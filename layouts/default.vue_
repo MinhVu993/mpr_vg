@@ -1,0 +1,77 @@
+<i18n>
+  {
+    "en": { 
+        "appName" :"Manpower request tool",
+        "Welcome" :"Welcome"
+    },
+    "cn": {
+        "appName" :"人力资源申请工具",
+        "Welcome" :"欢迎"
+    },
+    "vi": {
+        "appName" :"Ứng dụng yêu cầu nhân sự",
+        "Welcome" :"Xin chào"
+    }
+  }
+</i18n>
+<template>
+<v-app dark>
+    <notifications position="top center" animation-type="velocity" />
+    <v-app-bar dense app absolute color="teal" dark>
+        <v-toolbar-title>
+            <v-btn text to="/">
+                <h3>
+                    {{ $t('appName') }}
+                </h3>
+            </v-btn>
+        </v-toolbar-title>
+        <v-spacer />
+        <v-btn @click="setLocale('vi')" text>VI</v-btn>
+        <v-btn @click="setLocale('cn')" text>中文</v-btn>
+        <v-btn @click="setLocale('en')" text>EN</v-btn>
+        <v-btn style="text-transform: capitalize" text @click="logout">
+            {{ $t('Welcome') }}: {{ $session.get('mpr').name}} - {{ $session.get('mpr').dept}}
+            <v-icon class="ml-3">mdi-logout-variant</v-icon>
+        </v-btn>
+    </v-app-bar>
+    <v-main>
+        <v-container fluid>
+            <auth></auth>
+            <nuxt />
+        </v-container>
+    </v-main>
+</v-app>
+</template>
+<script>
+import auth from '~/components/auth';
+export default {
+    components: {
+        auth,
+    },
+    data() {
+        return {
+            drawer: false,
+            activeUser: {
+                empno: null,
+            },
+        };
+    },
+    methods: {
+        async logout() {
+            this.$session.remove('mpr');
+            this.$session.remove('vg-portal');
+            this.$router.push('./');
+        },
+        setLocale(tg) {
+            this.$i18n.setLocale(tg);
+            this.$nuxt.$emit('setLocale', tg);
+        }
+    },
+    mounted() {
+        this.$nextTick(() => {
+            this.activeUser = this.$session.get('mpr');
+        });
+    },
+};
+</script>
+ 
