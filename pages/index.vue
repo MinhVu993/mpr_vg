@@ -818,12 +818,13 @@ export default {
             { text: this.$t('Reason Deny'), value: 'reason_denied' },
             ],
             statusFilter: 0, 
-            filterValues: {}, // Thêm object để lưu giá trị lọc
+            filterValues: {}, 
             dataRecruitmentReason: [],
             unitNames: [],
             lang: [],
             subPos: [],
             sentNotifications: new Set(),
+            
         }
     },
     computed: {
@@ -833,11 +834,9 @@ export default {
                 const approvalData = JSON.parse(this.selectedItem.approval);
                 let currentApprovalRecord = {};
                 
-                // Get the current cycle's approval record
                 if (this.selectedItem.approval_record) {
                     try {
                         const allApprovalRecords = JSON.parse(this.selectedItem.approval_record);
-                        // The latest record should be the last one in the array
                         currentApprovalRecord = allApprovalRecords[allApprovalRecords.length - 1] || {};
                     } catch(e) {
                         console.error('Error parsing current approval record:', e);
@@ -882,7 +881,17 @@ export default {
             });
             return Object.values(grouped);
         },
+        defaultTab() {
+            return this.hasTodoData ? 1 : 0;
+        },
         hasTodoData() {
+            // return this.dataFilteredByYear.some(item => {
+            //     return this.canApproveItemForTodo(item);
+            // });
+            if (!this.generalFlowData && Object.keys(this.approvalFlowCache).length === 0) {
+                return false;
+            }
+            
             return this.dataFilteredByYear.some(item => {
                 return this.canApproveItemForTodo(item);
             });
@@ -1016,29 +1025,42 @@ export default {
         
         filteredData() {
             let result = this.dataFilteredByYear;
-            if (this.statusFilter === 1) { // To do tab
+            
+            if (this.activeUser) {
+                if (!['hr', 'admin'].includes(this.activeUser.role?.toLowerCase())) {
+                    result = result.filter(item => {
+                        const currentStatus = item.status_amendent || item.status;
+                        if (['completed', 'declined'].includes(currentStatus)) {
+                            return item.submiterInfo?.empno === this.activeUser.empno;
+                        }
+                        return item.submiterInfo?.empno === this.activeUser.empno || 
+                        this.canApproveItemForTodo(item);
+                    });
+                }
+            }
+            if (this.statusFilter === 1) {
                 result = result.filter(item => this.canApproveItemForTodo(item));
-            } else if (this.statusFilter === 2) { // Pending tab
+            } else if (this.statusFilter === 2) {
                 result = result.filter(item => 
                 ['waiting_unit', 'waiting_dept', 'waiting_div','waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
                 ['waiting_unit', 'waiting_dept', 'waiting_div','waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)
                 );
-            } else if (this.statusFilter === 3) { // Returned tab
+            } else if (this.statusFilter === 3) {
                 result = result.filter(item => 
                 item.status === 'returned' || 
                 item.status_amendent === 'returned' ||
                 this.hasReturnedLevel(item)
                 );
-            } else if (this.statusFilter === 4) { // Approved tab
+            } else if (this.statusFilter === 4) {
                 result = result.filter(item => 
                 item.status === 'completed' || item.status_amendent === 'completed'
                 );
-            } else if (this.statusFilter === 5) { // Rejected tab  
+            } else if (this.statusFilter === 5) {
                 result = result.filter(item =>  
                 ['declined', 'cancelled'].includes(item.status) ||
                 ['declined', 'cancelled'].includes(item.status_amendent)
                 );
-            } 
+            }
             
             Object.entries(this.filterValues).forEach(([key, values]) => {
                 if (values && values.length) {
@@ -1081,8 +1103,6 @@ export default {
                     });
                 }
             });
-            
-            // Áp dụng tìm kiếm text nếu có
             if (this.search) {
                 const searchTerm = this.search.toLowerCase();
                 result = result.filter(item => {
@@ -1181,6 +1201,9 @@ export default {
         },
     },
     methods: {
+        setDefaultTab() {
+            this.statusFilter = this.defaultTab;
+        },
         getSubPositionName(subPosId, showAll = false) {
             if (!subPosId) return '';
             try {
@@ -1446,11 +1469,9 @@ export default {
             let todo = 0, completed = 0, processing = 0, returned = 0, declined = 0;
             
             this.dataFilteredByYear.forEach(item => {
-                // QUAN TRỌNG: Đảm bảo có flow data trước khi kiểm tra
                 if (this.canApproveItemForTodo(item)) {
                     todo++;
                 }
-                
                 if (['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
                 ['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)) {
                     processing++;
@@ -1617,7 +1638,8 @@ export default {
                 const res = await this.$axios.post(this.api + 'getAllDataMpr', params);
                 if (res.status === 200) {
                     this.dataMpr = res.data.dataMpr;
-                    
+                    await this.$nextTick();
+                    this.setDefaultTab();
                     
                 } else {
                     throw new Error('Failed to fetch data');
@@ -2106,10 +2128,8 @@ export default {
         canApproveItem(item) {
             if (!item || !this.activeUser) return false;
             
-            // Get the effective status
             const effectiveStatus = item.status_amendent || item.status;
             
-            // Early return if status is completed or declined
             if (effectiveStatus === 'completed' || effectiveStatus === 'declined') return false;
             
             try {
@@ -2117,12 +2137,6 @@ export default {
                 if (!flowData) return false;
                 
                 const statusToLevelCode = {
-                    // 'waiting_unit': 'unit_manager',
-                    // 'waiting_dept': 'dept_manager',
-                    // 'waiting_div': 'division_manager',
-                    // 'waiting_hr_rec_sf': 'hr_rec_sf',
-                    // 'waiting_hr': 'hr_manager',
-                    // 'waiting_ad': 'smp_manager',
                     'waiting_gm': 'general_manager'
                 };
                 
@@ -2151,15 +2165,11 @@ export default {
         },
         canApproveItemForTodo(item)
         {
-            if (!item || !this.activeUser) return false;
-            
-            // Kiểm tra status và status_amendent
+            // if (!item || !this.activeUser) return false;
             if ((item.status === 'completed' || item.status === 'declined') && 
             (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined')) {
                 return false;
             }
-            
-            // Mảng các trạng thái cần kiểm tra
             const validStatuses = [
             'waiting_unit', 
             'waiting_dept', 
@@ -2258,7 +2268,6 @@ export default {
         },
         async fetchFlowData() {
             if (!this.activeUser) return;
-            
             try {
                 const res = await this.$axios.post(this.api + "getDataFlowForItem", {
                     empno: this.activeUser.empno,
@@ -2277,7 +2286,7 @@ export default {
         },
         getAmendmentStatusText(status, item = {}) {
             if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
-                return "🔄" + this.$t("Returned") + " - " + this.$t("Applicant");
+                return "🔄" + this.$t("Returned");
             }
             const prefix = "🔄";
             switch (status) {
@@ -2334,7 +2343,7 @@ export default {
         },
         getStatusText(status, item = {}) {
             if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
-                return this.$t("Returned") + " - " + this.$t("Applicant");
+                return this.$t("Returned");
             }
             switch (status) {
                 case "completed":
@@ -3139,20 +3148,37 @@ export default {
                 this.$router.push('/');
                 return;
             }
+            await this.getAllData();
             await this.fetchFlowData();
             await this.fetchData();
-            await this.getAllData();
+            // this.$nextTick(() => {
+            //     this.setDefaultTab();
+            // });
         }
         catch (error) {
             console.error('Error in mounted hook:', error);
-            // this.statusFilter = 0; // Set to "All" tab in case of error
         }
     },
     watch: {
-        hasTodoData(val) {
-            if (!val && this.statusFilter === 1) {
-                this.statusFilter = 0; // Chuyển về tab "All"
-            }
+        hasTodoData: {
+            handler(newVal, oldVal) {
+                if (oldVal !== undefined && newVal !== oldVal) {
+                    if (!newVal && this.statusFilter === 1) {
+                        this.statusFilter = 0; 
+                    }
+                }
+            },
+            immediate: false
+        },
+        generalFlowData: {
+            handler(newVal) {
+                if (newVal) {
+                    this.$nextTick(() => {
+                        this.setDefaultTab();
+                    });
+                }
+            },
+            immediate: false
         },
         selectedYears: {
             handler() {
@@ -3295,7 +3321,7 @@ export default {
             "Pending Dept": "Đang chờ bộ phận phê duyệt",
             "Pending Div": "Đang chờ cấp sở phê duyệt",
             "Pending HR Rec SF": "Đang chờ nhân viên HR phê duyệt",
-            "Pending HR": "Đang chờ chử quản HR phê duyệt",
+            "Pending HR": "Đang chờ chủ quản HR phê duyệt",
             "Pending AD": "Đang chờ chủ quản AD phê duyệt",
             "Pending GM": "Đang chờ phó tổng phê duyệt",
             "Closed": "Đã đóng",

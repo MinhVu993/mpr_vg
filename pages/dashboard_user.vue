@@ -144,7 +144,10 @@
                     @changed="updateFilter('recruited_status', $event)" />
                 </template>
                 <template v-slot:[`item.recruited_status`]="{ item }">
-                    <v-card v-if="getRecruitmentStatus(item).show" outlined class="pa-1" :color="getRecruitmentStatus(item).color"
+                    <v-card v-if="getRecruitmentStatus(item).show" 
+                    outlined 
+                    class="pa-1" 
+                    :color="getRecruitmentStatus(item).color"
                     :dark="getRecruitmentStatus(item).dark">
                     <div class="d-flex align-center flex-column">
                         <span class="text-body-2 font-weight-medium">
@@ -1180,13 +1183,30 @@ export default {
                 };
             }
             if ( hold === 1 && item.hold_date && resumed === 0 ) {
+                const daysRemaining = this.calculateDaysRemaining(item.hold_date);
+                let statusText = this.$t('Recruitment hold');
+                let detailText = `(${this.formatDate(item.hold_date)} ${this.$t('hold')})`;
+                
+                if (daysRemaining > 0) {
+                    detailText += ` ${this.$t('remaining')} \n${daysRemaining} ${this.$t('days')}`;
+                } else {
+                    // Chỉ thực hiện auto decline nếu chưa bị declined
+                    if (item.status_amendent !== 'declined' && item.status !== 'declined') {
+                        // Kiểm tra xem đã thực hiện auto decline chưa
+                        if (!this.sentNotifications.has(`declined_${item.id}`)) {
+                            this.sentNotifications.add(`declined_${item.id}`);
+                            this.handleExpiredHold(item);
+                        }
+                    }
+                    detailText += `\n${this.$t('Hold period expired')}`;
+                }
+                
                 return {
-                    text: this.$t('Recruitment hold'),
-                    detail: `(${this.formatDate(item.hold_date)} ${this.$t('hold')})`,
+                    text: statusText,
+                    detail: detailText,
                     show: true,
-                    color: 'amber lighten-1',
+                    color: daysRemaining > 0 ? 'amber lighten-1' : 'red lighten-1',
                     dark: false
-                    
                 };
             }
             if ( resumed === 1 && item.resumed_date) {
@@ -1199,7 +1219,6 @@ export default {
                 };
             }
             
-            // Trường hợp 5: Điều kiện yêu cầu đã thay đổi
             if (status === 'completed' && this.hasRequirementChange(item)) {
                 return {
                     text: this.$t('Recruiting'),
@@ -1210,8 +1229,6 @@ export default {
                     
                 };
             }
-            
-            
             return {
                 text: '',
                 detail: '',
@@ -1219,6 +1236,69 @@ export default {
                 color: '',
                 dark: false
             };
+        },
+        async handleExpiredHold(item) {
+            try {
+                if (!this.sentNotifications.has(`email_${item.id}`)) {
+                    this.sentNotifications.add(`email_${item.id}`);
+                    await this.sendAutoCloseNotification(item);
+                }
+                await this.updateStatusToDeclined(item);
+            } catch (error) {
+                console.error('Error handling expired hold:', error);
+            }
+        },
+        async updateStatusToDeclined(item) {
+            try {
+                // Xác định trạng thái hiện tại cần update
+                const currentStatus = item.status_amendent;
+                
+                const response = await this.$axios.post(this.api + 'denyRequest', {
+                    id: item.id,
+                    reason: 'Auto declined due to hold period expired',
+                    user_empno: this.activeUser.empno,
+                    dataReq: {
+                        dataFlow: this.dataFlow || '',
+                        id: item.id, 
+                        status: item.status,
+                        approval: item.approval,
+                        status_amendent: currentStatus === 'completed' ? 'declined' : item.status_amendent,
+                        auto_decline: true,
+                        current_processing_status: currentStatus
+                    }
+                });
+                
+                if (response.data.success) {
+                    // Refresh data after update
+                    await this.getAllData();
+                    console.log('Status updated to declined successfully');
+                } else {
+                    console.error('Failed to update status:', response.data.message);
+                }
+            } catch (error) {
+                console.error('Error updating status to declined:', error);
+                // Hiển thị thông báo lỗi cho user
+                this.$notify({
+                    title: this.$t('Error'),
+                    text: this.$t('Failed to update status automatically'),
+                    type: 'error'
+                });
+            }
+        },
+        async sendAutoCloseNotification(item) {
+            if (this.sentNotifications.has(item.id)) {
+                return;
+            }
+            try {
+                const response = await this.$axios.post(this.api + 'sendAutoCloseEmail', {
+                    id: item.id
+                });
+                if (response.data.success) {
+                    this.sentNotifications.add(item.id);
+                }
+            } catch (error) {
+                console.error('Error sending auto close notification:', error);
+            }
         },
         
         hasRequirementChange(item) {
@@ -2000,7 +2080,7 @@ export default {
         },
         getAmendmentStatusText(status, item = {}) {
             if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
-                return "🔄" + this.$t("Returned") + " - " + this.$t("Applicant");
+                return "🔄" + this.$t("Returned");
             }
             const prefix = "🔄";
             switch (status) {

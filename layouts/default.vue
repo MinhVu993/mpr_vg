@@ -19,7 +19,7 @@
             "Main page - User": "主頁-使用者"
       },
       "vi": {
-          "appName" :"VG - Hệ thống đơn xin bổ sung công nhân-nhân viên",
+          "appName" :"VG - Hệ thống đơn xin bổ sung công nhân viên",
           "appname": "Ứng dụng quản lý ký túc xá",
             "accessDenied": "Bạn không được phép truy cập vào ứng dụng này.",
             "User manual": "Hướng dẫn sử dụng",

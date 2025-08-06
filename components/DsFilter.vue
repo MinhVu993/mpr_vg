@@ -17,6 +17,7 @@
         </template>
         <v-card>
             <v-autocomplete
+                ref="autocomplete"
                 v-model="selected"
                 :items="filteredItems"
                 :search-input.sync="searchQuery"
@@ -26,8 +27,10 @@
                 clearable
                 dense
                 hide-details
+                autofocus
                 class="px-2 pt-2"
                 @click:clear="clearFilter"
+                @keyup.enter="handleEnterKey"
             >
                 <template v-slot:selection="{ item, index }">
                     <v-chip v-if="index < 2" small>
@@ -86,6 +89,13 @@ export default {
         }
     },
     watch: {
+        show(val) {
+            if (val) {
+                this.$nextTick(() => {
+                    this.$refs.autocomplete.focus();
+                });
+            }
+        },
         searchQuery(newVal) {
             if (!newVal) {
                 this.selected = [];
@@ -108,21 +118,43 @@ export default {
             this.selected = [];
             this.searchQuery = null;
         },
+        handleEnterKey() {
+            if (!this.searchQuery) return;
+            
+            const query = this.searchQuery.toLowerCase().trim();
+            if (query) {
+                // Tìm tất cả items phù hợp với từ khóa tìm kiếm
+                const matchedItems = this.inItems.filter(item =>
+                    String(item).toLowerCase().includes(query)
+                );
+                
+                // Đảm bảo không trùng lặp
+                this.selected = [...new Set([...this.selected, ...matchedItems])];
+                
+                // Xác nhận hoàn thành tìm kiếm - đóng menu
+                this.show = false;
+            }
+        },
     },
 }
 </script>
 
-<style scoped>
-.filter-header {
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
+<i18n>
+{
+    "en": {
+        "Search": "Search",
+        "Clear": "Clear",
+        "Close": "Close"
+    },
+  "cn": {
+        "Search": "搜索",
+        "Clear": "清除",
+        "Close": "关闭"
+    },
+   "vi": {
+        "Search": "Tìm kiếm",
+        "Clear": "Xóa",
+        "Close": "Đóng"
+    }
 }
-.badge {
-    margin-left: 4px;
-}
-.v-menu {
-    display: inline-block;
-}
-</style>
+</i18n>
