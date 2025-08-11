@@ -524,7 +524,7 @@ class vgMprCtrl extends Controller
             }
         }
         private function getAmendmentChangeReason($mpr) {
-            if (empty($mpr->change_req)) {
+             if (empty($mpr->change_req)) {
                 return null;
             }
             try {
@@ -533,23 +533,46 @@ class vgMprCtrl extends Controller
                     return null;
                 }
                 $lastChangeReq = end($changeReqData);
-                if (!isset($lastChangeReq['change_reason']) || !isset($lastChangeReq['change_reason']['id'])) {
+
+                // Kiểm tra cấu trúc
+                if (
+                    !isset($lastChangeReq['change_reason']) ||
+                    !is_array($lastChangeReq['change_reason']) ||
+                    !isset($lastChangeReq['change_reason']['id'])
+                ) {
                     return null;
                 }
-                
-                $changeReasonId = $lastChangeReq['change_reason']['id'];
+
+                // Ép kiểu id về int (trường hợp lưu "03", "7", ...)
+                $changeReasonId = (int)$lastChangeReq['change_reason']['id'];
+                if ($changeReasonId <= 0) {
+                    return null;
+                }
+
                 $changeReason = ChangeReason::find($changeReasonId);
-                
                 if (!$changeReason) {
                     return null;
                 }
-                
+
+                // Giải mã field reason (thường là JSON)
+                $reasonRaw = $changeReason->reason;
+                if (is_string($reasonRaw)) {
+                    $decoded = json_decode($reasonRaw, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        $reasonRaw = $decoded;
+                    }
+                }
+
+                if (!is_array($reasonRaw)) {
+                    return null;
+                }
+
                 return [
-                    'cn' => $changeReason->reason['cn'] ?? '',
-                    'en' => $changeReason->reason['en'] ?? '',
-                    'vi' => $changeReason->reason['vi'] ?? ''
+                    'cn' => $reasonRaw['cn'] ?? '',
+                    'en' => $reasonRaw['en'] ?? '',
+                    'vi' => $reasonRaw['vi'] ?? '',
                 ];
-                
+
             } catch (\Exception $e) {
                 \Log::error('Error getting amendment change reason: ' . $e->getMessage());
                 return null;
@@ -614,7 +637,7 @@ class vgMprCtrl extends Controller
                     $templateData['request']['re_id'] = $mpr->req_id_change;
                     $templateData['request']['remark_change'] = $mpr->remark_change;
                 } else {
-                    $emailSubject = "[MPR]人員增補單簽核通知 / Manpower Request Form Pending Your Approval";
+                    $emailSubject = "[MPR] 人員增補單簽核通知 / Manpower Request Form Pending Your Approval / Thông báo phê duyệt đơn bổ sung nhân sự";
                     $templateView = 'VgMpr-approval';
                 }
                 
@@ -871,22 +894,22 @@ class vgMprCtrl extends Controller
                     }
                     private function sendMsg($params) 
                     {
-                        try {
-                            $client = new \GuzzleHttp\Client();
+                        // try {
+                        //     $client = new \GuzzleHttp\Client();
                             
-                            $formData = http_build_query($params);
+                        //     $formData = http_build_query($params);
                             
-                            $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
-                                'headers' => [
-                                    'Content-Type' => 'application/x-www-form-urlencoded'
-                                ],
-                                'body' => $formData 
-                            ]);
+                        //     $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
+                        //         'headers' => [
+                        //             'Content-Type' => 'application/x-www-form-urlencoded'
+                        //         ],
+                        //         'body' => $formData 
+                        //     ]);
                             
-                            return json_decode($response->getBody()->getContents(), true);
-                        } catch (\Exception $e) {
-                            throw $e;
-                        }
+                        //     return json_decode($response->getBody()->getContents(), true);
+                        // } catch (\Exception $e) {
+                        //     throw $e;
+                        // }
                     }
                     public function denyRequest(Request $req)
                     {
@@ -1265,8 +1288,8 @@ class vgMprCtrl extends Controller
                                             $emailList = [$submitter['email']];
                                             $templateView = $isAmendmentRequest ? 'VgMpr-completed_amd' : 'VgMpr-completed';
                                             $emailSubject = $isAmendmentRequest 
-                                            ? "[MPR] 人員增補需求變更核准通知 / MPR Amendment Request Approved / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã được phê duyệt"
-                                            : "[MPR] 人員增補單核准通知 / Manpower Request Approved / Đơn xin bổ sung nhân sự đã được phê duyệt";
+                                            ? "[MPR] 人員增補需求變更核准通知 / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã được phê duyệt"
+                                            : "[MPR] 人員增補單核准通知 / Đơn xin bổ sung nhân sự đã được phê duyệt";
                                         }
                                         
                                         $emailContent = view($templateView, $templateData)->render();
@@ -1330,8 +1353,8 @@ class vgMprCtrl extends Controller
                                             $templateView = $isAmendmentRequest ? 'VgMpr-denial_amd' : 'VgMpr-denial';
                                             $emailContent = view($templateView, $templateData)->render();
                                             $emailSubject = $isAmendmentRequest 
-                                            ? "[MPR] 人員增補需求變更否決通知 / MPR Amendment Request Denied / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã bị từ chối"
-                                            : "[MPR] 人員增補單否決通知 / Manpower Request Denied / Đơn xin bổ sung nhân sự đã bị từ chối";
+                                            ? "[MPR] 人員增補需求變更否決通知 / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã bị từ chối"
+                                            : "[MPR] 人員增補單否決通知 / Đơn xin bổ sung nhân sự đã bị từ chối";
                                             
                                             $mailData = [
                                                 'to' => [$submitter['email']],
@@ -1394,8 +1417,8 @@ class vgMprCtrl extends Controller
                                                 $emailContent = view($templateView, $templateData)->render();
                                                 
                                                 $emailSubject = $isAmendmentRequest
-                                                ? "[MPR] 人員增補需求變更退回通知 / MPR Amendment Request Returned / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã bị trả về"
-                                                : "[MPR] 人員增補單退回通知 / Manpower Request Returned / Đơn xin bổ sung nhân sự đã bị trả về";
+                                                ? "[MPR] 人員增補需求變更退回通知 / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã bị trả về"
+                                                : "[MPR] 人員增補單退回通知 / Đơn xin bổ sung nhân sự đã bị trả về";
                                                 
                                                 $emailList = array_column($recipientsList, 'email');
                                                 
@@ -1832,14 +1855,24 @@ class vgMprCtrl extends Controller
                                                         ->first();
                                                         $position = $typeApply ? $typeApply->type_name : '';
                                                         
-                                                        // Parse position name for display
-                                                        $positionName = '';
+                                                        // Parse position name for different languages
+                                                        $positionNames = [
+                                                            'cn' => '',
+                                                            'vi' => '',
+                                                            'en' => ''
+                                                        ];
+                                                        
                                                         if ($position) {
                                                             try {
                                                                 $positionObj = json_decode($position, true);
-                                                                $positionName = $positionObj['vi'] ?? $positionObj['en'] ?? $position;
+                                                                $positionNames['cn'] = $positionObj['cn'] ?? $positionObj['en'] ?? $position;
+                                                                $positionNames['vi'] = $positionObj['vi'] ?? $positionObj['en'] ?? $position;
+                                                                $positionNames['en'] = $positionObj['en'] ?? $position;
                                                             } catch (\Exception $e) {
-                                                                $positionName = $position;
+                                                                // Fallback to original value for all languages
+                                                                $positionNames['cn'] = $position;
+                                                                $positionNames['vi'] = $position;
+                                                                $positionNames['en'] = $position;
                                                             }
                                                         }
                                                         
@@ -1866,7 +1899,7 @@ class vgMprCtrl extends Controller
                                                             'request' => [
                                                                 'id' => $mpr->req_id,
                                                                 'unit' => $submitter['unit'] ?? '',
-                                                                'position' => $positionName,
+                                                                'position' => $positionNames, // Truyền object chứa tất cả ngôn ngữ
                                                                 'stocknumber' => $mpr->stocknumber ?? $totalQty,
                                                                 'recruited' => $mpr->recruited ?? 0,
                                                                 'hold_date' => $mpr->hold_date
@@ -1878,13 +1911,13 @@ class vgMprCtrl extends Controller
                                                             $emailSubject = "[MPR] 人員增補申請自動結案通知 / MPR Auto Close Notification / Thông báo tự động đóng yêu cầu nhân sự";
                                                             
                                                             $mailData = [
-                                                                'to' => [$submitter['email']], // Email của submitter
+                                                                'to' => [$submitter['email']],
                                                                 'subject' => $emailSubject,
                                                                 'msgBody' => $emailContent,
                                                             ];
                                                             
                                                             $params = [
-                                                                'target' => 'VG-MPR', // Giữ nguyên target như các email MPR khác
+                                                                'target' => 'VG-MPR',
                                                                 'body' => $emailContent,
                                                                 'msg_type' => "m",
                                                                 'msg_method' => "both",

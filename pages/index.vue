@@ -886,1311 +886,1354 @@ export default {
         },
         hasTodoData() {
             // return this.dataFilteredByYear.some(item => {
-            //     return this.canApproveItemForTodo(item);
-            // });
-            if (!this.generalFlowData && Object.keys(this.approvalFlowCache).length === 0) {
-                return false;
-            }
-            
-            return this.dataFilteredByYear.some(item => {
-                return this.canApproveItemForTodo(item);
-            });
-        },
-        originalHeaders() {
-            return this.getHRHeaders();
-        },
-        canReturn() {
-            return this.returnReason.trim();
-        },
-        totalSum() {
-            return {
-                qty_req: this.filteredData.reduce((sum, item) => {
-                    // Kiểm tra deny_temp trước VÀ status_amendent='completed'
-                    if (item.deny_temp && 
-                    item.deny_temp.trim() !== '' && 
-                    item.status_amendent === 'completed') {
-                        try {
-                            const denyTempData = JSON.parse(item.deny_temp);
-                            if (denyTempData.recruited !== undefined) {
-                                return sum + (parseInt(denyTempData.recruited) || 0);
-                            } else if (item.recruited !== undefined) {
-                                return sum + (parseInt(item.recruited) || 0);
-                            }
-                        } catch (e) {
-                            console.error("Error parsing deny_temp for total:", e);
-                        }
-                    }
-                    
-                    // Logic cũ cho change_req
-                    if (item.change_req) {
-                        try {
-                            const changeReq = typeof item.change_req === 'string' 
-                            ? JSON.parse(item.change_req) 
-                            : item.change_req;
-                            
-                            if (Array.isArray(changeReq)) {
-                                const lastValidChange = [...changeReq]
-                                .reverse()
-                                .find(change => change.change_qty && change.change_qty.trim() !== '');
-                                
-                                if (lastValidChange) {
-                                    return sum + (parseInt(lastValidChange.change_qty) || 0);
-                                }
-                            }
-                        } catch (e) {
-                            console.error("Error parsing change_req:", e);
-                        }
-                    }
-                    
-                    return sum + this.getDisplayQuantity(item.qty_req, item);
-                }, 0),
-                recruited: this.filteredData.reduce((sum, item) => {
-                    return sum + (parseInt(item.recruited) || 0);
-                }, 0),
-                resign: this.filteredData.reduce((sum, item) => {
-                    return sum + (parseInt(item.resign) || 0);
-                }, 0),
-            };
-        },
-        formattedData() {
-            return this.dataMpr.map(item => {
-                const submitter = JSON.parse(item.submitter || '{}');
-                const education = JSON.parse(item.edu || '{}');
-                let qtyReq;
-                try {
-                    qtyReq = typeof item.qty_req === 'string' ? JSON.parse(item.qty_req) : item.qty_req;
-                } catch (e) {
-                    console.error("Error parsing qty_req:", e);
-                    qtyReq = { workers: 0, staff: 0, officers: 0, engineers: 0 };
+                //     return this.canApproveItemForTodo(item);
+                // });
+                if (!this.generalFlowData && Object.keys(this.approvalFlowCache).length === 0) {
+                    return false;
                 }
-                const engSkill = JSON.parse(item.eng_skill || '[]');
-                const chnSkill = JSON.parse(item.chn_skill || '[]');
-                const eitherSkill = JSON.parse(item.either_skill || '[]');
-                const workExp = JSON.parse(item.w_exp || '{}');
-                const reasonExp =item.reason_exp ;
-                const compSkill = JSON.parse(item.comp_skill || '{}');
-                const position = JSON.parse(item.pos || '{}');
                 
-                const positions = Object.entries(qtyReq)
-                .filter(([_, value]) => Number(value) > 0)
-                .map(([key]) => key);
-                
-                const officerLevel = qtyReq.level || null;
-                
-                const formattedReason = this.formatReason(reasonExp);
-                
-                // Find matching unit name from unitNames array
-                const unitCode = submitter.unit;
-                const unitInfo = this.unitNames.find(u => u.code === unitCode);
-                const unitName = unitInfo ? unitInfo.name : '';
-                
-                
-                return {
-                    ...item,
-                    submiterInfo: submitter,
-                    unit: unitCode,
-                    unit_name: unitName, // Add unit_name mapping
-                    division: submitter.div,
-                    edu_level: formatters.education(education, this.$i18n),
-                    language: this.formatLanguageSkills(engSkill, chnSkill, eitherSkill),
-                    workExpInfo: this.formatWorkExperience(workExp),
-                    reasonInfo: {
-                        ...formattedReason,
-                        oldEmpNo: item.old_emp,
-                        otherReason: item.isOther_reason
-                    },
-                    reason: formattedReason.type,
-                    computerSkillsInfo: compSkill,
-                    positionInfo: position,
-                    qtyReq: qtyReq,
-                    qtyInfo: {
-                        total: this.getDisplayQuantity(item.qty_req),
-                        details: typeof qtyReq === 'object' ?
-                        `Workers: ${qtyReq.workers || 0}, Staff: ${qtyReq.staff || 0}, Staff_lang: ${qtyReq.staff_lang || 0}, Engineers: ${qtyReq.engineers || 0}, Leader: ${qtyReq.leader || 0}, Tranlator: ${qtyReq.tranlator || 0}`:qtyReq.toString()
-                    },
-                    positions,
-                    officerLevel
-                };
-            });
-        },
-        dataFilteredByYear() {
-            if (!this.selectedYears.length) return this.formattedData;
-            
-            return this.formattedData.filter(item => {
-                if (!item.key_in_date) return false;
-                const itemYear = new Date(item.key_in_date).getFullYear().toString();
-                return this.selectedYears.includes(itemYear);
-            });
-        },
-        
-        filteredData() {
-            let result = this.dataFilteredByYear;
-            
-            if (this.activeUser) {
-                if (!['hr', 'admin'].includes(this.activeUser.role?.toLowerCase())) {
-                    result = result.filter(item => {
-                        const currentStatus = item.status_amendent || item.status;
-                        if (['completed', 'declined'].includes(currentStatus)) {
-                            return item.submiterInfo?.empno === this.activeUser.empno;
-                        }
-                        return item.submiterInfo?.empno === this.activeUser.empno || 
-                        this.canApproveItemForTodo(item);
-                    });
-                }
-            }
-            if (this.statusFilter === 1) {
-                result = result.filter(item => this.canApproveItemForTodo(item));
-            } else if (this.statusFilter === 2) {
-                result = result.filter(item => 
-                ['waiting_unit', 'waiting_dept', 'waiting_div','waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
-                ['waiting_unit', 'waiting_dept', 'waiting_div','waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)
-                );
-            } else if (this.statusFilter === 3) {
-                result = result.filter(item => 
-                item.status === 'returned' || 
-                item.status_amendent === 'returned' ||
-                this.hasReturnedLevel(item)
-                );
-            } else if (this.statusFilter === 4) {
-                result = result.filter(item => 
-                item.status === 'completed' || item.status_amendent === 'completed'
-                );
-            } else if (this.statusFilter === 5) {
-                result = result.filter(item =>  
-                ['declined', 'cancelled'].includes(item.status) ||
-                ['declined', 'cancelled'].includes(item.status_amendent)
-                );
-            }
-            
-            Object.entries(this.filterValues).forEach(([key, values]) => {
-                if (values && values.length) {
-                    result = result.filter(item => {
-                        switch(key) {
-                            case 'req_id':
-                            return values.includes(item.req_id);
-                            case 'submitter':
-                            return values.includes(item.submiterInfo?.name);
-                            case 'date_req':
-                            return values.includes(this.formatDate(item.date_req));
-                            case 'unit':
-                            return values.includes(item.unit);
-                            case 'division': 
-                            return values.includes(item.division);
-                            case 'pos':
-                            return values.includes(this.getPositionName(item.pos));
-                            case 'reason':
-                            return values.includes(item.reason);
-                            case 'status':
-                            return values.includes(this.getStatusText(item.status)) ||
-                            values.includes(this.getStatusText(item.status_amendent));
-                            case 'sub_pos':
-                            const subPosName = this.getSubPositionName(item.sub_pos, true);
-                            return values.some(subPos => subPosName.includes(subPos));
-                            case 'recruited':
-                            return values.includes(item.recruited);
-                            case 'resign':
-                            return values.includes(item.resign);
-                            case 'qty_req':
-                            return values.includes(item.qtyInfo.total);
-                            case 'recruited_status':
-                            const status = this.getRecruitmentStatus(item);
-                            return status.show && values.includes(status.text);
-                            
-                            default:
-                            
-                            return true;
-                        }
-                    });
-                }
-            });
-            if (this.search) {
-                const searchTerm = this.search.toLowerCase();
-                result = result.filter(item => {
-                    return (
-                    String(item.id).toLowerCase().includes(searchTerm) ||
-                    String(item.req_id).toLowerCase().includes(searchTerm) ||
-                    String(item.date_req).toLowerCase().includes(searchTerm) ||
-                    (item.submiterInfo?.name || '').toLowerCase().includes(searchTerm) ||
-                    (item.unit || '').toLowerCase().includes(searchTerm) ||
-                    (item.division || '').toLowerCase().includes(searchTerm) ||
-                    this.getPositionName(item.pos).toLowerCase().includes(searchTerm) ||
-                    (item.reason || '').toLowerCase().includes(searchTerm) ||
-                    this.getStatusText(item.status).toLowerCase().includes(searchTerm) ||
-                    this.getStatusText(item.status_amendent).toLowerCase().includes(searchTerm) ||
-                    (item.recruited || '').toLowerCase().includes(searchTerm) || 
-                    (item.resign || '').toLowerCase().includes(searchTerm) ||
-                    (item.qtyInfo.total || '').toLowerCase().includes(searchTerm) ||
-                    (item.qtyInfo.details || '').toLowerCase().includes(searchTerm) ||
-                    (item.sub_pos ? this.getSubPositionName(item.sub_pos, true).toLowerCase().includes(searchTerm) : false)
-                    );
+                return this.dataFilteredByYear.some(item => {
+                    return this.canApproveItemForTodo(item);
                 });
-            }
+            },
+            originalHeaders() {
+                return this.getHRHeaders();
+            },
+            canReturn() {
+                return this.returnReason.trim();
+            },
+            totalSum() {
+                return {
+                    qty_req: this.filteredData.reduce((sum, item) => {
+                        // Kiểm tra deny_temp trước VÀ status_amendent='completed'
+                        if (item.deny_temp && 
+                        item.deny_temp.trim() !== '' && 
+                        item.status_amendent === 'completed') {
+                            try {
+                                const denyTempData = JSON.parse(item.deny_temp);
+                                if (denyTempData.recruited !== undefined) {
+                                    return sum + (parseInt(denyTempData.recruited) || 0);
+                                } else if (item.recruited !== undefined) {
+                                    return sum + (parseInt(item.recruited) || 0);
+                                }
+                            } catch (e) {
+                                console.error("Error parsing deny_temp for total:", e);
+                            }
+                        }
+                        
+                        // Logic cũ cho change_req
+                        if (item.change_req) {
+                            try {
+                                const changeReq = typeof item.change_req === 'string' 
+                                ? JSON.parse(item.change_req) 
+                                : item.change_req;
+                                
+                                if (Array.isArray(changeReq)) {
+                                    const lastValidChange = [...changeReq]
+                                    .reverse()
+                                    .find(change => change.change_qty && change.change_qty.trim() !== '');
+                                    
+                                    if (lastValidChange) {
+                                        return sum + (parseInt(lastValidChange.change_qty) || 0);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error("Error parsing change_req:", e);
+                            }
+                        }
+                        
+                        return sum + this.getDisplayQuantity(item.qty_req, item);
+                    }, 0),
+                    recruited: this.filteredData.reduce((sum, item) => {
+                        return sum + (parseInt(item.recruited) || 0);
+                    }, 0),
+                    resign: this.filteredData.reduce((sum, item) => {
+                        return sum + (parseInt(item.resign) || 0);
+                    }, 0),
+                };
+            },
+            formattedData() {
+                return this.dataMpr.map(item => {
+                    const submitter = JSON.parse(item.submitter || '{}');
+                    const education = JSON.parse(item.edu || '{}');
+                    let qtyReq;
+                    try {
+                        qtyReq = typeof item.qty_req === 'string' ? JSON.parse(item.qty_req) : item.qty_req;
+                    } catch (e) {
+                        console.error("Error parsing qty_req:", e);
+                        qtyReq = { workers: 0, staff: 0, officers: 0, engineers: 0 };
+                    }
+                    const engSkill = JSON.parse(item.eng_skill || '[]');
+                    const chnSkill = JSON.parse(item.chn_skill || '[]');
+                    const eitherSkill = JSON.parse(item.either_skill || '[]');
+                    const workExp = JSON.parse(item.w_exp || '{}');
+                    const reasonExp =item.reason_exp ;
+                    const compSkill = JSON.parse(item.comp_skill || '{}');
+                    const position = JSON.parse(item.pos || '{}');
+                    
+                    const positions = Object.entries(qtyReq)
+                    .filter(([_, value]) => Number(value) > 0)
+                    .map(([key]) => key);
+                    
+                    const officerLevel = qtyReq.level || null;
+                    
+                    const formattedReason = this.formatReason(reasonExp);
+                    
+                    // Find matching unit name from unitNames array
+                    const unitCode = submitter.unit;
+                    const unitInfo = this.unitNames.find(u => u.code === unitCode);
+                    const unitName = unitInfo ? unitInfo.name : '';
+                    
+                    
+                    return {
+                        ...item,
+                        submiterInfo: submitter,
+                        unit: unitCode,
+                        unit_name: unitName, // Add unit_name mapping
+                        division: submitter.div,
+                        edu_level: formatters.education(education, this.$i18n),
+                        language: this.formatLanguageSkills(engSkill, chnSkill, eitherSkill),
+                        workExpInfo: this.formatWorkExperience(workExp),
+                        reasonInfo: {
+                            ...formattedReason,
+                            oldEmpNo: item.old_emp,
+                            otherReason: item.isOther_reason
+                        },
+                        reason: formattedReason.type,
+                        computerSkillsInfo: compSkill,
+                        positionInfo: position,
+                        qtyReq: qtyReq,
+                        qtyInfo: {
+                            total: this.getDisplayQuantity(item.qty_req),
+                            details: typeof qtyReq === 'object' ?
+                            `Workers: ${qtyReq.workers || 0}, Staff: ${qtyReq.staff || 0}, Staff_lang: ${qtyReq.staff_lang || 0}, Engineers: ${qtyReq.engineers || 0}, Leader: ${qtyReq.leader || 0}, Tranlator: ${qtyReq.tranlator || 0}`:qtyReq.toString()
+                        },
+                        positions,
+                        officerLevel
+                    };
+                });
+            },
+            dataFilteredByYear() {
+                if (!this.selectedYears.length) return this.formattedData;
+                
+                return this.formattedData.filter(item => {
+                    if (!item.key_in_date) return false;
+                    const itemYear = new Date(item.key_in_date).getFullYear().toString();
+                    return this.selectedYears.includes(itemYear);
+                });
+            },
             
-            return result;
-        },
-        availableYears() {
-            const currentYear = new Date().getFullYear();
-            const years = [];
-            for (let i = currentYear - 5; i <= currentYear + 5; i++) {
-                years.push(i.toString());
-            }
-            return years;
-        },
-        positionFilterItems() {
-            const items = new Set();
-            this.formattedData.forEach(item => {
-                if (item.pos) {
-                    const position = this.pos.find(p => p.id === parseInt(item.pos));
-                    if (position && position.type_name) {
-                        try {
-                            const typeNameObj = JSON.parse(position.type_name.trim());
-                            const locale = this.$i18n.locale || 'en';
-                            const name = typeNameObj[locale] || typeNameObj['en'] || '';
-                            if (name) items.add(name);
-                        } catch (error) {
-                            console.error('Error parsing position name:', error);
+            filteredData() {
+                let result = this.dataFilteredByYear;
+                
+                if (this.activeUser) {
+                    if (!['hr', 'admin'].includes(this.activeUser.role?.toLowerCase())) {
+                        result = result.filter(item => {
+                            const currentStatus = item.status_amendent || item.status;
+                            if (['completed', 'declined'].includes(currentStatus)) {
+                                return item.submiterInfo?.empno === this.activeUser.empno;
+                            }
+                            return item.submiterInfo?.empno === this.activeUser.empno || 
+                            this.canApproveItemForTodo(item);
+                        });
+                    }
+                }
+                if (this.statusFilter === 1) {
+                    result = result.filter(item => this.canApproveItemForTodo(item));
+                } else if (this.statusFilter === 2) {
+                    result = result.filter(item => 
+                    ['waiting_unit', 'waiting_dept', 'waiting_div','waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
+                    ['waiting_unit', 'waiting_dept', 'waiting_div','waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)
+                    );
+                } else if (this.statusFilter === 3) {
+                    result = result.filter(item => 
+                    item.status === 'returned' || 
+                    item.status_amendent === 'returned' ||
+                    this.hasReturnedLevel(item)
+                    );
+                } else if (this.statusFilter === 4) {
+                    result = result.filter(item => 
+                    item.status === 'completed' || item.status_amendent === 'completed'
+                    );
+                } else if (this.statusFilter === 5) {
+                    result = result.filter(item =>  
+                    ['declined', 'cancelled'].includes(item.status) ||
+                    ['declined', 'cancelled'].includes(item.status_amendent)
+                    );
+                }
+                
+                Object.entries(this.filterValues).forEach(([key, values]) => {
+                    if (values && values.length) {
+                        result = result.filter(item => {
+                            switch(key) {
+                                case 'req_id':
+                                return values.includes(item.req_id);
+                                case 'submitter':
+                                return values.includes(item.submiterInfo?.name);
+                                case 'date_req':
+                                return values.includes(this.formatDate(item.date_req));
+                                case 'unit':
+                                return values.includes(item.unit);
+                                case 'division': 
+                                return values.includes(item.division);
+                                case 'pos':
+                                return values.includes(this.getPositionName(item.pos));
+                                case 'reason':
+                                return values.includes(item.reason);
+                                case 'status':
+                                return values.includes(this.getStatusText(item.status)) ||
+                                values.includes(this.getStatusText(item.status_amendent));
+                                case 'sub_pos':
+                                const subPosName = this.getSubPositionName(item.sub_pos, true);
+                                return values.some(subPos => subPosName.includes(subPos));
+                                case 'recruited':
+                                return values.includes(item.recruited);
+                                case 'resign':
+                                return values.includes(item.resign);
+                                case 'qty_req':
+                                return values.includes(item.qtyInfo.total);
+                                case 'recruited_status':
+                                const status = this.getRecruitmentStatus(item);
+                                return status.show && values.includes(status.text);
+                                
+                                default:
+                                
+                                return true;
+                            }
+                        });
+                    }
+                });
+                if (this.search) {
+                    const searchTerm = this.search.toLowerCase();
+                    result = result.filter(item => {
+                        return (
+                        String(item.id).toLowerCase().includes(searchTerm) ||
+                        String(item.req_id).toLowerCase().includes(searchTerm) ||
+                        String(item.date_req).toLowerCase().includes(searchTerm) ||
+                        (item.submiterInfo?.name || '').toLowerCase().includes(searchTerm) ||
+                        (item.unit || '').toLowerCase().includes(searchTerm) ||
+                        (item.division || '').toLowerCase().includes(searchTerm) ||
+                        this.getPositionName(item.pos).toLowerCase().includes(searchTerm) ||
+                        (item.reason || '').toLowerCase().includes(searchTerm) ||
+                        this.getStatusText(item.status).toLowerCase().includes(searchTerm) ||
+                        this.getStatusText(item.status_amendent).toLowerCase().includes(searchTerm) ||
+                        (item.recruited || '').toLowerCase().includes(searchTerm) || 
+                        (item.resign || '').toLowerCase().includes(searchTerm) ||
+                        (item.qtyInfo.total || '').toLowerCase().includes(searchTerm) ||
+                        (item.qtyInfo.details || '').toLowerCase().includes(searchTerm) ||
+                        (item.sub_pos ? this.getSubPositionName(item.sub_pos, true).toLowerCase().includes(searchTerm) : false)
+                        );
+                    });
+                }
+                
+                return result;
+            },
+            availableYears() {
+                const currentYear = new Date().getFullYear();
+                const years = [];
+                for (let i = currentYear - 5; i <= currentYear + 5; i++) {
+                    years.push(i.toString());
+                }
+                return years;
+            },
+            positionFilterItems() {
+                const items = new Set();
+                this.formattedData.forEach(item => {
+                    if (item.pos) {
+                        const position = this.pos.find(p => p.id === parseInt(item.pos));
+                        if (position && position.type_name) {
+                            try {
+                                const typeNameObj = JSON.parse(position.type_name.trim());
+                                const locale = this.$i18n.locale || 'en';
+                                const name = typeNameObj[locale] || typeNameObj['en'] || '';
+                                if (name) items.add(name);
+                            } catch (error) {
+                                console.error('Error parsing position name:', error);
+                            }
                         }
                     }
+                });
+                return Array.from(items).sort();
+            },
+            mprOptions() {
+                if (!this.dataMpr || this.dataMpr.length === 0) return [];
+                return this.dataMpr.map(mpr => ({
+                    value: mpr.id,
+                    text: `${mpr.id} - ${mpr.req_id}`
+                }));
+            },
+            filterItems() {
+                return {
+                    req_id: [...new Set(this.formattedData.map(item => item.req_id))].filter(Boolean),
+                    submitter: [...new Set(this.formattedData.map(item => item.submiterInfo?.name))].filter(Boolean),
+                    date_req: [...new Set(this.formattedData.map(item => this.formatDate(item.date_req)))].filter(Boolean),
+                    unit: [...new Set(this.formattedData.map(item => item.unit))].filter(Boolean),
+                    division: [...new Set(this.formattedData.map(item => item.division))].filter(Boolean),
+                    pos: [...new Set(this.formattedData.map(item => this.getPositionName(item.pos)))].filter(Boolean),
+                    reason: [...new Set(this.formattedData.map(item => item.reason))].filter(Boolean),
+                    status: [...new Set(this.formattedData.flatMap(item => [
+                    this.getStatusText(item.status),
+                    this.getStatusText(item.status_amendent)
+                    ]))].filter(Boolean),
+                    sub_pos: [...new Set(this.subPos.map(sp => {
+                        try {
+                            const subNameObj = JSON.parse(sp.sub_name.trim());
+                            const locale = this.$i18n.locale || 'en';
+                            return subNameObj[locale] || subNameObj['en'] || '';
+                        } catch (error) {
+                            console.error('Error parsing sub position name:', error);
+                            return '';
+                        }
+                    }))].filter(Boolean),
+                    recruited: [...new Set(this.formattedData.map(item => item.recruited))].filter(Boolean),
+                    resign: [...new Set(this.formattedData.map(item => item.resign))].filter(Boolean),
+                    qty_req: [...new Set(this.formattedData.map(item => item.qtyInfo.total))].filter(Boolean),
+                    recruited_status: [
+                    ...new Set(this.formattedData
+                    .map(item => {
+                        const status = this.getRecruitmentStatus(item);
+                        return status.show ? status.text : null;
+                    })
+                    .filter(Boolean)
+                    )
+                    ],
                 }
-            });
-            return Array.from(items).sort();
+            },
         },
-        mprOptions() {
-            if (!this.dataMpr || this.dataMpr.length === 0) return [];
-            return this.dataMpr.map(mpr => ({
-                value: mpr.id,
-                text: `${mpr.id} - ${mpr.req_id}`
-            }));
-        },
-        filterItems() {
-            return {
-                req_id: [...new Set(this.formattedData.map(item => item.req_id))].filter(Boolean),
-                submitter: [...new Set(this.formattedData.map(item => item.submiterInfo?.name))].filter(Boolean),
-                date_req: [...new Set(this.formattedData.map(item => this.formatDate(item.date_req)))].filter(Boolean),
-                unit: [...new Set(this.formattedData.map(item => item.unit))].filter(Boolean),
-                division: [...new Set(this.formattedData.map(item => item.division))].filter(Boolean),
-                pos: [...new Set(this.formattedData.map(item => this.getPositionName(item.pos)))].filter(Boolean),
-                reason: [...new Set(this.formattedData.map(item => item.reason))].filter(Boolean),
-                status: [...new Set(this.formattedData.flatMap(item => [
-                this.getStatusText(item.status),
-                this.getStatusText(item.status_amendent)
-                ]))].filter(Boolean),
-                sub_pos: [...new Set(this.subPos.map(sp => {
-                    try {
-                        const subNameObj = JSON.parse(sp.sub_name.trim());
-                        const locale = this.$i18n.locale || 'en';
-                        return subNameObj[locale] || subNameObj['en'] || '';
-                    } catch (error) {
-                        console.error('Error parsing sub position name:', error);
-                        return '';
+        methods: {
+            setDefaultTab() {
+                this.statusFilter = this.defaultTab;
+            },
+            getSubPositionName(subPosId, showAll = false) {
+                if (!subPosId) return '';
+                try {
+                    const subPosition = this.subPos.find(sp => sp.id === parseInt(subPosId));
+                    if (!subPosition || !subPosition.sub_name) return '';
+                    const subNameObj = JSON.parse(subPosition.sub_name.trim());
+                    const locale = this.$i18n.locale || 'en';
+                    return subNameObj[locale] || subNameObj.en || '';
+                } catch (error) {
+                    console.error('Error parsing sub position name:', error);
+                    return '';
+                }
+            },
+            calculateDaysRemaining(holdDate) {
+                const hold = new Date(holdDate);
+                const holdDateOnly = new Date(hold.getFullYear(), hold.getMonth(), hold.getDate());
+                
+                const deadline = new Date(holdDateOnly);
+                deadline.setDate(deadline.getDate() + 90);
+                deadline.setHours(23, 59, 59, 999);
+                
+                const today = new Date();
+                const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                
+                // Calculate remaining days
+                const remaining = Math.ceil((deadline - todayDateOnly) / (1000 * 60 * 60 * 24));
+                return remaining;
+            },
+            getRecruitmentStatus(item) {
+                const stocknumber = parseInt(item.stocknumber);
+                const recruited = parseInt(item.recruited);
+                const hold = parseInt(item.hold);
+                const resumed = parseInt(item.resumed);
+                const status = item.status;
+                const statusAmendent = item.status_amendent;
+                
+                const isCompleted = (status === 'completed') && (!statusAmendent);
+                
+                if (item.deny_temp && statusAmendent === 'completed') {
+                    const denyTempData = JSON.parse(item.deny_temp);
+                    
+                    if (denyTempData.fullfilldate) {
+                        return {
+                            text: this.$t('Cancelled'),
+                            detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
+                            show: true,
+                            color: 'red lighten-4',
+                            dark: false,
+                        };
                     }
-                }))].filter(Boolean),
-                recruited: [...new Set(this.formattedData.map(item => item.recruited))].filter(Boolean),
-                resign: [...new Set(this.formattedData.map(item => item.resign))].filter(Boolean),
-                qty_req: [...new Set(this.formattedData.map(item => item.qtyInfo.total))].filter(Boolean),
-                recruited_status: [
-                ...new Set(this.formattedData
-                .map(item => {
-                    const status = this.getRecruitmentStatus(item);
-                    return status.show ? status.text : null;
-                })
-                .filter(Boolean)
-                )
-                ],
-            }
-        },
-    },
-    methods: {
-        setDefaultTab() {
-            this.statusFilter = this.defaultTab;
-        },
-        getSubPositionName(subPosId, showAll = false) {
-            if (!subPosId) return '';
-            try {
-                const subPosition = this.subPos.find(sp => sp.id === parseInt(subPosId));
-                if (!subPosition || !subPosition.sub_name) return '';
-                const subNameObj = JSON.parse(subPosition.sub_name.trim());
-                const locale = this.$i18n.locale || 'en';
-                return subNameObj[locale] || subNameObj.en || '';
-            } catch (error) {
-                console.error('Error parsing sub position name:', error);
-                return '';
-            }
-        },
-        calculateDaysRemaining(holdDate) {
-            const hold = new Date(holdDate);
-            const holdDateOnly = new Date(hold.getFullYear(), hold.getMonth(), hold.getDate());
-            
-            const deadline = new Date(holdDateOnly);
-            deadline.setDate(deadline.getDate() + 90);
-            deadline.setHours(23, 59, 59, 999);
-            
-            const today = new Date();
-            const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-            
-            // Calculate remaining days
-            const remaining = Math.ceil((deadline - todayDateOnly) / (1000 * 60 * 60 * 24));
-            return remaining;
-        },
-        getRecruitmentStatus(item) {
-            const stocknumber = parseInt(item.stocknumber);
-            const recruited = parseInt(item.recruited);
-            const hold = parseInt(item.hold);
-            const resumed = parseInt(item.resumed);
-            const status = item.status;
-            const statusAmendent = item.status_amendent;
-            
-            const isCompleted = (status === 'completed') && (!statusAmendent);
-            
-            if (item.deny_temp && statusAmendent === 'completed') {
-                const denyTempData = JSON.parse(item.deny_temp);
-                
-                if (denyTempData.fullfilldate) {
-                    return {
-                        text: this.$t('Cancelled'),
-                        detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
-                        show: true,
-                        color: 'red lighten-4',
-                        dark: false,
-                    };
+                    
                 }
                 
-            }
-            
-            if (isCompleted) {
-                if (stocknumber ===0) {
-                    return {
-                        text: this.$t('Closed'),
-                        // detail: `${recruited}/${stocknumber}`,
-                        show: true,
-                        
-                    };
+                if (isCompleted) {
+                    if (stocknumber ===0) {
+                        return {
+                            text: this.$t('Closed'),
+                            // detail: `${recruited}/${stocknumber}`,
+                            show: true,
+                            
+                        };
+                    }
+                    if (stocknumber > recruited) {
+                        return {
+                            text: this.$t('Recruiting'),
+                            // detail: `${recruited}/${stocknumber}`,
+                            show: true,
+                            color: 'teal accent-3',
+                            dark: false
+                        };
+                    }
+                    
                 }
-                if (stocknumber > recruited) {
+                if(status === 'completed' && statusAmendent !== 'completed') {
                     return {
                         text: this.$t('Recruiting'),
-                        // detail: `${recruited}/${stocknumber}`,
+                        // detail: `(${this.formatDate(item.completed_date)})`,
+                        show: true,
+                        color: 'teal accent-3',
+                        dark: false
+                    };
+                }
+                if (statusAmendent === 'completed' && stocknumber > recruited) {
+                    return {
+                        text: this.$t('Recruiting'),
+                        detail: '', // hoặc detail phù hợp
+                        show: true,
+                        color: 'teal accent-3',
+                        dark: false
+                    };
+                }
+                if (statusAmendent === 'completed' && stocknumber === recruited) {
+                    return {
+                        text: this.$t('Closed'),
+                        detail: '', // hoặc detail phù hợp
+                        show: true,
+                        color: 'green lighten-4',
+                        dark: false
+                    };
+                }
+                if ( hold === 1 && item.hold_date && resumed === 0 ) {
+                    const daysRemaining = this.calculateDaysRemaining(item.hold_date);
+                    let statusText = this.$t('Recruitment hold');
+                    let detailText = `(${this.formatDate(item.hold_date)} ${this.$t('hold')})`;
+                    
+                    if (daysRemaining > 0) {
+                        detailText += ` ${this.$t('remaining')} \n${daysRemaining} ${this.$t('days')}`;
+                    } else {
+                        // Chỉ thực hiện auto decline nếu chưa bị declined
+                        if (item.status_amendent !== 'declined' && item.status !== 'declined') {
+                            // Kiểm tra xem đã thực hiện auto decline chưa
+                            if (!this.sentNotifications.has(`declined_${item.id}`)) {
+                                this.sentNotifications.add(`declined_${item.id}`);
+                                this.handleExpiredHold(item);
+                            }
+                        }
+                        detailText += `\n${this.$t('Hold period expired')}`;
+                    }
+                    
+                    return {
+                        text: statusText,
+                        detail: detailText,
+                        show: true,
+                        color: daysRemaining > 0 ? 'amber lighten-1' : 'red lighten-1',
+                        dark: false
+                    };
+                }
+                if ( resumed === 1 && item.resumed_date) {
+                    return {
+                        text: this.$t('Recruiting'),
+                        detail: `(${this.formatDate(item.hold_date)} - ${this.$t('Resumed')}, ${this.formatDate(item.resumed_date)} - ${this.$t('hold')})`,
                         show: true,
                         color: 'teal accent-3',
                         dark: false
                     };
                 }
                 
-            }
-            if(status === 'completed' && statusAmendent !== 'completed') {
-                return {
-                    text: this.$t('Recruiting'),
-                    // detail: `(${this.formatDate(item.completed_date)})`,
-                    show: true,
-                    color: 'teal accent-3',
-                    dark: false
-                };
-            }
-            if (statusAmendent === 'completed' && stocknumber > recruited) {
-                return {
-                    text: this.$t('Recruiting'),
-                    detail: '', // hoặc detail phù hợp
-                    show: true,
-                    color: 'teal accent-3',
-                    dark: false
-                };
-            }
-            if (statusAmendent === 'completed' && stocknumber === recruited) {
-                return {
-                    text: this.$t('Closed'),
-                    detail: '', // hoặc detail phù hợp
-                    show: true,
-                    color: 'green lighten-4',
-                    dark: false
-                };
-            }
-            if ( hold === 1 && item.hold_date && resumed === 0 ) {
-                const daysRemaining = this.calculateDaysRemaining(item.hold_date);
-                let statusText = this.$t('Recruitment hold');
-                let detailText = `(${this.formatDate(item.hold_date)} ${this.$t('hold')})`;
-                
-                if (daysRemaining > 0) {
-                    detailText += ` ${this.$t('remaining')} \n${daysRemaining} ${this.$t('days')}`;
-                } else {
-                    // Chỉ thực hiện auto decline nếu chưa bị declined
-                    if (item.status_amendent !== 'declined' && item.status !== 'declined') {
-                        // Kiểm tra xem đã thực hiện auto decline chưa
-                        if (!this.sentNotifications.has(`declined_${item.id}`)) {
-                            this.sentNotifications.add(`declined_${item.id}`);
-                            this.handleExpiredHold(item);
-                        }
-                    }
-                    detailText += `\n${this.$t('Hold period expired')}`;
+                if (status === 'completed' && this.hasRequirementChange(item)) {
+                    return {
+                        text: this.$t('Recruiting'),
+                        detail: this.$t('#Change in hiring requirements'),
+                        show: true,
+                        color: 'amber lighten-1',
+                        dark: false
+                        
+                    };
                 }
-                
                 return {
-                    text: statusText,
-                    detail: detailText,
-                    show: true,
-                    color: daysRemaining > 0 ? 'amber lighten-1' : 'red lighten-1',
+                    text: '',
+                    detail: '',
+                    show: false,
+                    color: '',
                     dark: false
                 };
-            }
-            if ( resumed === 1 && item.resumed_date) {
-                return {
-                    text: this.$t('Recruiting'),
-                    detail: `(${this.formatDate(item.hold_date)} - ${this.$t('Resumed')}, ${this.formatDate(item.resumed_date)} - ${this.$t('hold')})`,
-                    show: true,
-                    color: 'teal accent-3',
-                    dark: false
-                };
-            }
-            
-            if (status === 'completed' && this.hasRequirementChange(item)) {
-                return {
-                    text: this.$t('Recruiting'),
-                    detail: this.$t('#Change in hiring requirements'),
-                    show: true,
-                    color: 'amber lighten-1',
-                    dark: false
+            },
+            async handleExpiredHold(item) {
+                try {
+                    if (!this.sentNotifications.has(`email_${item.id}`)) {
+                        this.sentNotifications.add(`email_${item.id}`);
+                        await this.sendAutoCloseNotification(item);
+                    }
+                    await this.updateStatusToDeclined(item);
+                } catch (error) {
+                    console.error('Error handling expired hold:', error);
+                }
+            },
+            async updateStatusToDeclined(item) {
+                try {
+                    // Xác định trạng thái hiện tại cần update
+                    const currentStatus = item.status_amendent;
                     
-                };
-            }
-            return {
-                text: '',
-                detail: '',
-                show: false,
-                color: '',
-                dark: false
-            };
-        },
-        async handleExpiredHold(item) {
-            try {
-                if (!this.sentNotifications.has(`email_${item.id}`)) {
-                    this.sentNotifications.add(`email_${item.id}`);
-                    await this.sendAutoCloseNotification(item);
-                }
-                await this.updateStatusToDeclined(item);
-            } catch (error) {
-                console.error('Error handling expired hold:', error);
-            }
-        },
-        async updateStatusToDeclined(item) {
-            try {
-                // Xác định trạng thái hiện tại cần update
-                const currentStatus = item.status_amendent;
-                
-                const response = await this.$axios.post(this.api + 'denyRequest', {
-                    id: item.id,
-                    reason: 'Auto declined due to hold period expired',
-                    user_empno: this.activeUser.empno,
-                    dataReq: {
-                        dataFlow: this.dataFlow || '',
-                        id: item.id, 
-                        status: item.status,
-                        approval: item.approval,
-                        status_amendent: currentStatus === 'completed' ? 'declined' : item.status_amendent,
-                        auto_decline: true,
-                        current_processing_status: currentStatus
+                    const response = await this.$axios.post(this.api + 'denyRequest', {
+                        id: item.id,
+                        reason: 'Auto declined due to hold period expired',
+                        user_empno: this.activeUser.empno,
+                        dataReq: {
+                            dataFlow: this.dataFlow || '',
+                            id: item.id, 
+                            status: item.status,
+                            approval: item.approval,
+                            status_amendent: currentStatus === 'completed' ? 'declined' : item.status_amendent,
+                            auto_decline: true,
+                            current_processing_status: currentStatus
+                        }
+                    });
+                    
+                    if (response.data.success) {
+                        // Refresh data after update
+                        await this.getAllData();
+                        console.log('Status updated to declined successfully');
+                    } else {
+                        console.error('Failed to update status:', response.data.message);
                     }
-                });
-                
-                if (response.data.success) {
-                    // Refresh data after update
-                    await this.getAllData();
-                    console.log('Status updated to declined successfully');
-                } else {
-                    console.error('Failed to update status:', response.data.message);
-                }
-            } catch (error) {
-                console.error('Error updating status to declined:', error);
-                // Hiển thị thông báo lỗi cho user
-                this.$notify({
-                    title: this.$t('Error'),
-                    text: this.$t('Failed to update status automatically'),
-                    type: 'error'
-                });
-            }
-        },
-        async sendAutoCloseNotification(item) {
-            if (this.sentNotifications.has(item.id)) {
-                return;
-            }
-            try {
-                const response = await this.$axios.post(this.api + 'sendAutoCloseEmail', {
-                    id: item.id
-                });
-                if (response.data.success) {
-                    this.sentNotifications.add(item.id);
-                }
-            } catch (error) {
-                console.error('Error sending auto close notification:', error);
-            }
-        },
-        hasRequirementChange(item) {
-            try {
-                if (!item.change_req) return false;
-                
-                const changeReq = typeof item.change_req === 'string' 
-                ? JSON.parse(item.change_req) 
-                : item.change_req;
-                
-                if (Array.isArray(changeReq) && changeReq.length > 0) {
-                    const lastChange = changeReq[changeReq.length - 1];
-                    return lastChange.change_reason && 
-                    lastChange.change_reason.id === 3;
-                }
-                
-                return false;
-            } catch (error) {
-                console.error('Error checking requirement change:', error);
-                return false;
-            }
-        },
-        
-        formatDate(date) {
-            if (!date) return '';
-            try {
-                return dayjs(date).format('MM-DD');
-            } catch (error) {
-                return date;
-            }
-        },
-        getCycleColor(cycleIndex) {
-            const colors = {
-                1: 'teal darken-2',
-                2: 'blue darken-2', 
-                3: 'deep-orange darken-2',
-                4: 'purple darken-2'
-            };
-            return colors[cycleIndex] || 'grey darken-2';
-        },
-        formatID(str) {
-            if (!str) return "";
-            return str.slice(-9);
-        },
-        statusCounts() {
-            const all = this.dataFilteredByYear.length;
-            let todo = 0, completed = 0, processing = 0, returned = 0, declined = 0;
-            
-            this.dataFilteredByYear.forEach(item => {
-                if (this.canApproveItemForTodo(item)) {
-                    todo++;
-                }
-                if (['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
-                ['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)) {
-                    processing++;
-                }
-                if (item.status === 'completed' || item.status_amendent === 'completed') {
-                    completed++;
-                }
-                if (item.status === 'returned' || item.status_amendent === 'returned' || this.hasReturnedLevel(item)) {
-                    returned++;
-                }
-                if (['declined', 'cancelled'].includes(item.status) || ['declined', 'cancelled'].includes(item.status_amendent)) {
-                    declined++;
-                }
-            });
-            
-            return {
-                all,
-                todo,
-                completed,
-                processing,
-                return: returned,
-                decline: declined
-            };
-        },
-        isInApprovalFlow() {
-            if (!this.dataFlow || !this.activeUser?.empno) return false;
-            
-            return this.dataFlow.some(level => {
-                const isManager = level.managers?.some(manager => 
-                manager.empno === this.activeUser.empno
-                );
-                if (isManager) return true;
-                return level.managers?.some(manager => 
-                manager.deputies?.some(deputy => 
-                deputy.empno === this.activeUser.empno && deputy.status
-                )
-                );
-            });
-        },
-        
-        getHRHeaders() {
-            return [
-            { text: 'ID', value: 'req_id', width: '30px',align: 'center' },
-            { text: 'Submitted by', value: 'submitter', width: '150px' },
-            { text: 'Apply Date', value: 'date_req', width: '150px' },
-            { text: 'Unit code', value: 'unit', width: '100px' },
-            { text: 'Unit Name', value: 'unit_name',width: '200px' },
-            { text: 'Position', value: 'pos', width: '120px' },
-            { text: 'Sub position', value: 'sub_pos', width: '130px' },
-            { text: 'Conditions', value: 'conditions', width: '120px' },
-            { text: 'Demand', value: 'qty_req', align: 'center', width: '120px' },
-            { text: 'Reason', value: 'reason', width: '120px' },
-            { text: 'Approval Status', value: 'status', width: '160px' },
-            { text: 'Recruitment status', value: 'recruited_status', width: '200px' },
-            { text: 'Recruited', value: 'recruited', align: 'center', width: '130px' },
-            { text: 'Resign', value: 'resign', align: 'center', width: '120px' },
-            { text: 'Print', value: 'action', sortable: false, width: '100px' }
-            ];
-        },
-        formatDate(date) {
-            return date ? dayjs(date).format('YYYY-MM-DD') : '';
-        },
-        getCandidatesCount(candidates) {
-            try {
-                const parsedCandidates = JSON.parse(candidates || '[]');
-                return parsedCandidates.length;
-            } catch (error) {
-                console.error("Error parsing candidates:", error);
-                return 0;
-            }
-        },
-        clearSelection() {
-            this.selectedCandidates = [];
-            this.selectAll = false; 
-        },
-        showCandidatesDialog(candidates) {
-            try {
-                this.parsedCandidates = JSON.parse(candidates || '[]');
-                if (this.parsedCandidates.length > 0) {
-                    this.selectIdMpr = this.dataMpr.find(mpr => mpr.candidates === candidates);
-                    this.clearSelection(); 
-                    this.candidatesDialog = true;
-                } else {
+                } catch (error) {
+                    console.error('Error updating status to declined:', error);
+                    // Hiển thị thông báo lỗi cho user
                     this.$notify({
-                        title: 'No Candidates',
-                        text: 'No candidates data available',
-                        type: 'info'
+                        title: this.$t('Error'),
+                        text: this.$t('Failed to update status automatically'),
+                        type: 'error'
                     });
                 }
-            } catch (error) {
-                this.$notify({
-                    title: 'Error',
-                    text: 'Error loading candidates data', 
-                    type: 'error'
-                });
-            }
-        },
-        async updateCancelDate() {
-            if (!this.selectIdMpr) return;
-            
-            try {
-                this.loading = true;
-                const cancelData = {
-                    date: this.selectedCancelDate,
-                    reason: this.cancelReason
-                };
-                const response = await this.$axios.post(this.api + 'updateCancelDate', {
-                    id: this.selectIdMpr.id,
-                    cancel_date: JSON.stringify(cancelData)
-                });
-                if (response.data.success) {
-                    this.cancelDialog = false;
-                    this.selectedCancelDate = ''; 
-                    this.cancelReason = '';
-                    this.selectIdMpr = null;
-                    await this.fetchData(); 
+            },
+            async sendAutoCloseNotification(item) {
+                if (this.sentNotifications.has(item.id)) {
+                    return;
                 }
-            } catch (error) {
-                console.error('Error updating cancel date:', error);
-                this.$notify({
-                    title: this.$t('Error'),
-                    text: this.$t('Failed to update cancel date'),
-                    type: 'error'
-                });
-            } finally {
-                this.loading = false;
-            }
-        },
-        async handleCancelDateClick(item) {
-            this.selectIdMpr = item;
-            if (item.cancel_date) {
                 try {
-                    const cancelData = JSON.parse(item.cancel_date);
-                    this.selectedCancelDate = cancelData.date || '';
-                    this.cancelReason = cancelData.reason || '';
-                } catch (e) {
+                    const response = await this.$axios.post(this.api + 'sendAutoCloseEmail', {
+                        id: item.id
+                    });
+                    if (response.data.success) {
+                        this.sentNotifications.add(item.id);
+                    }
+                } catch (error) {
+                    console.error('Error sending auto close notification:', error);
+                }
+            },
+            hasRequirementChange(item) {
+                try {
+                    if (!item.change_req) return false;
+                    
+                    const changeReq = typeof item.change_req === 'string' 
+                    ? JSON.parse(item.change_req) 
+                    : item.change_req;
+                    
+                    if (Array.isArray(changeReq) && changeReq.length > 0) {
+                        const lastChange = changeReq[changeReq.length - 1];
+                        return lastChange.change_reason && 
+                        lastChange.change_reason.id === 3;
+                    }
+                    
+                    return false;
+                } catch (error) {
+                    console.error('Error checking requirement change:', error);
+                    return false;
+                }
+            },
+            
+            formatDate(date) {
+                if (!date) return '';
+                try {
+                    return dayjs(date).format('MM-DD');
+                } catch (error) {
+                    return date;
+                }
+            },
+            getCycleColor(cycleIndex) {
+                const colors = {
+                    1: 'teal darken-2',
+                    2: 'blue darken-2', 
+                    3: 'deep-orange darken-2',
+                    4: 'purple darken-2'
+                };
+                return colors[cycleIndex] || 'grey darken-2';
+            },
+            formatID(str) {
+                if (!str) return "";
+                return str.slice(-9);
+            },
+            statusCounts() {
+                const all = this.dataFilteredByYear.length;
+                let todo = 0, completed = 0, processing = 0, returned = 0, declined = 0;
+                
+                this.dataFilteredByYear.forEach(item => {
+                    if (this.canApproveItemForTodo(item)) {
+                        todo++;
+                    }
+                    if (['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
+                    ['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)) {
+                        processing++;
+                    }
+                    if (item.status === 'completed' || item.status_amendent === 'completed') {
+                        completed++;
+                    }
+                    if (item.status === 'returned' || item.status_amendent === 'returned' || this.hasReturnedLevel(item)) {
+                        returned++;
+                    }
+                    if (['declined', 'cancelled'].includes(item.status) || ['declined', 'cancelled'].includes(item.status_amendent)) {
+                        declined++;
+                    }
+                });
+                
+                return {
+                    all,
+                    todo,
+                    completed,
+                    processing,
+                    return: returned,
+                    decline: declined
+                };
+            },
+            isInApprovalFlow() {
+                if (!this.dataFlow || !this.activeUser?.empno) return false;
+                
+                return this.dataFlow.some(level => {
+                    const isManager = level.managers?.some(manager => 
+                    manager.empno === this.activeUser.empno
+                    );
+                    if (isManager) return true;
+                    return level.managers?.some(manager => 
+                    manager.deputies?.some(deputy => 
+                    deputy.empno === this.activeUser.empno && deputy.status
+                    )
+                    );
+                });
+            },
+            
+            getHRHeaders() {
+                return [
+                { text: 'ID', value: 'req_id',align: 'center' },
+                { text: 'Submitted by', value: 'submitter',},
+                { text: 'Apply Date', value: 'date_req',},
+                { text: 'Unit code', value: 'unit',  },
+                { text: 'Unit Name', value: 'unit_name', },
+                { text: 'Position', value: 'pos',  },
+                { text: 'Sub position', value: 'sub_pos',  },
+                { text: 'Conditions', value: 'conditions', },
+                { text: 'Demand', value: 'qty_req', align: 'center',  },
+                { text: 'Reason', value: 'reason', },
+                { text: 'Approval Status', value: 'status',},
+                { text: 'Recruitment status', value: 'recruited_status', },
+                { text: 'Recruited', value: 'recruited', align: 'center',  },
+                { text: 'Resign', value: 'resign', align: 'center', },
+                { text: 'Print', value: 'action', sortable: false,  }
+                ];
+            },
+            formatDate(date) {
+                return date ? dayjs(date).format('YYYY-MM-DD') : '';
+            },
+            getCandidatesCount(candidates) {
+                try {
+                    const parsedCandidates = JSON.parse(candidates || '[]');
+                    return parsedCandidates.length;
+                } catch (error) {
+                    console.error("Error parsing candidates:", error);
+                    return 0;
+                }
+            },
+            clearSelection() {
+                this.selectedCandidates = [];
+                this.selectAll = false; 
+            },
+            showCandidatesDialog(candidates) {
+                try {
+                    this.parsedCandidates = JSON.parse(candidates || '[]');
+                    if (this.parsedCandidates.length > 0) {
+                        this.selectIdMpr = this.dataMpr.find(mpr => mpr.candidates === candidates);
+                        this.clearSelection(); 
+                        this.candidatesDialog = true;
+                    } else {
+                        this.$notify({
+                            title: 'No Candidates',
+                            text: 'No candidates data available',
+                            type: 'info'
+                        });
+                    }
+                } catch (error) {
+                    this.$notify({
+                        title: 'Error',
+                        text: 'Error loading candidates data', 
+                        type: 'error'
+                    });
+                }
+            },
+            async updateCancelDate() {
+                if (!this.selectIdMpr) return;
+                
+                try {
+                    this.loading = true;
+                    const cancelData = {
+                        date: this.selectedCancelDate,
+                        reason: this.cancelReason
+                    };
+                    const response = await this.$axios.post(this.api + 'updateCancelDate', {
+                        id: this.selectIdMpr.id,
+                        cancel_date: JSON.stringify(cancelData)
+                    });
+                    if (response.data.success) {
+                        this.cancelDialog = false;
+                        this.selectedCancelDate = ''; 
+                        this.cancelReason = '';
+                        this.selectIdMpr = null;
+                        await this.fetchData(); 
+                    }
+                } catch (error) {
+                    console.error('Error updating cancel date:', error);
+                    this.$notify({
+                        title: this.$t('Error'),
+                        text: this.$t('Failed to update cancel date'),
+                        type: 'error'
+                    });
+                } finally {
+                    this.loading = false;
+                }
+            },
+            async handleCancelDateClick(item) {
+                this.selectIdMpr = item;
+                if (item.cancel_date) {
+                    try {
+                        const cancelData = JSON.parse(item.cancel_date);
+                        this.selectedCancelDate = cancelData.date || '';
+                        this.cancelReason = cancelData.reason || '';
+                    } catch (e) {
+                        this.selectedCancelDate = '';
+                        this.cancelReason = '';
+                    }
+                } else {
                     this.selectedCancelDate = '';
                     this.cancelReason = '';
                 }
-            } else {
-                this.selectedCancelDate = '';
-                this.cancelReason = '';
-            }
-            this.cancelDialog = true;
-        },
-        formatCancelDate(value) {
-            if (!value) return '';
-            try {
-                const cancelData = JSON.parse(value);
-                return cancelData.date || '';
-            } catch (e) {
-                return '';
-            }
-        },
-        async getAllData() {
-            let params = {
-                loc: this.activeUser.location,
-                dept: this.activeUser.dept,
-                empno: this.activeUser.empno,
-                high_dept:this.activeUser.hight_dept,
-                role: this.activeUser.role,
-            }
-            try {
-                const res = await this.$axios.post(this.api + 'getAllDataMpr', params);
-                if (res.status === 200) {
-                    this.dataMpr = res.data.dataMpr;
-                    await this.$nextTick();
-                    this.setDefaultTab();
-                    
-                } else {
-                    throw new Error('Failed to fetch data');
-                }
-            } catch (error) {
-                console.error('Fetch error:', error);
-            }
-        },
-        async fetchData() {
-            let params = {
-                loc:this.activeUser.location,
-            }
-            try {
-                const res = await this.$axios.post(this.api + 'getDataModel', params);
-                if (res.status === 200) {
-                    this.dataRecruitmentReason = res.data.dataRecReason;
-                    this.unitNames = res.data.dataDeptHrm
-                    this.pos = res.data.dataTypeApply;
-                    this.lang = res.data.dataLang;
-                    this.subPos = res.data.dataSubPos;
-                    this.flowCache.clear();
-                    await this.preloadFlowData();
-                    this.filteredItems = [];
-                } else {
-                    throw new Error('Failed to fetch data');
-                }
-            } catch (error) {
-                console.error('Fetch error:', error);
-            }
-        },
-        
-        formatWorkExperience(exp) {
-            if (!exp || !exp.id) return { text: 'N/A', color: 'grey' };
-            
-            const map = {
-                1: { text: this.$t('Not Required'), color: 'grey' },
-                2: { text: this.$t('< 1 year'), color: 'primary' },
-                3: { text: this.$t('1-2 years'), color: 'info' },
-                4: { text: this.$t('2-3 years'), color: 'warning' },
-                5: { text: this.$t('> 3 years'), color: 'error' }
-            };
-            
-            if (exp.name) {
-                const locale = this.$i18n.locale || 'en';
-                if (exp.name[locale]) {
-                    return {
-                        text: exp.name[locale],
-                        color: map[exp.id]?.color || 'grey'
-                    };
-                }
-            }
-            
-            return map[exp.id] || { text: 'N/A', color: 'grey' };
-        },
-        
-        formatReason(reasonId) {
-            try {
-                const reasonObj = this.dataRecruitmentReason.find(reason => reason.id === parseInt(reasonId));
-                if (!reasonObj) {
-                    return { 
-                        type: this.$t('Unknown reason'), 
-                        oldEmpNo: '',
-                        requestDate: '' 
-                    };
-                }
-                const nameObj = JSON.parse(reasonObj.name);
-                const locale = this.$i18n.locale || 'en';
-                const localizedName = nameObj[locale] || nameObj.en || reasonObj.id;
-                return {
-                    type: localizedName,
-                    oldEmpNo: '',
-                    requestDate: ''
-                };
-            } catch (error) {
-                console.error('Error formatting reason:', error, reasonId);
-                return { 
-                    type: String(reasonId), 
-                    oldEmpNo: '', 
-                    requestDate: '' 
-                };
-            }
-        },
-        
-        downloadFile(filename) {
-            if (!filename) {
-                this.$store.dispatch('showWarning', this.$t('No file attached'));
-                return;
-            }
-            window.open(`${this.storageUrl}${filename}`, '_blank');
-        },
-        
-        formatLanguageSkills(eng, chn, either) {
-            const languages = [];
-            // Nếu tất cả đều rỗng thì trả đơn null
-            if ((!eng || eng.length === 0) && (!chn || chn.length === 0) && (!either || either.length === 0)) {
-                return null;
-            }
-            // Nếu có English
-            if (eng && eng.length > 0) {
-                languages.push(this.$t('English'));
-            }
-            // Nếu có Chinese
-            if (chn && chn.length > 0) {
-                languages.push(this.$t('Chinese'));
-            }
-            // Nếu có Either
-            if (either && either.length > 0) {
-                languages.push(this.$t('Either - or'));
-            }
-            // Nếu không có gì thì trả đơn "No required"
-            return languages.length > 0 ? languages.join('/') : this.$t('No required');
-        },
-        
-        customSearch() {
-            if (!this.search) {
-                this.filteredItems = this.formattedData;
-                return;
-            }
-            const searchTerm = this.search.toLowerCase();
-            this.filteredItems = this.formattedData.filter(item => {
-                return (
-                String(item.id).toLowerCase().includes(searchTerm) ||
-                String(item.req_id).toLowerCase().includes(searchTerm) ||
-                String(item.key_in_date).toLowerCase().includes(searchTerm) ||
-                String(item.date_req).toLowerCase().includes(searchTerm) ||
-                
-                (item.submiterInfo?.name || '').toLowerCase().includes(searchTerm) ||
-                (item.submiterInfo?.empno || '').toLowerCase().includes(searchTerm) ||
-                (item.submiterInfo?.dept_sumt || '').toLowerCase().includes(searchTerm) ||
-                
-                (item.unit || '').toLowerCase().includes(searchTerm) ||
-                (item.division || '').toLowerCase().includes(searchTerm) ||
-                
-                (item.positions || []).join(' ').toLowerCase().includes(searchTerm) ||
-                (item.reasonInfo?.type || '').toLowerCase().includes(searchTerm) ||
-                
-                (item.status || '').toLowerCase().includes(searchTerm)
-                );
-            });
-        },
-        openDetail(item) {
-            if (typeof item.qty_req === 'string' && item.qty_req.startsWith('{')) {
+                this.cancelDialog = true;
+            },
+            formatCancelDate(value) {
+                if (!value) return '';
                 try {
-                    const qtyData = JSON.parse(item.qty_req);
-                    item.total_qty = (
-                    parseInt(qtyData.workers || 0) +
-                    parseInt(qtyData.staff || 0) +
-                    parseInt(qtyData.staff_lang || 0) +
-                    parseInt(qtyData.engineers || 0) +
-                    parseInt(qtyData.leader || 0)  +
-                    parseInt(qtyData.tranlator || 0) 
-                    );
+                    const cancelData = JSON.parse(value);
+                    return cancelData.date || '';
                 } catch (e) {
-                    console.error("Error preprocessing quantity:", e);
+                    return '';
                 }
-            }
-            
-            const parsedItem = {
-                ...item,
-                pos: item.pos ? parseInt(item.pos) : null,
-                edu: item.edu ? parseInt(item.edu) : null,
-                w_exp: item.w_exp ? parseInt(item.w_exp) : null,
-                wps: item.wps ? JSON.parse(item.wps) : []
-            };
-            
-            this.selectedItem = Object.assign({}, parsedItem);
-            this.isChange = false;
-            this.isEdit = true;
-            this.appDialog = true;
-        },
-        handleYearSelect(date) {
-            this.yearMenu = false;
-            this.selectedYear = date.split('-')[0];
-        },
-        clearYearSelection() {
-            this.selectedYears = [];
-            this.yearMenu = false;
-        },
-        hasReturnedLevel(item) {
-            if (!item.approval) return false;
-            try {
-                const approvalData = JSON.parse(item.approval);
-                return approvalData.some(level => level.status === 'returned') && item.status === 'waiting_unit';
-            } catch (error) {
-                console.error('Error parsing approval data:', error);
-                return false;
-            }
-            
-        },
-        printDocument(item) {
-            if (item.qty_req && typeof item.qty_req === 'string') {
+            },
+            async getAllData() {
+                let params = {
+                    loc: this.activeUser.location,
+                    dept: this.activeUser.dept,
+                    empno: this.activeUser.empno,
+                    high_dept:this.activeUser.hight_dept,
+                    role: this.activeUser.role,
+                }
                 try {
-                    const qtyData = JSON.parse(item.qty_req);
-                } catch (e) {
-                    console.error("Error pre-processing qty_req for printing:", e);
+                    const res = await this.$axios.post(this.api + 'getAllDataMpr', params);
+                    if (res.status === 200) {
+                        this.dataMpr = res.data.dataMpr;
+                        await this.$nextTick();
+                        this.setDefaultTab();
+                        
+                    } else {
+                        throw new Error('Failed to fetch data');
+                    }
+                } catch (error) {
+                    console.error('Fetch error:', error);
                 }
-            }
+            },
+            async fetchData() {
+                let params = {
+                    loc:this.activeUser.location,
+                }
+                try {
+                    const res = await this.$axios.post(this.api + 'getDataModel', params);
+                    if (res.status === 200) {
+                        this.dataRecruitmentReason = res.data.dataRecReason;
+                        this.unitNames = res.data.dataDeptHrm
+                        this.pos = res.data.dataTypeApply;
+                        this.lang = res.data.dataLang;
+                        this.subPos = res.data.dataSubPos;
+                        this.flowCache.clear();
+                        await this.preloadFlowData();
+                        this.filteredItems = [];
+                    } else {
+                        throw new Error('Failed to fetch data');
+                    }
+                } catch (error) {
+                    console.error('Fetch error:', error);
+                }
+            },
             
-            const routeData = this.$router.resolve({
-                name: 'template-print-request',
-                query: { id: item.id }
-            });
-            window.open(routeData.href, '_blank');
-        },
-        
-        getLocalizedName(nameObj) {
-            if (!nameObj) return '-';
-            const locale = this.$i18n.locale || 'en';
-            return nameObj[locale] || nameObj.en || '-';
-        },
-        getDisplayQuantity(qtyReq, item) {
-            if (!qtyReq) return 0;
-            
-            try {
-                // Kiểm tra deny_temp trước tiên VÀ status_amendent phải là 'completed'
-                if (item && 
-                item.deny_temp && 
-                typeof item.deny_temp === 'string' && 
-                item.deny_temp.trim() !== '' &&
-                item.status_amendent === 'completed') {
-                    try {
-                        const denyTempData = JSON.parse(item.deny_temp);
-                        // Nếu có deny_temp và status_amendent='completed', sử dụng recruited từ deny_temp hoặc recruited từ item
-                        if (denyTempData.recruited !== undefined) {
-                            return parseInt(denyTempData.recruited) || 0;
-                        } else if (item.recruited !== undefined) {
-                            return parseInt(item.recruited) || 0;
-                        }
-                    } catch (error) {
-                        console.error('Error parsing deny_temp for quantity display:', error);
+            formatWorkExperience(exp) {
+                if (!exp || !exp.id) return { text: 'N/A', color: 'grey' };
+                
+                const map = {
+                    1: { text: this.$t('Not Required'), color: 'grey' },
+                    2: { text: this.$t('< 1 year'), color: 'primary' },
+                    3: { text: this.$t('1-2 years'), color: 'info' },
+                    4: { text: this.$t('2-3 years'), color: 'warning' },
+                    5: { text: this.$t('> 3 years'), color: 'error' }
+                };
+                
+                if (exp.name) {
+                    const locale = this.$i18n.locale || 'en';
+                    if (exp.name[locale]) {
+                        return {
+                            text: exp.name[locale],
+                            color: map[exp.id]?.color || 'grey'
+                        };
                     }
                 }
                 
-                // Logic cũ cho trường hợp bình thường
-                if (this.hasQuantityChange({qty_req: qtyReq, change_req: item?.change_req})) {
-                    return parseInt(this.getChangeQuantity({qty_req: qtyReq, change_req: item?.change_req})) || 0;
+                return map[exp.id] || { text: 'N/A', color: 'grey' };
+            },
+            
+            formatReason(reasonId) {
+                try {
+                    const reasonObj = this.dataRecruitmentReason.find(reason => reason.id === parseInt(reasonId));
+                    if (!reasonObj) {
+                        return { 
+                            type: this.$t('Unknown reason'), 
+                            oldEmpNo: '',
+                            requestDate: '' 
+                        };
+                    }
+                    const nameObj = JSON.parse(reasonObj.name);
+                    const locale = this.$i18n.locale || 'en';
+                    const localizedName = nameObj[locale] || nameObj.en || reasonObj.id;
+                    return {
+                        type: localizedName,
+                        oldEmpNo: '',
+                        requestDate: ''
+                    };
+                } catch (error) {
+                    console.error('Error formatting reason:', error, reasonId);
+                    return { 
+                        type: String(reasonId), 
+                        oldEmpNo: '', 
+                        requestDate: '' 
+                    };
+                }
+            },
+            
+            downloadFile(filename) {
+                if (!filename) {
+                    this.$store.dispatch('showWarning', this.$t('No file attached'));
+                    return;
+                }
+                window.open(`${this.storageUrl}${filename}`, '_blank');
+            },
+            
+            formatLanguageSkills(eng, chn, either) {
+                const languages = [];
+                // Nếu tất cả đều rỗng thì trả đơn null
+                if ((!eng || eng.length === 0) && (!chn || chn.length === 0) && (!either || either.length === 0)) {
+                    return null;
+                }
+                // Nếu có English
+                if (eng && eng.length > 0) {
+                    languages.push(this.$t('English'));
+                }
+                // Nếu có Chinese
+                if (chn && chn.length > 0) {
+                    languages.push(this.$t('Chinese'));
+                }
+                // Nếu có Either
+                if (either && either.length > 0) {
+                    languages.push(this.$t('Either - or'));
+                }
+                // Nếu không có gì thì trả đơn "No required"
+                return languages.length > 0 ? languages.join('/') : this.$t('No required');
+            },
+            
+            customSearch() {
+                if (!this.search) {
+                    this.filteredItems = this.formattedData;
+                    return;
+                }
+                const searchTerm = this.search.toLowerCase();
+                this.filteredItems = this.formattedData.filter(item => {
+                    return (
+                    String(item.id).toLowerCase().includes(searchTerm) ||
+                    String(item.req_id).toLowerCase().includes(searchTerm) ||
+                    String(item.key_in_date).toLowerCase().includes(searchTerm) ||
+                    String(item.date_req).toLowerCase().includes(searchTerm) ||
+                    
+                    (item.submiterInfo?.name || '').toLowerCase().includes(searchTerm) ||
+                    (item.submiterInfo?.empno || '').toLowerCase().includes(searchTerm) ||
+                    (item.submiterInfo?.dept_sumt || '').toLowerCase().includes(searchTerm) ||
+                    
+                    (item.unit || '').toLowerCase().includes(searchTerm) ||
+                    (item.division || '').toLowerCase().includes(searchTerm) ||
+                    
+                    (item.positions || []).join(' ').toLowerCase().includes(searchTerm) ||
+                    (item.reasonInfo?.type || '').toLowerCase().includes(searchTerm) ||
+                    
+                    (item.status || '').toLowerCase().includes(searchTerm)
+                    );
+                });
+            },
+            openDetail(item) {
+                if (typeof item.qty_req === 'string' && item.qty_req.startsWith('{')) {
+                    try {
+                        const qtyData = JSON.parse(item.qty_req);
+                        item.total_qty = (
+                        parseInt(qtyData.workers || 0) +
+                        parseInt(qtyData.staff || 0) +
+                        parseInt(qtyData.staff_lang || 0) +
+                        parseInt(qtyData.engineers || 0) +
+                        parseInt(qtyData.leader || 0)  +
+                        parseInt(qtyData.tranlator || 0) 
+                        );
+                    } catch (e) {
+                        console.error("Error preprocessing quantity:", e);
+                    }
                 }
                 
+                const parsedItem = {
+                    ...item,
+                    pos: item.pos ? parseInt(item.pos) : null,
+                    edu: item.edu ? parseInt(item.edu) : null,
+                    w_exp: item.w_exp ? parseInt(item.w_exp) : null,
+                    wps: item.wps ? JSON.parse(item.wps) : []
+                };
+                
+                this.selectedItem = Object.assign({}, parsedItem);
+                this.isChange = false;
+                this.isEdit = true;
+                this.appDialog = true;
+            },
+            handleYearSelect(date) {
+                this.yearMenu = false;
+                this.selectedYear = date.split('-')[0];
+            },
+            clearYearSelection() {
+                this.selectedYears = [];
+                this.yearMenu = false;
+            },
+            hasReturnedLevel(item) {
+                if (!item.approval) return false;
+                try {
+                    const approvalData = JSON.parse(item.approval);
+                    return approvalData.some(level => level.status === 'returned') && item.status === 'waiting_unit';
+                } catch (error) {
+                    console.error('Error parsing approval data:', error);
+                    return false;
+                }
+                
+            },
+            printDocument(item) {
+                if (item.qty_req && typeof item.qty_req === 'string') {
+                    try {
+                        const qtyData = JSON.parse(item.qty_req);
+                    } catch (e) {
+                        console.error("Error pre-processing qty_req for printing:", e);
+                    }
+                }
+                
+                const routeData = this.$router.resolve({
+                    name: 'template-print-request',
+                    query: { id: item.id }
+                });
+                window.open(routeData.href, '_blank');
+            },
+            
+            getLocalizedName(nameObj) {
+                if (!nameObj) return '-';
+                const locale = this.$i18n.locale || 'en';
+                return nameObj[locale] || nameObj.en || '-';
+            },
+            getDisplayQuantity(qtyReq, item) {
+                if (!qtyReq) return 0;
+                
+                try {
+                    // Kiểm tra deny_temp trước tiên VÀ status_amendent phải là 'completed'
+                    if (item && 
+                    item.deny_temp && 
+                    typeof item.deny_temp === 'string' && 
+                    item.deny_temp.trim() !== '' &&
+                    item.status_amendent === 'completed') {
+                        try {
+                            const denyTempData = JSON.parse(item.deny_temp);
+                            // Nếu có deny_temp và status_amendent='completed', sử dụng recruited từ deny_temp hoặc recruited từ item
+                            if (denyTempData.recruited !== undefined) {
+                                return parseInt(denyTempData.recruited) || 0;
+                            } else if (item.recruited !== undefined) {
+                                return parseInt(item.recruited) || 0;
+                            }
+                        } catch (error) {
+                            console.error('Error parsing deny_temp for quantity display:', error);
+                        }
+                    }
+                    
+                    // Logic cũ cho trường hợp bình thường
+                    if (this.hasQuantityChange({qty_req: qtyReq, change_req: item?.change_req})) {
+                        return parseInt(this.getChangeQuantity({qty_req: qtyReq, change_req: item?.change_req})) || 0;
+                    }
+                    
+                    if (typeof qtyReq === 'string') {
+                        if (qtyReq.startsWith('{')) {
+                            const qtyData = JSON.parse(qtyReq);
+                            return (
+                            parseInt(qtyData.workers || 0) +
+                            parseInt(qtyData.staff || 0) +
+                            parseInt(qtyData.staff_lang || 0) +
+                            parseInt(qtyData.engineers || 0) +
+                            parseInt(qtyData.leader || 0) +
+                            parseInt(qtyData.tranlator || 0)
+                            );
+                        } else {
+                            return parseInt(qtyReq) || 0;
+                        }
+                    }
+                    return parseInt(qtyReq) || 0;
+                } catch (e) {
+                    console.error("Error parsing quantity:", e);
+                    return 0;
+                }
+            },
+            
+            calculateOriginalQuantity(qtyReq) {
                 if (typeof qtyReq === 'string') {
                     if (qtyReq.startsWith('{')) {
                         const qtyData = JSON.parse(qtyReq);
+                        // Chỉ tính đến leader, bỏ qua tranlator và level
                         return (
                         parseInt(qtyData.workers || 0) +
                         parseInt(qtyData.staff || 0) +
                         parseInt(qtyData.staff_lang || 0) +
                         parseInt(qtyData.engineers || 0) +
-                        parseInt(qtyData.leader || 0) +
-                        parseInt(qtyData.tranlator || 0)
+                        parseInt(qtyData.leader || 0)
+                        // Không tính: tranlator và level
                         );
                     } else {
                         return parseInt(qtyReq) || 0;
                     }
                 }
                 return parseInt(qtyReq) || 0;
-            } catch (e) {
-                console.error("Error parsing quantity:", e);
-                return 0;
-            }
-        },
-        
-        calculateOriginalQuantity(qtyReq) {
-            if (typeof qtyReq === 'string') {
-                if (qtyReq.startsWith('{')) {
-                    const qtyData = JSON.parse(qtyReq);
-                    // Chỉ tính đến leader, bỏ qua tranlator và level
-                    return (
-                    parseInt(qtyData.workers || 0) +
-                    parseInt(qtyData.staff || 0) +
-                    parseInt(qtyData.staff_lang || 0) +
-                    parseInt(qtyData.engineers || 0) +
-                    parseInt(qtyData.leader || 0)
-                    // Không tính: tranlator và level
-                    );
-                } else {
-                    return parseInt(qtyReq) || 0;
+            },
+            
+            isAmendmentDeniedButOriginalValid(item) {
+                if (!item) return false;
+                
+                const isAmendment = !!(item.req_id_change);
+                if (!isAmendment) return false;
+                const hasLogs = !!(item.logs && item.logs.trim() !== '' && item.logs !== 'null');
+                if (!hasLogs) return false;
+                
+                if (item.status === 'completed' && this.hasQuantityChange(item)) {
+                    // Kiểm tra xem amendment có bị từ chối không
+                    return this.isAmendmentDenied(item);
                 }
-            }
-            return parseInt(qtyReq) || 0;
-        },
-        
-        isAmendmentDeniedButOriginalValid(item) {
-            if (!item) return false;
-            
-            const isAmendment = !!(item.req_id_change);
-            if (!isAmendment) return false;
-            const hasLogs = !!(item.logs && item.logs.trim() !== '' && item.logs !== 'null');
-            if (!hasLogs) return false;
-            
-            if (item.status === 'completed' && this.hasQuantityChange(item)) {
-                // Kiểm tra xem amendment có bị từ chối không
-                return this.isAmendmentDenied(item);
-            }
-            return false;
-        },
-        
-        isAmendmentDenied(item) {
-            if (!item.approval) return false;
-            
-            try {
-                const approvalData = JSON.parse(item.approval);
-                return approvalData.some(level => level.status === 'rejected');
-            } catch (error) {
-                console.error('Error parsing approval data:', error);
                 return false;
-            }
-        },
-        
-        hasQuantityChange(item) {
-            // Nếu có deny_temp VÀ status_amendent='completed', không hiển thị change quantity tooltip
-            if (item.deny_temp && 
-            item.deny_temp.trim() !== '' && 
-            item.status_amendent === 'completed') {
-                return false;
-            }
+            },
             
-            if (!item.change_req) return false;
-            try {
-                const changeReq = typeof item.change_req === 'string' 
-                ? JSON.parse(item.change_req) 
-                : item.change_req;
+            isAmendmentDenied(item) {
+                if (!item.approval) return false;
                 
-                return Array.isArray(changeReq) && changeReq.length > 0 && 
-                changeReq.some(change => change.change_qty);
-            } catch (e) {
-                console.error("Error parsing change_req:", e);
-                return false;
-            }
-        },
-        
-        getChangeQuantity(item) {
-            try {
-                const changeReq = typeof item.change_req === 'string' 
-                ? JSON.parse(item.change_req) 
-                : item.change_req;
+                try {
+                    const approvalData = JSON.parse(item.approval);
+                    return approvalData.some(level => level.status === 'rejected');
+                } catch (error) {
+                    console.error('Error parsing approval data:', error);
+                    return false;
+                }
+            },
+            
+            hasQuantityChange(item) {
+                // Nếu có deny_temp VÀ status_amendent='completed', không hiển thị change quantity tooltip
+                if (item.deny_temp && 
+                item.deny_temp.trim() !== '' && 
+                item.status_amendent === 'completed') {
+                    return false;
+                }
                 
-                if (Array.isArray(changeReq)) {
-                    const validChanges = changeReq.filter(change => change.change_qty);
-                    if (validChanges.length > 0) {
-                        return validChanges[validChanges.length - 1].change_qty;
+                if (!item.change_req) return false;
+                try {
+                    const changeReq = typeof item.change_req === 'string' 
+                    ? JSON.parse(item.change_req) 
+                    : item.change_req;
+                    
+                    return Array.isArray(changeReq) && changeReq.length > 0 && 
+                    changeReq.some(change => change.change_qty);
+                } catch (e) {
+                    console.error("Error parsing change_req:", e);
+                    return false;
+                }
+            },
+            
+            getChangeQuantity(item) {
+                try {
+                    const changeReq = typeof item.change_req === 'string' 
+                    ? JSON.parse(item.change_req) 
+                    : item.change_req;
+                    
+                    if (Array.isArray(changeReq)) {
+                        const validChanges = changeReq.filter(change => change.change_qty);
+                        if (validChanges.length > 0) {
+                            return validChanges[validChanges.length - 1].change_qty;
+                        }
                     }
+                    else if (changeReq && changeReq.change_qty) {
+                        return changeReq.change_qty;
+                    }
+                    return 0;
+                } catch (e) {
+                    console.error("Error getting change quantity:", e);
+                    return 0;
                 }
-                else if (changeReq && changeReq.change_qty) {
-                    return changeReq.change_qty;
-                }
-                return 0;
-            } catch (e) {
-                console.error("Error getting change quantity:", e);
-                return 0;
-            }
-        },
-        
-        getChangeReason(item) {
-            try {
-                const changeReq = typeof item.change_req === 'string' 
-                ? JSON.parse(item.change_req) 
-                : item.change_req;
-                
-                if (Array.isArray(changeReq)) {
-                    const validChanges = changeReq.filter(change => change.change_reason);
-                    if (validChanges.length > 0) {
-                        const lastChange = validChanges[validChanges.length - 1];
-                        if (lastChange.change_reason) {
-                            const reason = lastChange.change_reason;
-                            if (reason.id && reason.text) {
-                                return reason.text;
-                            } 
-                            else if (typeof reason === 'string') {
-                                return reason;
-                            }
-                            else {
-                                return JSON.stringify(reason);
+            },
+            
+            getChangeReason(item) {
+                try {
+                    const changeReq = typeof item.change_req === 'string' 
+                    ? JSON.parse(item.change_req) 
+                    : item.change_req;
+                    
+                    if (Array.isArray(changeReq)) {
+                        const validChanges = changeReq.filter(change => change.change_reason);
+                        if (validChanges.length > 0) {
+                            const lastChange = validChanges[validChanges.length - 1];
+                            if (lastChange.change_reason) {
+                                const reason = lastChange.change_reason;
+                                if (reason.id && reason.text) {
+                                    return reason.text;
+                                } 
+                                else if (typeof reason === 'string') {
+                                    return reason;
+                                }
+                                else {
+                                    return JSON.stringify(reason);
+                                }
                             }
                         }
                     }
-                }
-                else if (changeReq && changeReq.change_reason) {
-                    const reason = changeReq.change_reason;
-                    if (reason.id && reason.text) {
-                        return reason.text;
-                    } 
-                    else if (typeof reason === 'string') {
-                        return reason;
+                    else if (changeReq && changeReq.change_reason) {
+                        const reason = changeReq.change_reason;
+                        if (reason.id && reason.text) {
+                            return reason.text;
+                        } 
+                        else if (typeof reason === 'string') {
+                            return reason;
+                        }
+                        else {
+                            return JSON.stringify(reason);
+                        }
                     }
-                    else {
-                        return JSON.stringify(reason);
+                    return this.$t('Changed quantity');
+                } catch (e) {
+                    console.error("Error getting change reason:", e);
+                    return this.$t('Changed quantity');
+                }
+            },
+            async openAcceptDialog(item) {
+                this.selectedItemForAccept = item;
+                try {
+                    const flowData = await this.getFlowDataForItem(item);
+                    if (flowData) {
+                        this.dataFlow = flowData;
+                        this.confirmAcceptDialog = true;
                     }
+                } catch (error) {
+                    console.error("Error in openAcceptDialog:", error);
                 }
-                return this.$t('Changed quantity');
-            } catch (e) {
-                console.error("Error getting change reason:", e);
-                return this.$t('Changed quantity');
-            }
-        },
-        async openAcceptDialog(item) {
-            this.selectedItemForAccept = item;
-            try {
-                const flowData = await this.getFlowDataForItem(item);
-                if (flowData) {
-                    this.dataFlow = flowData;
-                    this.confirmAcceptDialog = true;
-                }
-            } catch (error) {
-                console.error("Error in openAcceptDialog:", error);
-            }
-        },
-        async confirmAccept() {
-            if (!this.selectedItemForAccept) return;
-            
-            let params = {
-                user_empno: this.activeUser.empno,
-                dataReq: {
-                    dataFlow: this.dataFlow,
-                    id: this.selectedItemForAccept.id,
-                    status: this.selectedItemForAccept.status,
-                    status_amendent: this.selectedItemForAccept.status_amendent,
-                    approval: this.selectedItemForAccept.approval,
-                    
-                }
-            };
-            const res = await this.$axios.post(this.api + "acceptRequest", params);
-            if (res.status === 200) {
-                await this.getAllData();
-            }
-            this.confirmAcceptDialog = false;
-            this.selectedItemForAccept = null;
-        },
-        async openDenyDialog(item) {
-            this.selectedItemForAction = item;
-            this.denyReason = '';
-            try {
-                const flowData = await this.getFlowDataForItem(item);
-                if (flowData) {
-                    this.dataFlow = flowData;
-                    this.confirmDenyDialog = true;
-                }
-            } catch (error) {
-                console.error("Error in openDenyDialog:", error);
-            }
-        },
-        async confirmDeny() {
-            if (!this.denyReason.trim()) {
-                return;
-            }
-            try {
-                const response = await this.$axios.post(this.api + 'denyRequest', {
-                    id: this.selectedItemForAction.id,
-                    reason: this.denyReason,
+            },
+            async confirmAccept() {
+                if (!this.selectedItemForAccept) return;
+                
+                let params = {
                     user_empno: this.activeUser.empno,
                     dataReq: {
                         dataFlow: this.dataFlow,
-                        id: this.selectedItemForAction.id,
-                        status: this.selectedItemForAction.status,
-                        approval: this.selectedItemForAction.approval,
-                        status_amendent: this.selectedItemForAction.status_amendent,
+                        id: this.selectedItemForAccept.id,
+                        status: this.selectedItemForAccept.status,
+                        status_amendent: this.selectedItemForAccept.status_amendent,
+                        approval: this.selectedItemForAccept.approval,
+                        
                     }
-                });
-                
-                if (response.data.success) {
-                    await this.getAllData();
-                    this.confirmDenyDialog = false;
-                    this.selectedItemForAction = null;
-                    this.denyReason = '';
-                }
-            } catch (error) {
-                console.error('Error denying request:', error);
-            }
-        },
-        
-        getApprovalStatusColor(status) {
-            const normalizedStatus = status.toLowerCase();
-            switch (normalizedStatus) {
-                case 'waiting':
-                return 'warning';
-                case 'approved':
-                return 'success';
-                case 'rejected':
-                return 'error';
-                case 'processing':
-                return 'info';
-                case 'returned':
-                return 'amber';
-                default:
-                return 'grey';
-            }
-        },
-        canApproveItem(item) {
-            if (!item || !this.activeUser) return false;
-            
-            const effectiveStatus = item.status_amendent || item.status;
-            
-            if (effectiveStatus === 'completed' || effectiveStatus === 'declined') return false;
-            
-            try {
-                const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
-                if (!flowData) return false;
-                
-                const statusToLevelCode = {
-                    'waiting_gm': 'general_manager'
                 };
-                
-                const currentLevelCode = statusToLevelCode[effectiveStatus];
-                
-                if (!currentLevelCode) return false;
-                
-                const currentLevel = flowData.find(level => level.lvl_code === currentLevelCode);
-                if (!currentLevel?.managers) return false;
-                
-                return currentLevel.managers.some(manager => {
-                    if (manager.empno === this.activeUser.empno) return true;
-                    
-                    if (manager.deputies && Array.isArray(manager.deputies)) {
-                        return manager.deputies.some(deputy =>
-                        deputy.empno === this.activeUser.empno && deputy.status === true
-                        );
+                const res = await this.$axios.post(this.api + "acceptRequest", params);
+                if (res.status === 200) {
+                    await this.getAllData();
+                }
+                this.confirmAcceptDialog = false;
+                this.selectedItemForAccept = null;
+            },
+            async openDenyDialog(item) {
+                this.selectedItemForAction = item;
+                this.denyReason = '';
+                try {
+                    const flowData = await this.getFlowDataForItem(item);
+                    if (flowData) {
+                        this.dataFlow = flowData;
+                        this.confirmDenyDialog = true;
                     }
+                } catch (error) {
+                    console.error("Error in openDenyDialog:", error);
+                }
+            },
+            async confirmDeny() {
+                if (!this.denyReason.trim()) {
+                    return;
+                }
+                try {
+                    const response = await this.$axios.post(this.api + 'denyRequest', {
+                        id: this.selectedItemForAction.id,
+                        reason: this.denyReason,
+                        user_empno: this.activeUser.empno,
+                        dataReq: {
+                            dataFlow: this.dataFlow,
+                            id: this.selectedItemForAction.id,
+                            status: this.selectedItemForAction.status,
+                            approval: this.selectedItemForAction.approval,
+                            status_amendent: this.selectedItemForAction.status_amendent,
+                        }
+                    });
+                    
+                    if (response.data.success) {
+                        await this.getAllData();
+                        this.confirmDenyDialog = false;
+                        this.selectedItemForAction = null;
+                        this.denyReason = '';
+                    }
+                } catch (error) {
+                    console.error('Error denying request:', error);
+                }
+            },
+            
+            getApprovalStatusColor(status) {
+                const normalizedStatus = status.toLowerCase();
+                switch (normalizedStatus) {
+                    case 'waiting':
+                    return 'warning';
+                    case 'approved':
+                    return 'success';
+                    case 'rejected':
+                    return 'error';
+                    case 'processing':
+                    return 'info';
+                    case 'returned':
+                    return 'amber';
+                    default:
+                    return 'grey';
+                }
+            },
+            canApproveItem(item) {
+                if (!item || !this.activeUser) return false;
+                
+                const effectiveStatus = item.status_amendent || item.status;
+                
+                if (effectiveStatus === 'completed' || effectiveStatus === 'declined') return false;
+                
+                try {
+                    const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
+                    if (!flowData) return false;
+                    
+                    const statusToLevelCode = {
+                        'waiting_gm': 'general_manager'
+                    };
+                    
+                    const currentLevelCode = statusToLevelCode[effectiveStatus];
+                    
+                    if (!currentLevelCode) return false;
+                    
+                    const currentLevel = flowData.find(level => level.lvl_code === currentLevelCode);
+                    if (!currentLevel?.managers) return false;
+                    
+                    return currentLevel.managers.some(manager => {
+                        if (manager.empno === this.activeUser.empno) return true;
+                        
+                        if (manager.deputies && Array.isArray(manager.deputies)) {
+                            return manager.deputies.some(deputy =>
+                            deputy.empno === this.activeUser.empno && deputy.status === true
+                            );
+                        }
+                        return false;
+                    });
+                    
+                } catch (error) {
+                    console.error('Error in canApproveItem:', error);
                     return false;
-                });
+                }
+            },
+            canApproveItemForTodo(item)
+            {
+                // if (!item || !this.activeUser) return false;
+                if ((item.status === 'completed' || item.status === 'declined') && 
+                (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined')) {
+                    return false;
+                }
+                const validStatuses = [
+                'waiting_unit', 
+                'waiting_dept', 
+                'waiting_div', 
+                'waiting_hr_rec_sf', 
+                'waiting_hr', 
+                'waiting_ad', 
+                'waiting_gm'
+                ];
                 
-            } catch (error) {
-                console.error('Error in canApproveItem:', error);
-                return false;
-            }
-        },
-        canApproveItemForTodo(item)
-        {
-            // if (!item || !this.activeUser) return false;
-            if ((item.status === 'completed' || item.status === 'declined') && 
-            (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined')) {
-                return false;
-            }
-            const validStatuses = [
-            'waiting_unit', 
-            'waiting_dept', 
-            'waiting_div', 
-            'waiting_hr_rec_sf', 
-            'waiting_hr', 
-            'waiting_ad', 
-            'waiting_gm'
-            ];
-            
-            // Kiểm tra xem có ít nhất một trong hai trạng thái thuộc danh sách hợp lệ
-            if (!validStatuses.includes(item.status) && 
-            (!item.status_amendent || !validStatuses.includes(item.status_amendent))) {
-                return false;
-            }
-            
-            try {
-                const approval = JSON.parse(item.approval);
+                // Kiểm tra xem có ít nhất một trong hai trạng thái thuộc danh sách hợp lệ
+                if (!validStatuses.includes(item.status) && 
+                (!item.status_amendent || !validStatuses.includes(item.status_amendent))) {
+                    return false;
+                }
                 
-                // Nếu có status_amendent, sử dụng logic khác
-                if (item.status_amendent) {
+                try {
+                    const approval = JSON.parse(item.approval);
+                    
+                    // Nếu có status_amendent, sử dụng logic khác
+                    if (item.status_amendent) {
+                        const statusToLevelCode = {
+                            'waiting_unit': 'unit_manager',
+                            'waiting_dept': 'dept_manager',
+                            'waiting_div': 'division_manager',
+                            'waiting_hr_rec_sf': 'hr_rec_sf',
+                            'waiting_hr': 'hr_manager',
+                            'waiting_ad': 'smp_manager',
+                            'waiting_gm': 'general_manager'
+                        };
+                        
+                        const currentLevelCode = statusToLevelCode[item.status_amendent];
+                        if (!currentLevelCode) return false;
+                        
+                        const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
+                        if (!flowData || !Array.isArray(flowData)) return false;
+                        
+                        const currentFlowLevel = flowData.find(level => level.lvl_code === currentLevelCode);
+                        if (!currentFlowLevel?.managers) return false;
+                        
+                        return currentFlowLevel.managers.some(manager => {
+                            if (manager.empno === this.activeUser.empno) return true;
+                            
+                            if (manager.deputies && Array.isArray(manager.deputies)) {
+                                return manager.deputies.some(deputy => 
+                                deputy.empno === this.activeUser.empno && 
+                                deputy.status === true
+                                );
+                            }
+                            return false;
+                        });
+                    }
+                    
+                    // Logic cũ cho status thông thường
+                    const currentLevel = approval.find(level => level.status === 'waiting');
+                    if (!currentLevel) return false;
+                    
+                    if (currentLevel.approver && currentLevel.approver.empno === this.activeUser.empno) {
+                        return true;
+                    }
+                    
+                    const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
+                    if (!flowData || !Array.isArray(flowData)) return false;
+                    
                     const statusToLevelCode = {
                         'waiting_unit': 'unit_manager',
                         'waiting_dept': 'dept_manager',
@@ -2200,12 +2243,8 @@ export default {
                         'waiting_ad': 'smp_manager',
                         'waiting_gm': 'general_manager'
                     };
-                    
-                    const currentLevelCode = statusToLevelCode[item.status_amendent];
+                    const currentLevelCode = statusToLevelCode[item.status];
                     if (!currentLevelCode) return false;
-                    
-                    const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
-                    if (!flowData || !Array.isArray(flowData)) return false;
                     
                     const currentFlowLevel = flowData.find(level => level.lvl_code === currentLevelCode);
                     if (!currentFlowLevel?.managers) return false;
@@ -2221,1238 +2260,1199 @@ export default {
                         }
                         return false;
                     });
-                }
-                
-                // Logic cũ cho status thông thường
-                const currentLevel = approval.find(level => level.status === 'waiting');
-                if (!currentLevel) return false;
-                
-                if (currentLevel.approver && currentLevel.approver.empno === this.activeUser.empno) {
-                    return true;
-                }
-                
-                const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
-                if (!flowData || !Array.isArray(flowData)) return false;
-                
-                const statusToLevelCode = {
-                    'waiting_unit': 'unit_manager',
-                    'waiting_dept': 'dept_manager',
-                    'waiting_div': 'division_manager',
-                    'waiting_hr_rec_sf': 'hr_rec_sf',
-                    'waiting_hr': 'hr_manager',
-                    'waiting_ad': 'smp_manager',
-                    'waiting_gm': 'general_manager'
-                };
-                const currentLevelCode = statusToLevelCode[item.status];
-                if (!currentLevelCode) return false;
-                
-                const currentFlowLevel = flowData.find(level => level.lvl_code === currentLevelCode);
-                if (!currentFlowLevel?.managers) return false;
-                
-                return currentFlowLevel.managers.some(manager => {
-                    if (manager.empno === this.activeUser.empno) return true;
                     
-                    if (manager.deputies && Array.isArray(manager.deputies)) {
-                        return manager.deputies.some(deputy => 
-                        deputy.empno === this.activeUser.empno && 
-                        deputy.status === true
-                        );
-                    }
+                } catch (error) {
+                    console.error('Error in canApproveItemForTodo:', error);
                     return false;
-                });
-                
-            } catch (error) {
-                console.error('Error in canApproveItemForTodo:', error);
-                return false;
-            }
-        },
-        async fetchFlowData() {
-            if (!this.activeUser) return;
-            try {
-                const res = await this.$axios.post(this.api + "getDataFlowForItem", {
-                    empno: this.activeUser.empno,
-                    name: this.activeUser.name,
-                    dept_sumt: this.activeUser.dept,
-                    high_dept: this.activeUser.hight_dept,
-                });
-                
-                if (res.data) {
-                    this.generalFlowData = res.data.flow_data;
                 }
-            } catch (error) {
-                console.log("Error fetching general flow data:", error);
-                this.statusFilter = 0; // Set to "All" tab in case of error
-            }
-        },
-        getAmendmentStatusText(status, item = {}) {
-            if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
-                return "🔄" + this.$t("Returned");
-            }
-            const prefix = "🔄";
-            switch (status) {
-                case "waiting_unit":
-                return prefix + this.$t("Pending Unit");
-                case "waiting_dept":
-                return prefix + this.$t("Pending Dept");
-                case "waiting_div":
-                return prefix + this.$t("Pending Div");
-                case "waiting_hr_rec_sf":
-                return prefix + this.$t("Pending HR Rec SF");
-                case "waiting_hr":
-                return prefix + this.$t("Pending HR");
-                case "waiting_ad":
-                return prefix + this.$t("Pending AD");
-                case "waiting_gm":
-                return prefix + this.$t("Pending GM");
-                case "completed":
-                return prefix + this.$t("Approved");
-                case "declined":
-                return prefix + this.$t("Rejected");
-                case "returned":
-                return prefix + this.$t("Returned");
-                default:
-                return prefix + this.$t("Amend - {status}", { status: status });
-            }
-        },
-        
-        getAmendmentStatusColor(status) {
-            switch (status) {
-                case "waiting_unit":
-                return "amber darken-1";
-                case "waiting_dept":
-                return "deep-orange darken-1";
-                case "waiting_div":
-                return "pink darken-1";
-                case "waiting_hr_rec_sf":
-                return "orange darken-1";
-                case "waiting_hr":
-                return "purple darken-1";
-                case "waiting_ad":
-                return "indigo darken-1";
-                case "waiting_gm":
-                return "blue darken-1";
-                case "completed":
-                return "green darken-1";
-                case "declined":
-                return "red darken-1";
-                case "returned":
-                return "amber darken-1";
-                default:
-                return "grey darken-1";
-            }
-        },
-        getStatusText(status, item = {}) {
-            if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
-                return this.$t("Returned");
-            }
-            switch (status) {
-                case "completed":
-                return this.$t("Approved");
-                case "waiting_unit":
-                return this.$t("Pending Unit");
-                case "waiting_dept":
-                return this.$t("Pending Dept");
-                case "waiting_div":
-                return this.$t("Pending Div");
-                case "waiting_hr_rec_sf":
-                return this.$t("Pending HR Rec SF");
-                case "waiting_hr":
-                return this.$t("Pending HR");
-                case "waiting_ad":
-                return this.$t("Pending AD");
-                case "waiting_gm":
-                return this.$t("Pending GM");
-                case "declined":
-                return this.$t("Rejected");
-                case "returned":
-                return this.$t("Returned");
-                default:
-                return status || "";
-            }
-        },
-        getStatusColor(status,item = {}) {
-            switch (status) {
-                case "waiting_unit":
-                return "amber darken-2";
-                case "waiting_dept":
-                return "deep-orange";
-                case "waiting_div":
-                return "pink darken-1";
-                case "waiting_hr_rec_sf":
-                return "orange darken-2";
-                case "waiting_hr":
-                return "purple";
-                case "waiting_ad":
-                return "indigo";
-                case "waiting_gm":
-                return "blue darken-3";
-                
-                case "completed":
-                return "green darken-2";
-                case "declined":
-                return "red darken-2";
-                case "cancelled":
-                return "grey darken-3";
-                
-                case "pending":
-                return "lime darken-2";
-                case "processing":
-                return "teal";
-                case "returned":
-                return "amber";
-                
-                default:
-                return "grey";
-            }
-        },
-        getCurrentLevel(status) {
-            const statusLevels = {
-                'waiting_unit': 1,
-                'waiting_dept': 2,
-                'waiting_div': 3,
-                'waiting_hr_rec_sf': 4,
-                'waiting_hr': 5,
-                'waiting_ad': 6,
-                'waiting_gm': 7,
-                'completed': 8,
-                'declined': 0
-            };
-            return statusLevels[status] || 0;
-        },
-        
-        async openReturnDialog(item) {
-            this.selectedItemForAction = item;
-            this.returnReason = '';
-            try {
-                const flowData = await this.getFlowDataForItem(item);
-                if (flowData) {
-                    this.dataFlow = flowData;
-                    this.confirmReturnDialog = true;
-                }
-            } catch (error) {
-                console.error("Error in openReturnDialog:", error);
-            }
-        },
-        
-        async confirmReturn() {
-            if (!this.returnReason.trim()) {
-                return;
-            }
-            
-            try {
-                const response = await this.$axios.post(this.api + 'returnRequest', {
-                    id: this.selectedItemForAction.id,
-                    reason: this.returnReason,
-                    returnToLevel: 'waiting_unit', // Luôn trả đơn cho unit level
-                    user_empno: this.activeUser.empno,
-                    dataReq: {
-                        dataFlow: this.dataFlow,
-                        id: this.selectedItemForAction.id,
-                        status: this.selectedItemForAction.status,
-                        status_amendent: this.selectedItemForAction.status_amendent,
-                        approval: this.selectedItemForAction.approval,
-                    }
-                });
-                
-                if (response.data.success) {
-                    await this.getAllData();
-                    this.confirmReturnDialog = false;
-                    this.selectedItemForAction = null;
-                    this.returnReason = '';
-                }
-            } catch (error) {
-                console.error('Error returning request:', error);
-                this.$store.dispatch('showError', this.$t('Failed to return request'));
-            }
-        },
-        getNextApproverInfo(item) {
-            try {
-                if ((item.status === 'completed' || item.status === 'declined') && 
-                (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined')) {
-                    return null;
-                }
-                
-                let flowData = this.approvalFlowCache[item.id];
-                
-                if (!flowData) {
-                    this.loadFlowDataForItem(item);
-                    return this.$t('Loading approver info...');
-                }
-                
-                const statusLevels = {
-                    'waiting_unit': 0,
-                    'waiting_dept': 1,
-                    'waiting_div': 2,
-                    'waiting_hr_rec_sf': 3,
-                    'waiting_hr': 4,
-                    'waiting_ad': 5,
-                    'waiting_gm': 6
-                };
-                
-                // Determine which status to use for getting approver info
-                let effectiveStatus = null;
-                
-                // Priority: amendment status if it's in waiting state
-                if (item.status_amendent && statusLevels.hasOwnProperty(item.status_amendent)) {
-                    effectiveStatus = item.status_amendent;
-                }
-                // Otherwise use main status if it's in waiting state
-                else if (item.status && statusLevels.hasOwnProperty(item.status)) {
-                    effectiveStatus = item.status;
-                }
-                
-                // If no effective status found, return null
-                if (!effectiveStatus) return null;
-                
-                const currentLevel = statusLevels[effectiveStatus];
-                const currentFlow = flowData[currentLevel];
-                
-                if (!currentFlow || !currentFlow.managers || currentFlow.managers.length === 0) {
-                    return null;
-                }
-                
-                const mainApprover = currentFlow.managers[0];
-                const deputies = mainApprover.deputies || [];
-                
-                let approverText = `${this.$t('Manager')}: ${mainApprover.empno} - ${mainApprover.name}`;
-                if (deputies.length > 0) {
-                    const activeDeputies = deputies.filter(d => d.status);
-                    if (activeDeputies.length > 0) {
-                        approverText += `\n${this.$t('Deputies')}: ` +
-                        activeDeputies.map(d => `${d.empno} - ${d.name}`).join('\n');
-                    }
-                }
-                return approverText;
-                
-            } catch (error) {
-                console.error('Error getting next approver info:', error);
-                return null;
-            }
-        },
-        getStatusWithApprover(status, item) {
-            const statusText = this.$t(this.getStatusText(status, item));
-            const approverInfo = this.getApproverName(status, item);
-            
-            if (approverInfo) {
-                return `${statusText}`;
-            }
-            return statusText;
-        },
-        
-        getAmendmentStatusWithApprover(status, item) {
-            const statusText = this.$t(this.getAmendmentStatusText(status));
-            const approverInfo = this.getApproverNameForAmendment(status, item);
-            
-            if (approverInfo) {
-                return `${statusText}`;
-            }
-            return statusText;
-        },
-        
-        getApproverName(status, item) {
-            try {
-                if (!status || status === 'completed' || status === 'declined') {
-                    return null;
-                }
-                
-                const statusLevels = {
-                    'waiting_unit': 0,
-                    'waiting_dept': 1,
-                    'waiting_div': 2,
-                    'waiting_hr_rec_sf': 3,
-                    'waiting_hr': 4,
-                    'waiting_ad': 5,
-                    'waiting_gm': 6
-                };
-                
-                if (!statusLevels.hasOwnProperty(status)) return null;
-                
-                let flowData = this.approvalFlowCache[item.id];
-                if (!flowData) return null;
-                
-                const currentLevel = statusLevels[status];
-                const currentFlow = flowData[currentLevel];
-                
-                if (!currentFlow || !currentFlow.managers || currentFlow.managers.length === 0) {
-                    return null;
-                }
-                
-                const mainApprover = currentFlow.managers[0];
-                return mainApprover.name || mainApprover.empno;
-                
-            } catch (error) {
-                console.error('Error getting approver name:', error);
-                return null;
-            }
-        },
-        
-        getApproverNameForAmendment(status, item) {
-            try {
-                if (!status || status === 'completed' || status === 'declined') {
-                    return null;
-                }
-                
-                const statusLevels = {
-                    'waiting_unit': 0,
-                    'waiting_dept': 1,
-                    'waiting_div': 2,
-                    'waiting_hr_rec_sf': 3,
-                    'waiting_hr': 4,
-                    'waiting_ad': 5,
-                    'waiting_gm': 6
-                };
-                
-                if (!statusLevels.hasOwnProperty(status)) return null;
-                
-                let flowData = this.approvalFlowCache[item.id];
-                if (!flowData) return null;
-                
-                const currentLevel = statusLevels[status];
-                const currentFlow = flowData[currentLevel];
-                
-                if (!currentFlow || !currentFlow.managers || currentFlow.managers.length === 0) {
-                    return null;
-                }
-                
-                const mainApprover = currentFlow.managers[0];
-                return mainApprover.name || mainApprover.empno;
-                
-            } catch (error) {
-                console.error('Error getting amendment approver name:', error);
-                return null;
-            }
-        },
-        // Thêm method riêng để lấy thông tin cho status chính
-        getNextApproverInfoForStatus(item) {
-            try {
-                if (!item.status || item.status === 'completed' || item.status === 'declined') {
-                    return null;
-                }
-                
-                const statusLevels = {
-                    'waiting_unit': 0,
-                    'waiting_dept': 1,
-                    'waiting_div': 2,
-                    'waiting_hr_rec_sf': 3,
-                    'waiting_hr': 4,
-                    'waiting_ad': 5,
-                    'waiting_gm': 6
-                };
-                
-                if (!statusLevels.hasOwnProperty(item.status)) return null;
-                
-                let flowData = this.approvalFlowCache[item.id];
-                if (!flowData) {
-                    this.loadFlowDataForItem(item);
-                    return this.$t('Loading approver info...');
-                }
-                
-                const currentLevel = statusLevels[item.status];
-                const currentFlow = flowData[currentLevel];
-                
-                if (!currentFlow || !currentFlow.managers || currentFlow.managers.length === 0) {
-                    return null;
-                }
-                
-                const mainApprover = currentFlow.managers[0];
-                const deputies = mainApprover.deputies || [];
-                
-                let approverText = `${this.$t('Manager')}: ${mainApprover.empno} - ${mainApprover.name}`;
-                if (deputies.length > 0) {
-                    const activeDeputies = deputies.filter(d => d.status);
-                    if (activeDeputies.length > 0) {
-                        approverText += `\n${this.$t('Deputies')}: ` +
-                        activeDeputies.map(d => `${d.empno} - ${d.name}`).join('\n');
-                    }
-                }
-                return approverText;
-                
-            } catch (error) {
-                console.error('Error getting status approver info:', error);
-                return null;
-            }
-        },
-        
-        // Thêm method riêng để lấy thông tin cho status_amendent
-        getNextApproverInfoForAmendment(item) {
-            try {
-                if (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined') {
-                    return null;
-                }
-                
-                const statusLevels = {
-                    'waiting_unit': 0,
-                    'waiting_dept': 1,
-                    'waiting_div': 2,
-                    'waiting_hr_rec_sf': 3,
-                    'waiting_hr': 4,
-                    'waiting_ad': 5,
-                    'waiting_gm': 6
-                };
-                
-                if (!statusLevels.hasOwnProperty(item.status_amendent)) return null;
-                
-                let flowData = this.approvalFlowCache[item.id];
-                if (!flowData) {
-                    this.loadFlowDataForItem(item);
-                    return this.$t('Loading approver info...');
-                }
-                
-                const currentLevel = statusLevels[item.status_amendent];
-                const currentFlow = flowData[currentLevel];
-                
-                if (!currentFlow || !currentFlow.managers || currentFlow.managers.length === 0) {
-                    return null;
-                }
-                
-                const mainApprover = currentFlow.managers[0];
-                const deputies = mainApprover.deputies || [];
-                
-                let approverText = `${this.$t('Manager')}: ${mainApprover.empno} - ${mainApprover.name}`;
-                if (deputies.length > 0) {
-                    const activeDeputies = deputies.filter(d => d.status);
-                    if (activeDeputies.length > 0) {
-                        approverText += `\n${this.$t('Deputies')}: ` +
-                        activeDeputies.map(d => `${d.empno} - ${d.name}`).join('\n');
-                    }
-                }
-                return approverText;
-                
-            } catch (error) {
-                console.error('Error getting amendment approver info:', error);
-                return null;
-            }
-        },
-        loadFlowDataForItem(item) {
-            if (this.approvalFlowCache[item.id]) return;
-            
-            this.getFlowDataForItem(item)
-            .then(() => {
-                this.$forceUpdate();
-            })
-            .catch(error => {
-                console.error("Error loading flow data:", error);
-            });
-        },
-        async getFlowDataForItem(item) {
-            const itemId = item.id;
-            
-            if (this.approvalFlowCache[itemId]) {
-                return this.approvalFlowCache[itemId];
-            }
-            
-            if (this.flowRequestInProgress[itemId]) {
-                return new Promise((resolve, reject) => {
-                    if (!this.flowRequestQueue[itemId]) {
-                        this.flowRequestQueue[itemId] = [];
-                    }
-                    this.flowRequestQueue[itemId].push({ resolve, reject });
-                });
-            }
-            
-            this.flowRequestInProgress[itemId] = true;
-            
-            const params = {
-                id: itemId,
-                empno: item.submiterInfo?.empno || item.submiterInfo?.empno,
-                name: item.submiterInfo?.name,
-                dept: item.submiterInfo?.dept_sumt,
-                high_dept: item.submiterInfo?.high_dept,
-            };
-            
-            try {
-                const res = await this.$axios.post(this.api + "getDataFlowForItem", params);
-                if (res.data && res.data.flow_data) {
-                    this.approvalFlowCache[itemId] = res.data.flow_data;
+            },
+            async fetchFlowData() {
+                if (!this.activeUser) return;
+                try {
+                    const res = await this.$axios.post(this.api + "getDataFlowForItem", {
+                        empno: this.activeUser.empno,
+                        name: this.activeUser.name,
+                        dept_sumt: this.activeUser.dept,
+                        high_dept: this.activeUser.hight_dept,
+                    });
                     
+                    if (res.data) {
+                        this.generalFlowData = res.data.flow_data;
+                    }
+                } catch (error) {
+                    console.log("Error fetching general flow data:", error);
+                    this.statusFilter = 0; // Set to "All" tab in case of error
+                }
+            },
+            getAmendmentStatusText(status, item = {}) {
+                if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
+                    return "🔄" + this.$t("Returned");
+                }
+                const prefix = "🔄";
+                switch (status) {
+                    case "waiting_unit":
+                    return prefix + this.$t("Pending Unit");
+                    case "waiting_dept":
+                    return prefix + this.$t("Pending Dept");
+                    case "waiting_div":
+                    return prefix + this.$t("Pending Div");
+                    case "waiting_hr_rec_sf":
+                    return prefix + this.$t("Pending HR Rec SF");
+                    case "waiting_hr":
+                    return prefix + this.$t("Pending HR");
+                    case "waiting_ad":
+                    return prefix + this.$t("Pending AD");
+                    case "waiting_gm":
+                    return prefix + this.$t("Pending GM");
+                    case "completed":
+                    return prefix + this.$t("Approved");
+                    case "declined":
+                    return prefix + this.$t("Rejected");
+                    case "returned":
+                    return prefix + this.$t("Returned");
+                    default:
+                    return prefix + this.$t("Amend - {status}", { status: status });
+                }
+            },
+            
+            getAmendmentStatusColor(status) {
+                switch (status) {
+                    case "waiting_unit":
+                    return "amber darken-1";
+                    case "waiting_dept":
+                    return "deep-orange darken-1";
+                    case "waiting_div":
+                    return "pink darken-1";
+                    case "waiting_hr_rec_sf":
+                    return "orange darken-1";
+                    case "waiting_hr":
+                    return "purple darken-1";
+                    case "waiting_ad":
+                    return "indigo darken-1";
+                    case "waiting_gm":
+                    return "blue darken-1";
+                    case "completed":
+                    return "green darken-1";
+                    case "declined":
+                    return "red darken-1";
+                    case "returned":
+                    return "amber darken-1";
+                    default:
+                    return "grey darken-1";
+                }
+            },
+            getStatusText(status, item = {}) {
+                if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
+                    return this.$t("Returned");
+                }
+                switch (status) {
+                    case "completed":
+                    return this.$t("Approved");
+                    case "waiting_unit":
+                    return this.$t("Pending Unit");
+                    case "waiting_dept":
+                    return this.$t("Pending Dept");
+                    case "waiting_div":
+                    return this.$t("Pending Div");
+                    case "waiting_hr_rec_sf":
+                    return this.$t("Pending HR Rec SF");
+                    case "waiting_hr":
+                    return this.$t("Pending HR");
+                    case "waiting_ad":
+                    return this.$t("Pending AD");
+                    case "waiting_gm":
+                    return this.$t("Pending GM");
+                    case "declined":
+                    return this.$t("Rejected");
+                    case "returned":
+                    return this.$t("Returned");
+                    default:
+                    return status || "";
+                }
+            },
+            getStatusColor(status,item = {}) {
+                switch (status) {
+                    case "waiting_unit":
+                    return "amber darken-2";
+                    case "waiting_dept":
+                    return "deep-orange";
+                    case "waiting_div":
+                    return "pink darken-1";
+                    case "waiting_hr_rec_sf":
+                    return "orange darken-2";
+                    case "waiting_hr":
+                    return "purple";
+                    case "waiting_ad":
+                    return "indigo";
+                    case "waiting_gm":
+                    return "blue darken-3";
+                    
+                    case "completed":
+                    return "green darken-2";
+                    case "declined":
+                    return "red darken-2";
+                    case "cancelled":
+                    return "grey darken-3";
+                    
+                    case "pending":
+                    return "lime darken-2";
+                    case "processing":
+                    return "teal";
+                    case "returned":
+                    return "amber";
+                    
+                    default:
+                    return "grey";
+                }
+            },
+            getCurrentLevel(status) {
+                const statusLevels = {
+                    'waiting_unit': 1,
+                    'waiting_dept': 2,
+                    'waiting_div': 3,
+                    'waiting_hr_rec_sf': 4,
+                    'waiting_hr': 5,
+                    'waiting_ad': 6,
+                    'waiting_gm': 7,
+                    'completed': 8,
+                    'declined': 0
+                };
+                return statusLevels[status] || 0;
+            },
+            
+            async openReturnDialog(item) {
+                this.selectedItemForAction = item;
+                this.returnReason = '';
+                try {
+                    const flowData = await this.getFlowDataForItem(item);
+                    if (flowData) {
+                        this.dataFlow = flowData;
+                        this.confirmReturnDialog = true;
+                    }
+                } catch (error) {
+                    console.error("Error in openReturnDialog:", error);
+                }
+            },
+            
+            async confirmReturn() {
+                if (!this.returnReason.trim()) {
+                    return;
+                }
+                
+                try {
+                    const response = await this.$axios.post(this.api + 'returnRequest', {
+                        id: this.selectedItemForAction.id,
+                        reason: this.returnReason,
+                        returnToLevel: 'waiting_unit', // Luôn trả đơn cho unit level
+                        user_empno: this.activeUser.empno,
+                        dataReq: {
+                            dataFlow: this.dataFlow,
+                            id: this.selectedItemForAction.id,
+                            status: this.selectedItemForAction.status,
+                            status_amendent: this.selectedItemForAction.status_amendent,
+                            approval: this.selectedItemForAction.approval,
+                        }
+                    });
+                    
+                    if (response.data.success) {
+                        await this.getAllData();
+                        this.confirmReturnDialog = false;
+                        this.selectedItemForAction = null;
+                        this.returnReason = '';
+                    }
+                } catch (error) {
+                    console.error('Error returning request:', error);
+                    this.$store.dispatch('showError', this.$t('Failed to return request'));
+                }
+            },
+            getNextApproverInfo(item) {
+                try {
+                    if ((item.status === 'completed' || item.status === 'declined') && 
+                    (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined')) {
+                        return null;
+                    }
+                    
+                    let flowData = this.approvalFlowCache[item.id];
+                    
+                    if (!flowData) {
+                        this.loadFlowDataForItem(item);
+                        return this.$t('Loading approver info...');
+                    }
+                    
+                    const statusLevels = {
+                        'waiting_unit': 0,
+                        'waiting_dept': 1,
+                        'waiting_div': 2,
+                        'waiting_hr_rec_sf': 3,
+                        'waiting_hr': 4,
+                        'waiting_ad': 5,
+                        'waiting_gm': 6
+                    };
+                    
+                    // Determine which status to use for getting approver info
+                    let effectiveStatus = null;
+                    
+                    // Priority: amendment status if it's in waiting state
+                    if (item.status_amendent && statusLevels.hasOwnProperty(item.status_amendent)) {
+                        effectiveStatus = item.status_amendent;
+                    }
+                    // Otherwise use main status if it's in waiting state
+                    else if (item.status && statusLevels.hasOwnProperty(item.status)) {
+                        effectiveStatus = item.status;
+                    }
+                    
+                    // If no effective status found, return null
+                    if (!effectiveStatus) return null;
+                    
+                    const currentLevel = statusLevels[effectiveStatus];
+                    const currentFlow = flowData[currentLevel];
+                    
+                    if (!currentFlow || !currentFlow.managers || currentFlow.managers.length === 0) {
+                        return null;
+                    }
+                    
+                    const mainApprover = currentFlow.managers[0];
+                    const deputies = mainApprover.deputies || [];
+                    
+                    let approverText = `${this.$t('Manager')}: ${mainApprover.empno} - ${mainApprover.name}`;
+                    if (deputies.length > 0) {
+                        const activeDeputies = deputies.filter(d => d.status);
+                        if (activeDeputies.length > 0) {
+                            approverText += `\n${this.$t('Deputies')}: ` +
+                            activeDeputies.map(d => `${d.empno} - ${d.name}`).join('\n');
+                        }
+                    }
+                    return approverText;
+                    
+                } catch (error) {
+                    console.error('Error getting next approver info:', error);
+                    return null;
+                }
+            },
+            getStatusWithApprover(status, item) {
+                const statusText = this.$t(this.getStatusText(status, item));
+                const approverInfo = this.getApproverName(status, item);
+                
+                if (approverInfo) {
+                    return `${statusText}`;
+                }
+                return statusText;
+            },
+            
+            getAmendmentStatusWithApprover(status, item) {
+                const statusText = this.$t(this.getAmendmentStatusText(status));
+                const approverInfo = this.getApproverNameForAmendment(status, item);
+                
+                if (approverInfo) {
+                    return `${statusText}`;
+                }
+                return statusText;
+            },
+            
+            getApproverName(status, item) {
+                try {
+                    if (!status || status === 'completed' || status === 'declined') {
+                        return null;
+                    }
+                    
+                    const statusLevels = {
+                        'waiting_unit': 0,
+                        'waiting_dept': 1,
+                        'waiting_div': 2,
+                        'waiting_hr_rec_sf': 3,
+                        'waiting_hr': 4,
+                        'waiting_ad': 5,
+                        'waiting_gm': 6
+                    };
+                    
+                    if (!statusLevels.hasOwnProperty(status)) return null;
+                    
+                    let flowData = this.approvalFlowCache[item.id];
+                    if (!flowData) return null;
+                    
+                    const currentLevel = statusLevels[status];
+                    const currentFlow = flowData[currentLevel];
+                    
+                    if (!currentFlow || !currentFlow.managers || currentFlow.managers.length === 0) {
+                        return null;
+                    }
+                    
+                    const mainApprover = currentFlow.managers[0];
+                    return mainApprover.name || mainApprover.empno;
+                    
+                } catch (error) {
+                    console.error('Error getting approver name:', error);
+                    return null;
+                }
+            },
+            
+            getApproverNameForAmendment(status, item) {
+                try {
+                    if (!status || status === 'completed' || status === 'declined') {
+                        return null;
+                    }
+                    
+                    const statusLevels = {
+                        'waiting_unit': 0,
+                        'waiting_dept': 1,
+                        'waiting_div': 2,
+                        'waiting_hr_rec_sf': 3,
+                        'waiting_hr': 4,
+                        'waiting_ad': 5,
+                        'waiting_gm': 6
+                    };
+                    
+                    if (!statusLevels.hasOwnProperty(status)) return null;
+                    
+                    let flowData = this.approvalFlowCache[item.id];
+                    if (!flowData) return null;
+                    
+                    const currentLevel = statusLevels[status];
+                    const currentFlow = flowData[currentLevel];
+                    
+                    if (!currentFlow || !currentFlow.managers || currentFlow.managers.length === 0) {
+                        return null;
+                    }
+                    
+                    const mainApprover = currentFlow.managers[0];
+                    return mainApprover.name || mainApprover.empno;
+                    
+                } catch (error) {
+                    console.error('Error getting amendment approver name:', error);
+                    return null;
+                }
+            },
+            // Thêm method riêng để lấy thông tin cho status chính
+            getNextApproverInfoForStatus(item) {
+                try {
+                    if (!item.status || item.status === 'completed' || item.status === 'declined') {
+                        return null;
+                    }
+                    
+                    const statusLevels = {
+                        'waiting_unit': 0,
+                        'waiting_dept': 1,
+                        'waiting_div': 2,
+                        'waiting_hr_rec_sf': 3,
+                        'waiting_hr': 4,
+                        'waiting_ad': 5,
+                        'waiting_gm': 6
+                    };
+                    
+                    if (!statusLevels.hasOwnProperty(item.status)) return null;
+                    
+                    let flowData = this.approvalFlowCache[item.id];
+                    if (!flowData) {
+                        this.loadFlowDataForItem(item);
+                        return this.$t('Loading approver info...');
+                    }
+                    
+                    const currentLevel = statusLevels[item.status];
+                    const currentFlow = flowData[currentLevel];
+                    
+                    if (!currentFlow || !currentFlow.managers || currentFlow.managers.length === 0) {
+                        return null;
+                    }
+                    
+                    const mainApprover = currentFlow.managers[0];
+                    const deputies = mainApprover.deputies || [];
+                    
+                    let approverText = `${this.$t('Manager')}: ${mainApprover.empno} - ${mainApprover.name}`;
+                    if (deputies.length > 0) {
+                        const activeDeputies = deputies.filter(d => d.status);
+                        if (activeDeputies.length > 0) {
+                            approverText += `\n${this.$t('Deputies')}: ` +
+                            activeDeputies.map(d => `${d.empno} - ${d.name}`).join('\n');
+                        }
+                    }
+                    return approverText;
+                    
+                } catch (error) {
+                    console.error('Error getting status approver info:', error);
+                    return null;
+                }
+            },
+            
+            // Thêm method riêng để lấy thông tin cho status_amendent
+            getNextApproverInfoForAmendment(item) {
+                try {
+                    if (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined') {
+                        return null;
+                    }
+                    
+                    const statusLevels = {
+                        'waiting_unit': 0,
+                        'waiting_dept': 1,
+                        'waiting_div': 2,
+                        'waiting_hr_rec_sf': 3,
+                        'waiting_hr': 4,
+                        'waiting_ad': 5,
+                        'waiting_gm': 6
+                    };
+                    
+                    if (!statusLevels.hasOwnProperty(item.status_amendent)) return null;
+                    
+                    let flowData = this.approvalFlowCache[item.id];
+                    if (!flowData) {
+                        this.loadFlowDataForItem(item);
+                        return this.$t('Loading approver info...');
+                    }
+                    
+                    const currentLevel = statusLevels[item.status_amendent];
+                    const currentFlow = flowData[currentLevel];
+                    
+                    if (!currentFlow || !currentFlow.managers || currentFlow.managers.length === 0) {
+                        return null;
+                    }
+                    
+                    const mainApprover = currentFlow.managers[0];
+                    const deputies = mainApprover.deputies || [];
+                    
+                    let approverText = `${this.$t('Manager')}: ${mainApprover.empno} - ${mainApprover.name}`;
+                    if (deputies.length > 0) {
+                        const activeDeputies = deputies.filter(d => d.status);
+                        if (activeDeputies.length > 0) {
+                            approverText += `\n${this.$t('Deputies')}: ` +
+                            activeDeputies.map(d => `${d.empno} - ${d.name}`).join('\n');
+                        }
+                    }
+                    return approverText;
+                    
+                } catch (error) {
+                    console.error('Error getting amendment approver info:', error);
+                    return null;
+                }
+            },
+            loadFlowDataForItem(item) {
+                if (this.approvalFlowCache[item.id]) return;
+                
+                this.getFlowDataForItem(item)
+                .then(() => {
+                    this.$forceUpdate();
+                })
+                .catch(error => {
+                    console.error("Error loading flow data:", error);
+                });
+            },
+            async getFlowDataForItem(item) {
+                const itemId = item.id;
+                
+                if (this.approvalFlowCache[itemId]) {
+                    return this.approvalFlowCache[itemId];
+                }
+                
+                if (this.flowRequestInProgress[itemId]) {
+                    return new Promise((resolve, reject) => {
+                        if (!this.flowRequestQueue[itemId]) {
+                            this.flowRequestQueue[itemId] = [];
+                        }
+                        this.flowRequestQueue[itemId].push({ resolve, reject });
+                    });
+                }
+                
+                this.flowRequestInProgress[itemId] = true;
+                
+                const params = {
+                    id: itemId,
+                    empno: item.submiterInfo?.empno || item.submiterInfo?.empno,
+                    name: item.submiterInfo?.name,
+                    dept: item.submiterInfo?.dept_sumt,
+                    high_dept: item.submiterInfo?.high_dept,
+                };
+                
+                try {
+                    const res = await this.$axios.post(this.api + "getDataFlowForItem", params);
+                    if (res.data && res.data.flow_data) {
+                        this.approvalFlowCache[itemId] = res.data.flow_data;
+                        
+                        if (this.flowRequestQueue[itemId]) {
+                            this.flowRequestQueue[itemId].forEach(request => {
+                                request.resolve(res.data.flow_data);
+                            });
+                            delete this.flowRequestQueue[itemId];
+                        }
+                        
+                        return res.data.flow_data;
+                    }
+                    return null;
+                } catch (error) {
                     if (this.flowRequestQueue[itemId]) {
                         this.flowRequestQueue[itemId].forEach(request => {
-                            request.resolve(res.data.flow_data);
+                            request.reject(error);
                         });
                         delete this.flowRequestQueue[itemId];
                     }
-                    
-                    return res.data.flow_data;
+                    console.error("Error getting flow data:", error);
+                    throw error;
+                } finally {
+                    delete this.flowRequestInProgress[itemId];
                 }
-                return null;
-            } catch (error) {
-                if (this.flowRequestQueue[itemId]) {
-                    this.flowRequestQueue[itemId].forEach(request => {
-                        request.reject(error);
-                    });
-                    delete this.flowRequestQueue[itemId];
-                }
-                console.error("Error getting flow data:", error);
-                throw error;
-            } finally {
-                delete this.flowRequestInProgress[itemId];
-            }
-        },
-        
-        getLevelName(status) {
-            const statusLevels = {
-                'waiting_unit': 1,
-                'waiting_dept': 2,
-                'waiting_div': 3,
-                'waiting_hr_rec_sf': 4,
-                'waiting_hr': 5,
-                'waiting_ad': 6,
-                'waiting_gm': 7,
-                'completed': 8,
-                'declined': 0
-            };
-            return statusLevels[status] || 0;
-        },
-        
-        async openApprovalDetails(item) {
-            try {
-                this.selectedApprovalData = this.getApprovalLogsData(item);
-                this.selectedItem = item;
-                this.selectedApprovalData.sort((a, b) => {
-                    if (a.cycleIndex !== b.cycleIndex) {
-                        return a.cycleIndex - b.cycleIndex;
-                    }
-                    return a.level - b.level;
-                });
-                this.approvalDialog = true;
-            } catch (error) {
-                console.error('Error opening approval details:', error);
-            }
-        },
-        
-        getApprovalLogsData(item) {
-            try {
-                let logsData = [];
-                if (item.logs) {
-                    const parsedLogs = JSON.parse(item.logs);
-                    const approvalRecords = item.approval_record ? JSON.parse(item.approval_record) : [];
-                    
-                    if (Array.isArray(parsedLogs[0])) {
-                        parsedLogs.forEach((cycle, cycleIndex) => {
-                            const cycleApprovalRecord = approvalRecords[cycleIndex] || {};
-                            const cycleData = cycle
-                            .filter(log => log.approver && log.approver.empno)
-                            .map((log, index) => {
-                                // Get the specific approval record for this level and cycle
-                                const recordKey = log.type; // e.g., 'unit', 'dept', etc.
-                                const approvalRecord = cycleApprovalRecord[recordKey] || '';
-                                
-                                return {
-                                    level: index + 1,
-                                    cycle: this.$t('Cycle') + ' ' + (cycleIndex + 1),
-                                    type: this.getApprovalLevelName(log.type),
-                                    empno: log.approver.empno,
-                                    name: log.approver.name,
-                                    dept: log.approver.dept,
-                                    status: log.status || '',
-                                    reason_denied: log.reason_denied || '',
-                                    return_reason: log.return_reason || '',
-                                    approval_record: approvalRecord,
-                                    processed_at: log.processed_at,
-                                    cycleIndex: cycleIndex + 1,
-                                };
-                            });
-                            logsData = [...logsData, ...cycleData];
-                        });
-                    } 
-                } 
-                
-                return logsData;
-            } catch (error) {
-                console.error('Error parsing approval logs:', error);
-                return [];
-            }
-        },
-        getReturnInfo(item) {
-            if (!item.approval) return { returned: false, reason: '' };
+            },
             
-            try {
-                const approvalData = JSON.parse(item.approval);
-                const returnedLevel = approvalData.find(level => level.status === 'returned');
-                if (returnedLevel && returnedLevel.return_reason) {
-                    return {
-                        returned: true,
-                        reason: returnedLevel.return_reason,
-                        level: returnedLevel.level
-                    };
-                }
-            } catch (error) {
-                console.error('Error parsing approval data:', error);
-            }
-            return { returned: false, reason: '' };
-        },
-        getApprovalLevelName(type) {
-            const types = {
-                'unit': this.$t('Unit'),
-                'dept': this.$t('Dept'),
-                'div': this.$t('Div'),
-                'hr_rec_sf': this.$t('Hr Rec SF'),
-                'hr': this.$t('Hr'),
-                'ad': this.$t('Ad'), 
-                'gm': this.$t('Gm')
-            };
-            return types[type] || type;
-        },
-        
-        getApprovalRecord(item, type) {
-            try {
-                if (!item.approval_record) return '';
-                const records = JSON.parse(item.approval_record);
-                return records[type] || '';
-            } catch (error) {
-                console.error('Error getting approval record:', error);
-                return '';
-            }
-        },
-        
-        openNewRequest() {
-            this.selectedItem = null; 
-            this.isEdit = false;
-            this.isChange = false; // Add this line
-            this.appDialog = true;
-        },
-        
-        getQuantityDetails(qtyReq) {
-            try {
-                const qty = typeof qtyReq === 'string' ? JSON.parse(qtyReq) : qtyReq;
-                const details = [];
-                if (qty.workers > 0) details.push(`${this.$t('Workers')}: ${qty.workers}`);
-                if (qty.staff > 0) details.push(`${this.$t('Staff')}: ${qty.staff}`);
-                if (qty.staff_lang > 0) details.push(`${this.$t('Staff Language')}: ${qty.staff_lang}`);
-                if (qty.engineers > 0) details.push(`${this.$t('Engineers')}: ${qty.engineers}`);
-                if (qty.leader > 0) details.push(`${this.$t('Leader')}: ${qty.leader}`);
-                if (qty.tranlator > 0) details.push(`${this.$t('Translator')}: ${qty.tranlator}`);
-                if (qty.level) details.push(`${this.$t('Level')}: ${qty.level}`);
-                return details.join(' | ');
-            } catch (e) {
-                console.error('Error parsing quantity:', e);
-                return '';
-            }
-        },
-        getPositionName(posId) {
-            try {
-                const position = this.pos.find(p => p.id === parseInt(posId));
-                if (!position || !position.type_name) return '';
-                const typeNameObj = JSON.parse(position.type_name.trim());
-                const locale = this.$i18n.locale || 'en';
-                return typeNameObj[locale] || typeNameObj.en || '';
-            } catch (error) {
-                console.error('Error parsing position name:', error);
-                return '';
-            }
-        },
-        async preloadFlowData() {
-            const visibleItems = this.filteredData;
-            const preloadPromises = visibleItems.map(item => {
-                if (!this.flowCache.has(item.id)) {
-                    return this.getFlowDataForItem(item).catch(err => {
-                        console.error(`Failed to preload flow data for item ${item.id}:`, err);
-                    });
-                }
-                return Promise.resolve();
-            });
+            getLevelName(status) {
+                const statusLevels = {
+                    'waiting_unit': 1,
+                    'waiting_dept': 2,
+                    'waiting_div': 3,
+                    'waiting_hr_rec_sf': 4,
+                    'waiting_hr': 5,
+                    'waiting_ad': 6,
+                    'waiting_gm': 7,
+                    'completed': 8,
+                    'declined': 0
+                };
+                return statusLevels[status] || 0;
+            },
             
-            await Promise.all(preloadPromises);
-        },
-        filterToDoData(data) {
-            // return data.filter(item => {
-            //     return ['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status);
-            // });
-            
-            return data.filter(item => {
-                return this.canApproveItemForTodo(item);
-            });
-        },
-        showRejectionDetails(item) {
-            try {
-                const approvalData = JSON.parse(item.approval);
-                this.rejectionDetails = approvalData
-                .filter(level => level.status === 'rejected' && level.reason_denied)
-                .map((level, index) => ({
-                    index: index + 1,
-                    empno: level.approver.empno,
-                    name: level.approver.name,
-                    dept: level.approver.dept,
-                    reason_denied: level.reason_denied,
-                    processed_at: this.formatDate(level.processed_at)
-                }));
-                if (this.rejectionDetails.length > 0) {
-                    this.rejectionDialog = true;
-                }
-            } catch (error) {
-                console.error('Error parsing approval data:', error);
-            }
-        },
-        isItemSelected(item) {
-            if (item.change_req) return false;
-            return this.selectedItem === item;
-        },
-        
-        toggleItemSelection(item) {
-            if (item.change_req) return; if (this.selectedItem === item) {
-                this.selectedItem = null;  
-            } else {
-                this.selectedItem = item;
-            }
-        },
-        
-        toggleSelectAll() {
-            return;
-        },
-        openChangeRequest() {
-            this.selectedItem = null;
-            this.isEdit = false;
-            this.isChange = true;
-            this.appDialog = true;
-        },
-        async exportExcel() {
-            try {
-                const headers = this.originalHeaders
-                .filter(header => header.value !== 'select' && header.value !== 'action')
-                .map(header => ({
-                    title: this.$t(header.text),
-                    key: header.value
-                }));
-                
-                const data = this.filteredData.map(item => {
-                    const row = {};
-                    headers.forEach(header => {
-                        switch (header.key) {
-                            case 'submitter':
-                            row[header.title] = item.submiterInfo ? 
-                            `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';
-                            break;
-                            case 'status':
-                            row[header.title] = this.$t(this.getStatusText(item.status, item));
-                            break;
-                            case 'pos':
-                            row[header.title] = this.getPositionName(item.pos);
-                            break;
-                            case 'qty_req':
-                            row[header.title] = this.getDisplayQuantity(item.qty_req);
-                            break;
-                            case 'date_req':
-                            case 'key_in_date':
-                            row[header.title] = this.formatDate(item[header.key]);
-                            break;
-                            default:
-                            row[header.title] = item[header.key];
+            async openApprovalDetails(item) {
+                try {
+                    this.selectedApprovalData = this.getApprovalLogsData(item);
+                    this.selectedItem = item;
+                    this.selectedApprovalData.sort((a, b) => {
+                        if (a.cycleIndex !== b.cycleIndex) {
+                            return a.cycleIndex - b.cycleIndex;
                         }
+                        return a.level - b.level;
                     });
-                    return row;
-                });
-                
-                const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.json_to_sheet(data);
-                const colWidths = headers.map(() => ({ wch: 20 }));
-                ws['!cols'] = colWidths;
-                XLSX.utils.book_append_sheet(wb, ws, 'Manpower Requests');
-                const date = new Date().toISOString().split('T')[0];
-                const fileName = `Manpower_Requests_${date}.xlsx`;
-                XLSX.writeFile(wb, fileName);
-                this.$notify({
-                    title: this.$t('Success'),
-                    text: this.$t('Export successful'),
-                    type: 'success'
-                });
-            } catch (error) {
-                console.error('Export error:', error);
-                this.$notify({
-                    title: this.$t('Error'),
-                    text: this.$t('Export failed'),
-                    type: 'error'
-                });
-            }
-        },
-        updateFilter(key, value) {
-            if (value && value.length) {
-                this.$set(this.filterValues, key, value);
-            } else {
-                this.$delete(this.filterValues, key);
-            }
-        },
-        getLanguageLevelText(langCode, levelId) {
-            try {
-                const langConfig = this.lang.find(config => config.lang_code === langCode);
-                if (!langConfig) return 'N/A';
-                
-                const levels = JSON.parse(langConfig.lang);
-                
-                const levelIndex = parseInt(levelId) - 1;
-                if (levelIndex < 0 || levelIndex >= levels.length) return 'N/A';
-                
-                const level = levels[levelIndex];
-                
-                const locale = this.$i18n.locale || 'en';
-                return level[locale] || level.en || 'N/A';
-                
-            } catch (error) {
-                console.error('Error getting language level text:', error);
-                return 'N/A';
-            }
-        },
-        
-        getLanguageRequirements(item) {
-            const requirements = [];
+                    this.approvalDialog = true;
+                } catch (error) {
+                    console.error('Error opening approval details:', error);
+                }
+            },
             
-            if (item.eng_skill && item.eng_skill !== '0') {
-                const levelText = this.getLanguageLevelText('en', item.eng_skill);
-                requirements.push({
-                    type: this.$t('English'),
-                    level: levelText,
-                    id: item.eng_skill
-                });
-            }
-            
-            if (item.chn_skill && item.chn_skill !== '0') {
-                const levelText = this.getLanguageLevelText('cn', item.chn_skill);
-                requirements.push({
-                    type: this.$t('Chinese'), 
-                    level: levelText,
-                    id: item.chn_skill
-                });
-            }
-            
-            if (item.either_skill && item.either_skill !== '0') {
-                const levelText = this.getLanguageLevelText('either', item.either_skill);
-                requirements.push({
-                    type: this.$t('Either'),
-                    level: levelText,
-                    id: item.either_skill
-                });
-            }
-            return requirements;
-        },
-        getComputerSkillImages(skills) {
-            if (!Array.isArray(skills)) return [];
-            
-            const skillMap = {
-                'Excel': { name: 'Excel', src: './excel.png' },
-                'Word': { name: 'Word', src: './word.png' },
-                'PowerPoint': { name: 'PowerPoint', src: './ppt.png' },
-                'Access': { name: 'Access', src: './acc.png' },
-                'Internet': { name: 'Internet', src: './www.png' }
-            };
-            
-            return skills
-            .filter(skill => skill !== 'Other')
-            .filter(skill => skill in skillMap)
-            .map(skill => skillMap[skill]);
-        }
-    },
-    async mounted() {
-        try {
-            if (this.$session.has('mpr')) {
-                this.activeUser = this.$session.get("mpr");
-            } else {
-                this.$router.push('/');
-                return;
-            }
-            await this.getAllData();
-            await this.fetchFlowData();
-            await this.fetchData();
-            // this.$nextTick(() => {
-            //     this.setDefaultTab();
-            // });
-        }
-        catch (error) {
-            console.error('Error in mounted hook:', error);
-        }
-    },
-    watch: {
-        hasTodoData: {
-            handler(newVal, oldVal) {
-                if (oldVal !== undefined && newVal !== oldVal) {
-                    if (!newVal && this.statusFilter === 1) {
-                        this.statusFilter = 0; 
+            getApprovalLogsData(item) {
+                try {
+                    let logsData = [];
+                    if (item.logs) {
+                        const parsedLogs = JSON.parse(item.logs);
+                        const approvalRecords = item.approval_record ? JSON.parse(item.approval_record) : [];
+                        
+                        if (Array.isArray(parsedLogs[0])) {
+                            parsedLogs.forEach((cycle, cycleIndex) => {
+                                const cycleApprovalRecord = approvalRecords[cycleIndex] || {};
+                                const cycleData = cycle
+                                .filter(log => log.approver && log.approver.empno)
+                                .map((log, index) => {
+                                    // Get the specific approval record for this level and cycle
+                                    const recordKey = log.type; // e.g., 'unit', 'dept', etc.
+                                    const approvalRecord = cycleApprovalRecord[recordKey] || '';
+                                    
+                                    return {
+                                        level: index + 1,
+                                        cycle: this.$t('Cycle') + ' ' + (cycleIndex + 1),
+                                        type: this.getApprovalLevelName(log.type),
+                                        empno: log.approver.empno,
+                                        name: log.approver.name,
+                                        dept: log.approver.dept,
+                                        status: log.status || '',
+                                        reason_denied: log.reason_denied || '',
+                                        return_reason: log.return_reason || '',
+                                        approval_record: approvalRecord,
+                                        processed_at: log.processed_at,
+                                        cycleIndex: cycleIndex + 1,
+                                    };
+                                });
+                                logsData = [...logsData, ...cycleData];
+                            });
+                        } 
+                    } 
+                    
+                    return logsData;
+                } catch (error) {
+                    console.error('Error parsing approval logs:', error);
+                    return [];
+                }
+            },
+            getReturnInfo(item) {
+                if (!item.approval) return { returned: false, reason: '' };
+                
+                try {
+                    const approvalData = JSON.parse(item.approval);
+                    const returnedLevel = approvalData.find(level => level.status === 'returned');
+                    if (returnedLevel && returnedLevel.return_reason) {
+                        return {
+                            returned: true,
+                            reason: returnedLevel.return_reason,
+                            level: returnedLevel.level
+                        };
                     }
+                } catch (error) {
+                    console.error('Error parsing approval data:', error);
+                }
+                return { returned: false, reason: '' };
+            },
+            getApprovalLevelName(type) {
+                const types = {
+                    'unit': this.$t('Unit'),
+                    'dept': this.$t('Dept'),
+                    'div': this.$t('Div'),
+                    'hr_rec_sf': this.$t('Hr Rec SF'),
+                    'hr': this.$t('Hr'),
+                    'ad': this.$t('Ad'), 
+                    'gm': this.$t('Gm')
+                };
+                return types[type] || type;
+            },
+            
+            getApprovalRecord(item, type) {
+                try {
+                    if (!item.approval_record) return '';
+                    const records = JSON.parse(item.approval_record);
+                    return records[type] || '';
+                } catch (error) {
+                    console.error('Error getting approval record:', error);
+                    return '';
                 }
             },
-            immediate: false
-        },
-        generalFlowData: {
-            handler(newVal) {
-                if (newVal) {
-                    this.$nextTick(() => {
-                        this.setDefaultTab();
-                    });
-                }
-            },
-            immediate: false
-        },
-        selectedYears: {
-            handler() {
-                this.filteredItems = [];
-            },
-            immediate: true
-        },
-        
-        formattedData: {
-            immediate: true,
-            handler(newVal) {
-                this.filteredItems = [];
-            },
-            deep: true
-        },
-        
-        dataMpr: {
-            handler() {
-                this.filteredItems = [];
-            },
-            immediate: true
-        },
-        
-        filteredData: {
-            handler() {
-                this.$nextTick(() => {
-                    this.preloadFlowData();
-                });
-            },
-            immediate: true,
-            deep: true
-        },
-        
-        statusFilter: {
-            handler() {
-                this.filteredItems = [];
-                this.search = '';
-            },
-            immediate: true
-        },
-        selectedCandidates(newVal) {
-            this.selectAll = newVal.length === this.parsedCandidates.length;
-        },
-        selectedItem(newVal) {
-            this.selectAll = false; 
-        },
-        appDialog(newVal) {
-            if (!newVal) { 
-                this.selectedItem = null;  
+            
+            openNewRequest() {
+                this.selectedItem = null; 
                 this.isEdit = false;
+                this.isChange = false; // Add this line
+                this.appDialog = true;
+            },
+            
+            getQuantityDetails(qtyReq) {
+                try {
+                    const qty = typeof qtyReq === 'string' ? JSON.parse(qtyReq) : qtyReq;
+                    const details = [];
+                    if (qty.workers > 0) details.push(`${this.$t('Workers')}: ${qty.workers}`);
+                    if (qty.staff > 0) details.push(`${this.$t('Staff')}: ${qty.staff}`);
+                    if (qty.staff_lang > 0) details.push(`${this.$t('Staff Language')}: ${qty.staff_lang}`);
+                    if (qty.engineers > 0) details.push(`${this.$t('Engineers')}: ${qty.engineers}`);
+                    if (qty.leader > 0) details.push(`${this.$t('Leader')}: ${qty.leader}`);
+                    if (qty.tranlator > 0) details.push(`${this.$t('Translator')}: ${qty.tranlator}`);
+                    if (qty.level) details.push(`${this.$t('Level')}: ${qty.level}`);
+                    return details.join(' | ');
+                } catch (e) {
+                    console.error('Error parsing quantity:', e);
+                    return '';
+                }
+            },
+            getPositionName(posId) {
+                try {
+                    const position = this.pos.find(p => p.id === parseInt(posId));
+                    if (!position || !position.type_name) return '';
+                    const typeNameObj = JSON.parse(position.type_name.trim());
+                    const locale = this.$i18n.locale || 'en';
+                    return typeNameObj[locale] || typeNameObj.en || '';
+                } catch (error) {
+                    console.error('Error parsing position name:', error);
+                    return '';
+                }
+            },
+            async preloadFlowData() {
+                const visibleItems = this.filteredData;
+                const preloadPromises = visibleItems.map(item => {
+                    if (!this.flowCache.has(item.id)) {
+                        return this.getFlowDataForItem(item).catch(err => {
+                            console.error(`Failed to preload flow data for item ${item.id}:`, err);
+                        });
+                    }
+                    return Promise.resolve();
+                });
+                
+                await Promise.all(preloadPromises);
+            },
+            filterToDoData(data) {
+                // return data.filter(item => {
+                    //     return ['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status);
+                    // });
+                    
+                    return data.filter(item => {
+                        return this.canApproveItemForTodo(item);
+                    });
+                },
+                showRejectionDetails(item) {
+                    try {
+                        const approvalData = JSON.parse(item.approval);
+                        this.rejectionDetails = approvalData
+                        .filter(level => level.status === 'rejected' && level.reason_denied)
+                        .map((level, index) => ({
+                            index: index + 1,
+                            empno: level.approver.empno,
+                            name: level.approver.name,
+                            dept: level.approver.dept,
+                            reason_denied: level.reason_denied,
+                            processed_at: this.formatDate(level.processed_at)
+                        }));
+                        if (this.rejectionDetails.length > 0) {
+                            this.rejectionDialog = true;
+                        }
+                    } catch (error) {
+                        console.error('Error parsing approval data:', error);
+                    }
+                },
+                isItemSelected(item) {
+                    if (item.change_req) return false;
+                    return this.selectedItem === item;
+                },
+                
+                toggleItemSelection(item) {
+                    if (item.change_req) return; if (this.selectedItem === item) {
+                        this.selectedItem = null;  
+                    } else {
+                        this.selectedItem = item;
+                    }
+                },
+                
+                toggleSelectAll() {
+                    return;
+                },
+                openChangeRequest() {
+                    this.selectedItem = null;
+                    this.isEdit = false;
+                    this.isChange = true;
+                    this.appDialog = true;
+                },
+                async exportExcel() {
+                    try {
+                        const headers = this.originalHeaders
+                        .filter(header => header.value !== 'select' && header.value !== 'action')
+                        .map(header => ({
+                            title: this.$t(header.text),
+                            key: header.value
+                        }));
+                        
+                        const data = this.filteredData.map(item => {
+                            const row = {};
+                            headers.forEach(header => {
+                                switch (header.key) {
+                                    case 'submitter':
+                                    row[header.title] = item.submiterInfo ? 
+                                    `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';
+                                    break;
+                                    case 'status':
+                                    row[header.title] = this.$t(this.getStatusText(item.status, item));
+                                    break;
+                                    case 'pos':
+                                    row[header.title] = this.getPositionName(item.pos);
+                                    break;
+                                    case 'qty_req':
+                                    row[header.title] = this.getDisplayQuantity(item.qty_req);
+                                    break;
+                                    case 'date_req':
+                                    case 'key_in_date':
+                                    row[header.title] = this.formatDate(item[header.key]);
+                                    break;
+                                    default:
+                                    row[header.title] = item[header.key];
+                                }
+                            });
+                            return row;
+                        });
+                        
+                        const wb = XLSX.utils.book_new();
+                        const ws = XLSX.utils.json_to_sheet(data);
+                        const colWidths = headers.map(() => ({ wch: 20 }));
+                        ws['!cols'] = colWidths;
+                        XLSX.utils.book_append_sheet(wb, ws, 'Manpower Requests');
+                        const date = new Date().toISOString().split('T')[0];
+                        const fileName = `Manpower_Requests_${date}.xlsx`;
+                        XLSX.writeFile(wb, fileName);
+                        this.$notify({
+                            title: this.$t('Success'),
+                            text: this.$t('Export successful'),
+                            type: 'success'
+                        });
+                    } catch (error) {
+                        console.error('Export error:', error);
+                        this.$notify({
+                            title: this.$t('Error'),
+                            text: this.$t('Export failed'),
+                            type: 'error'
+                        });
+                    }
+                },
+                updateFilter(key, value) {
+                    if (value && value.length) {
+                        this.$set(this.filterValues, key, value);
+                    } else {
+                        this.$delete(this.filterValues, key);
+                    }
+                },
+                getLanguageLevelText(langCode, levelId) {
+                    try {
+                        const langConfig = this.lang.find(config => config.lang_code === langCode);
+                        if (!langConfig) return 'N/A';
+                        
+                        const levels = JSON.parse(langConfig.lang);
+                        
+                        const levelIndex = parseInt(levelId) - 1;
+                        if (levelIndex < 0 || levelIndex >= levels.length) return 'N/A';
+                        
+                        const level = levels[levelIndex];
+                        
+                        const locale = this.$i18n.locale || 'en';
+                        return level[locale] || level.en || 'N/A';
+                        
+                    } catch (error) {
+                        console.error('Error getting language level text:', error);
+                        return 'N/A';
+                    }
+                },
+                
+                getLanguageRequirements(item) {
+                    const requirements = [];
+                    
+                    if (item.eng_skill && item.eng_skill !== '0') {
+                        const levelText = this.getLanguageLevelText('en', item.eng_skill);
+                        requirements.push({
+                            type: this.$t('English'),
+                            level: levelText,
+                            id: item.eng_skill
+                        });
+                    }
+                    
+                    if (item.chn_skill && item.chn_skill !== '0') {
+                        const levelText = this.getLanguageLevelText('cn', item.chn_skill);
+                        requirements.push({
+                            type: this.$t('Chinese'), 
+                            level: levelText,
+                            id: item.chn_skill
+                        });
+                    }
+                    
+                    if (item.either_skill && item.either_skill !== '0') {
+                        const levelText = this.getLanguageLevelText('either', item.either_skill);
+                        requirements.push({
+                            type: this.$t('Either'),
+                            level: levelText,
+                            id: item.either_skill
+                        });
+                    }
+                    return requirements;
+                },
+                getComputerSkillImages(skills) {
+                    if (!Array.isArray(skills)) return [];
+                    
+                    const skillMap = {
+                        'Excel': { name: 'Excel', src: './excel.png' },
+                        'Word': { name: 'Word', src: './word.png' },
+                        'PowerPoint': { name: 'PowerPoint', src: './ppt.png' },
+                        'Access': { name: 'Access', src: './acc.png' },
+                        'Internet': { name: 'Internet', src: './www.png' }
+                    };
+                    
+                    return skills
+                    .filter(skill => skill !== 'Other')
+                    .filter(skill => skill in skillMap)
+                    .map(skill => skillMap[skill]);
+                }
+            },
+            async mounted() {
+                try {
+                    if (this.$session.has('mpr')) {
+                        this.activeUser = this.$session.get("mpr");
+                    } else {
+                        this.$router.push('/');
+                        return;
+                    }
+                    await this.getAllData();
+                    await this.fetchFlowData();
+                    await this.fetchData();
+                    // this.$nextTick(() => {
+                        //     this.setDefaultTab();
+                        // });
+                    }
+                    catch (error) {
+                        console.error('Error in mounted hook:', error);
+                    }
+                },
+                watch: {
+                    hasTodoData: {
+                        handler(newVal, oldVal) {
+                            if (oldVal !== undefined && newVal !== oldVal) {
+                                if (!newVal && this.statusFilter === 1) {
+                                    this.statusFilter = 0; 
+                                }
+                            }
+                        },
+                        immediate: false
+                    },
+                    generalFlowData: {
+                        handler(newVal) {
+                            if (newVal) {
+                                this.$nextTick(() => {
+                                    this.setDefaultTab();
+                                });
+                            }
+                        },
+                        immediate: false
+                    },
+                    selectedYears: {
+                        handler() {
+                            this.filteredItems = [];
+                        },
+                        immediate: true
+                    },
+                    
+                    formattedData: {
+                        immediate: true,
+                        handler(newVal) {
+                            this.filteredItems = [];
+                        },
+                        deep: true
+                    },
+                    
+                    dataMpr: {
+                        handler() {
+                            this.filteredItems = [];
+                        },
+                        immediate: true
+                    },
+                    
+                    filteredData: {
+                        handler() {
+                            this.$nextTick(() => {
+                                this.preloadFlowData();
+                            });
+                        },
+                        immediate: true,
+                        deep: true
+                    },
+                    
+                    statusFilter: {
+                        handler() {
+                            this.filteredItems = [];
+                            this.search = '';
+                        },
+                        immediate: true
+                    },
+                    selectedCandidates(newVal) {
+                        this.selectAll = newVal.length === this.parsedCandidates.length;
+                    },
+                    selectedItem(newVal) {
+                        this.selectAll = false; 
+                    },
+                    appDialog(newVal) {
+                        if (!newVal) { 
+                            this.selectedItem = null;  
+                            this.isEdit = false;
+                        }
+                    },
+                    
+                },
             }
-        },
-        
-    },
-}
-</script>
-<i18n>
-    {
-        "en": {
-            "ID": "ID",
-            "Submitted by": "Submitted by",
-            "Apply Date": "Apply Date",
-            "Unit code": "Unit code",
-            "Unit name": "Unit name",
-            "Position": "Position",
-            "Sub position": "S.position",
-            "Conditions": "Conditions",
-            "Demand": "Demand",
-            "Reason": "Reason",
-            "Approval Status": "Approval Status",
-            "Recruitment status": "Recruitment status",
-            "Recruited": "Recruited",
-            "Resign": "Resign",
-            "Print": "Print",
-            "All": "All",
-            "To Do": "To Do",
-            "Pending": "Pending",
-            "Returned": "Returned",
-            "Approved": "Approved",
-            "Rejected": "Rejected",
-            "Manpower listing": "Manpower listing",
-            "Reload": "Reload",
-            "New request": "New request",
-            "Amendment request": "Amendment request",
-            "Total": "Total",
-            "Pending Unit": "Waiting Unit",
-            "Pending Dept": "Waiting department",
-            "Pending Div": "Waiting Division",
-            "Pending HR Rec SF": "Waiting HR Rec SF",
-            "Pending HR": "Waiting HR",
-            "Pending AD": "Waiting AD",
-            "Pending GM": "Waiting GM",
-            "Closed": "Closed",
-            "Recruiting": "Recruiting",
-            "Recruitment hold": "Recruitment hold",
-            "hold": "hold",
-            "Resumed": "Resumed",
-            "#Change in hiring requirements": "#Change in hiring requirements",
-            "Select year": "Select year",
-            "Close": "Close",
-            "Clear": "Clear",
-            "English": "English",
-            "Chinese": "Chinese",
-            "Either": "Either",
-            "Applicant": "Applicant",
-            "Search": "Search",
-            "Export": "Export",
-            "remaining": "remaining",
-            "Hold period expired": "Hold period expired",
-            "days": "days"
-        },
-        "vi": {
-            "ID": "ID",
-            "Submitted by": "Người nộp",
-            "Apply Date": "Ngày nộp",
-            "Unit code": "Mã đơn vị",
-            "Unit name": "Tên đơn vị",
-            "Position": "Vị trí",
-            "Sub position": "Vị trí phụ",
-            "Conditions": "Điều kiện",
-            "Demand": "Nhu cầu",
-            "Reason": "Lý do",
-            "Approval Status": "Trạng thái",
-            "Recruitment status": "Trạng thái tuyển dụng",
-            "Recruited": "Đã tuyển dụng",
-            "Resign": "Đã nghỉ việc",
-            "Print": "In",
-            "All": "Tất cả",
-            "To Do": "Cần làm",
-            "Pending": "Chờ duyệt",
-            "Returned": "Trả lại người đề nghị",
-            "Approved": "Đã duyệt",
-            "Rejected": "Từ chối",
-            "Manpower listing": "Danh sách đơn yêu cầu nhân sự",
-            "Reload": "Tải lại dữ liệu",
-            "New request": "Yêu cầu mới",
-            "Amendment request": "Yêu cầu sửa đổi",
-            "Total": "Tổng cộng",
-            "Pending Unit": "Đang chờ đơn vị phê duyệt",
-            "Pending Dept": "Đang chờ bộ phận phê duyệt",
-            "Pending Div": "Đang chờ cấp sở phê duyệt",
-            "Pending HR Rec SF": "Đang chờ nhân viên HR phê duyệt",
-            "Pending HR": "Đang chờ chủ quản HR phê duyệt",
-            "Pending AD": "Đang chờ chủ quản AD phê duyệt",
-            "Pending GM": "Đang chờ phó tổng phê duyệt",
-            "Closed": "Đã đóng",
-            "Recruiting": "Đang tuyển dụng",
-            "Recruitment hold": "Tạm dừng tuyển dụng",
-            "hold": "tạm dừng",
-            "Resumed": "Đã tiếp tục",
-            "#Change in hiring requirements": "#Thay đổi yêu cầu tuyển dụng",
-            "Select year": "Chọn năm",
-            "Close": "Đóng",
-            "Clear": "Xóa",
-            "English": "Tiếng Anh",
-            "Chinese": "Tiếng Trung",
-            "Either": "NN.Bất kỳ",
-            "Applicant": "Người nộp đơn",
-            "Search": "Tìm kiếm",
-            "Export": "Xuất Excel",
-            "remaining": "còn lại",
-            "Hold period expired": "Đã hết thời gian tạm dừng",
-            "days": "ngày"
-        },
-        "cn": {
-            "ID": "表單編號",
-            "Submitted by": "提交者",
-            "Apply Date": "申請日期",
-            "Unit code": "單位代號",
-            "Unit name": "單位名稱",
-            "Position": "職位",
-            "Sub position": "子職位",
-            "Conditions": "招募條件",
-            "Demand": "需求",
-            "Reason": "需求原因",
-            "Approval Status": "核准狀態",
-            "Recruitment status": "招募狀態",
-            "Recruited": "入職人數",
-            "Resign": "離職人數",
-            "Print": "列印",
-            "All": "所有",
-            "To Do": "待處理",
-            "Pending": "簽核中",
-            "Returned": "退回申請人",
-            "Approved": "已核准",
-            "Rejected": "否決",
-            "Manpower listing": "人力資源申請列表",
-            "Reload": "重新載入資料",
-            "New request": "新需求",
-            "Amendment request": "需求變更申請",
-            "Total": "總計",
-            "Pending Unit": "待單位核准",
-            "Pending Dept": "等部門主管",
-            "Pending Div": "等處級主管",
-            "Pending HR Rec SF": "待人力資源核准",
-            "Pending HR": "等HR",
-            "Pending AD": "等AD",
-            "Pending GM": "等GM",
-            "Closed": "結案",
-            "Recruiting": "招募中",
-            "Recruitment hold": "暫停招募",
-            "hold": "暫停",
-            "Resumed": "恢復",
-            "#Change in hiring requirements": "#招聘要求變更",
-            "Select year": "選擇年份",
-            "Close": "關閉",
-            "Clear": "清除",
-            "English": "英語",
-            "Chinese": "中文",
-            "Either": "都可",
-            "Applicant": "申請人",
-            "Search": "搜索",
-            "Export": "導出",
-            "remaining": "天数",
-            "Hold period expired": "暂停期已过",
-            "days": "天"
+        </script>
+        <i18n>
+            {
+                "en": {
+                    "ID": "ID",
+                    "Submitted by": "Submitted by",
+                    "Apply Date": "Apply Date",
+                    "Unit code": "Unit code",
+                    "Unit name": "Unit name",
+                    "Position": "Position",
+                    "Sub position": "S.position",
+                    "Conditions": "Conditions",
+                    "Demand": "Demand",
+                    "Reason": "Reason",
+                    "Approval Status": "Approval Status",
+                    "Recruitment status": "Recruitment status",
+                    "Recruited": "Recruited",
+                    "Resign": "Resign",
+                    "Print": "Print",
+                    "All": "All",
+                    "To Do": "To Do",
+                    "Pending": "Pending",
+                    "Returned": "Returned",
+                    "Approved": "Approved",
+                    "Rejected": "Rejected",
+                    "Manpower listing": "Manpower listing",
+                    "Reload": "Reload",
+                    "New request": "New request",
+                    "Amendment request": "Amendment request",
+                    "Total": "Total",
+                    "Pending Unit": "Waiting Unit",
+                    "Pending Dept": "Waiting department",
+                    "Pending Div": "Waiting Division",
+                    "Pending HR Rec SF": "Waiting HR Rec SF",
+                    "Pending HR": "Waiting HR",
+                    "Pending AD": "Waiting AD",
+                    "Pending GM": "Waiting GM",
+                    "Closed": "Closed",
+                    "Recruiting": "Recruiting",
+                    "Recruitment hold": "Recruitment hold",
+                    "hold": "hold",
+                    "Resumed": "Resumed",
+                    "#Change in hiring requirements": "#Change in hiring requirements",
+                    "Select year": "Select year",
+                    "Close": "Close",
+                    "Clear": "Clear",
+                    "English": "English",
+                    "Chinese": "Chinese",
+                    "Either": "Either",
+                    "Applicant": "Applicant",
+                    "Search": "Search",
+                    "Export": "Export",
+                    "remaining": "remaining",
+                    "Hold period expired": "Hold period expired",
+                    "days": "days"
+                },
+                "vi": {
+                    "ID": "ID",
+                    "Submitted by": "Người nộp",
+                    "Apply Date": "Ngày nộp",
+                    "Unit code": "Mã đơn vị",
+                    "Unit name": "Tên đơn vị",
+                    "Position": "Vị trí",
+                    "Sub position": "Vị trí phụ",
+                    "Conditions": "Điều kiện",
+                    "Demand": "Nhu cầu",
+                    "Reason": "Lý do",
+                    "Approval Status": "Trạng thái",
+                    "Recruitment status": "Trạng thái tuyển dụng",
+                    "Recruited": "Đã tuyển dụng",
+                    "Resign": "Đã nghỉ việc",
+                    "Print": "In",
+                    "All": "Tất cả",
+                    "To Do": "Cần làm",
+                    "Pending": "Chờ duyệt",
+                    "Returned": "Trả lại người đề nghị",
+                    "Approved": "Đã duyệt",
+                    "Rejected": "Từ chối",
+                    "Manpower listing": "Danh sách đơn yêu cầu nhân sự",
+                    "Reload": "Tải lại dữ liệu",
+                    "New request": "Yêu cầu mới",
+                    "Amendment request": "Yêu cầu sửa đổi",
+                    "Total": "Tổng cộng",
+                    "Pending Unit": "Đang chờ đơn vị phê duyệt",
+                    "Pending Dept": "Đang chờ bộ phận phê duyệt",
+                    "Pending Div": "Đang chờ cấp sở phê duyệt",
+                    "Pending HR Rec SF": "Đang chờ nhân viên HR phê duyệt",
+                    "Pending HR": "Đang chờ chủ quản HR phê duyệt",
+                    "Pending AD": "Đang chờ chủ quản AD phê duyệt",
+                    "Pending GM": "Đang chờ phó tổng phê duyệt",
+                    "Closed": "Đã đóng",
+                    "Recruiting": "Đang tuyển dụng",
+                    "Recruitment hold": "Tạm dừng tuyển dụng",
+                    "hold": "tạm dừng",
+                    "Resumed": "Đã tiếp tục",
+                    "#Change in hiring requirements": "#Thay đổi yêu cầu tuyển dụng",
+                    "Select year": "Chọn năm",
+                    "Close": "Đóng",
+                    "Clear": "Xóa",
+                    "English": "Tiếng Anh",
+                    "Chinese": "Tiếng Trung",
+                    "Either": "NN.Bất kỳ",
+                    "Applicant": "Người nộp đơn",
+                    "Search": "Tìm kiếm",
+                    "Export": "Xuất Excel",
+                    "remaining": "còn lại",
+                    "Hold period expired": "Đã hết thời gian tạm dừng",
+                    "days": "ngày"
+                },
+                "cn": {
+                    "ID": "表單編號",
+                    "Submitted by": "提交者",
+                    "Apply Date": "申請日期",
+                    "Unit code": "單位代號",
+                    "Unit name": "單位名稱",
+                    "Position": "職位",
+                    "Sub position": "子職位",
+                    "Conditions": "招募條件",
+                    "Demand": "需求",
+                    "Reason": "需求原因",
+                    "Approval Status": "核准狀態",
+                    "Recruitment status": "招募狀態",
+                    "Recruited": "入職人數",
+                    "Resign": "離職人數",
+                    "Print": "列印",
+                    "All": "所有",
+                    "To Do": "待處理",
+                    "Pending": "簽核中",
+                    "Returned": "退回申請人",
+                    "Approved": "已核准",
+                    "Rejected": "否決",
+                    "Manpower listing": "人力資源申請列表",
+                    "Reload": "重新載入資料",
+                    "New request": "新需求",
+                    "Amendment request": "需求變更申請",
+                    "Total": "總計",
+                    "Pending Unit": "待單位核准",
+                    "Pending Dept": "等部門主管",
+                    "Pending Div": "等處級主管",
+                    "Pending HR Rec SF": "待人力資源核准",
+                    "Pending HR": "等HR",
+                    "Pending AD": "等AD",
+                    "Pending GM": "等GM",
+                    "Closed": "結案",
+                    "Recruiting": "招募中",
+                    "Recruitment hold": "暫停招募",
+                    "hold": "暫停",
+                    "Resumed": "恢復",
+                    "#Change in hiring requirements": "#招聘要求變更",
+                    "Select year": "選擇年份",
+                    "Close": "關閉",
+                    "Clear": "清除",
+                    "English": "英語",
+                    "Chinese": "中文",
+                    "Either": "都可",
+                    "Applicant": "申請人",
+                    "Search": "搜索",
+                    "Export": "導出",
+                    "remaining": "天数",
+                    "Hold period expired": "暂停期已过",
+                    "days": "天"
+                }
+            }  
+        </i18n>     
+        <style scoped>
+        .data-table {
+            border-radius: 8px;
+            overflow: hidden;
         }
-    }  
-</i18n>     
-<style scoped>
-.data-table {
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.v-data-table {
-    border: 1px solid #e0e0e0;
-}
-
-.v-data-table ::v-deep thead th {
-    font-weight: 600 !important;
-    color: #004D40 !important;
-    background: white;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-}
-
-.v-data-table ::v-deep tbody tr:not(.total-row):hover {
-    background-color: #f3fd99 !important;
-}
-
-.total-row {
-    background-color: #004D40 !important;
-}
-
-.total-row td {
-    color: white !important;
-    font-size: 1.1em !important;
-    border-top: 2px solid #004D40 !important;
-    border-bottom: none !important;
-}
-
-.text-caption {
-    font-size: 0.75rem !important;
-}
-
-.v-menu {
-    display: inline-block;
-}
-
-.tooltip-content {
-    white-space: pre-line;
-    text-align: left;
-}
-
-.skill-icon {
-    width: 20px;
-    height: 20px;
-    object-fit: contain;
-}
-
-.skill-icon:hover {
-    transform: scale(1.1);
-    transition: transform 0.2s ease;
-}
-</style>
+        
+        .v-data-table {
+            border: 1px solid #e0e0e0;
+        }
+        .v-data-table ::v-deep tbody tr:not(.total-row):hover {
+            background-color: #f3fd99 !important;
+        }
+        
+        .total-row {
+            background-color: #004D40 !important;
+        }
+        
+        .total-row td {
+            color: white !important;
+            font-size: 1.1em !important;
+            border-top: 2px solid #004D40 !important;
+            border-bottom: none !important;
+        }
+        
+        .text-caption {
+            font-size: 0.75rem !important;
+        }
+        
+        .v-menu {
+            display: inline-block;
+        }
+        
+        .tooltip-content {
+            white-space: pre-line;
+            text-align: left;
+        }
+        
+        .skill-icon {
+            width: 20px;
+            height: 20px;
+            object-fit: contain;
+        }
+        
+        .skill-icon:hover {
+            transform: scale(1.1);
+            transition: transform 0.2s ease;
+        }
+        .v-data-table ::v-deep thead th {
+            font-weight: 600 !important;
+            color: #004D40 !important;
+            background: white;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            white-space: nowrap; /* Ngăn header xuống dòng */
+        }
+    </style>
+    

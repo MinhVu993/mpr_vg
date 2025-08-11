@@ -1361,18 +1361,18 @@ export default {
         
         getApproverHeaders() {
             return [
-            { text: 'ID', value: 'req_id', width: '30px',align: 'center' },
-            { text: 'Apply Date', value: 'date_req', width: '150px' },
-            { text: 'Unit code', value: 'unit', width: '120px' },
-            { text: 'Unit Name', value: 'unit_name',width: '100px' },
-            { text: 'Position', value: 'pos', width: '120px' },
-            { text: 'Demand', value: 'qty_req', align: 'center', width: '120px' },
-            { text: 'Reason', value: 'reason', width: '120px' },
-            { text: 'Approval Status', value: 'status', width: '160px' },
-            { text: 'Recruitment status', value: 'recruited_status', width: '200px' },
-            { text: 'Recruited', value: 'recruited', align: 'center', width: '130px' },
-            { text: 'Resign', value: 'resign', align: 'center', width: '120px' },
-            { text: 'Print', value: 'action', sortable: false, width: '100px' }
+            { text: 'ID', value: 'req_id',align: 'center' },
+            { text: 'Apply Date', value: 'date_req' },
+            { text: 'Unit code', value: 'unit', },
+            { text: 'Unit Name', value: 'unit_name', },
+            { text: 'Position', value: 'pos', },
+            { text: 'Demand', value: 'qty_req', align: 'center',},
+            { text: 'Reason', value: 'reason',  },
+            { text: 'Approval Status', value: 'status', },
+            { text: 'Recruitment status', value: 'recruited_status', },
+            { text: 'Recruited', value: 'recruited', align: 'center', },
+            { text: 'Resign', value: 'resign', align: 'center',},
+            { text: 'Print', value: 'action', sortable: false,  }
             ];
         },
         formatDate(date) {
@@ -3085,16 +3085,6 @@ export default {
 .v-data-table ::v-deep .v-data-table__wrapper {
     overflow-y: auto;
 }
-
-.v-data-table ::v-deep thead th {
-    font-weight: 600 !important;
-    color: #004D40 !important;
-    background: white;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-}
-
 .v-data-table ::v-deep tbody tr:not(.total-row):hover {
     background-color: #f3fd99 !important;
 }
@@ -3146,6 +3136,15 @@ export default {
     font-weight: bold;
     color: #ff0000;
     font-size: 1.1em;
+}
+.v-data-table ::v-deep thead th {
+    font-weight: 600 !important;
+    color: #004D40 !important;
+    background: white;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    white-space: nowrap; /* Ngăn header xuống dòng */
 }
 </style>
 
