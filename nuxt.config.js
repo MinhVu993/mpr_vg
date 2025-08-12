@@ -23,7 +23,7 @@ export default {
     host: process.env.HOST || "10.13.34.160",
     // gmo021.cansportsvg.com
     // 10.13.34.176
-    port: 3048,
+    port: 3047,
   },
   // Target: https://go.nuxtjs.dev/config-target
   target: "static",
@@ -132,8 +132,8 @@ export default {
       img: ({ isDev }) => isDev ? '[path][name].[ext]' : 'img/[name].[contenthash:7].[ext]',
       font: ({ isDev }) => isDev ? '[path][name].[ext]' : 'fonts/[name].[contenthash:7].[ext]'
     },
-    hotMiddleware: {
-      reload: false
-    }
+    // hotMiddleware: {
+    //   reload: false
+    // }
   },
 };

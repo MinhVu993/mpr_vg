@@ -491,17 +491,43 @@
                 <v-icon left dark>mdi-alert</v-icon>
                 {{ $t("Deny Request") }}
                 <v-spacer></v-spacer>
+                <v-btn-toggle v-model="selectedLanguage" group class="mr-4" dark>
+                    <v-btn x-small value="vi">VI</v-btn>
+                    <v-btn x-small value="cn">中文</v-btn>
+                </v-btn-toggle>
                 <v-btn icon dark @click="confirmDenyDialog = false">
                     <v-icon>mdi-close</v-icon>
                 </v-btn>
             </v-card-title>
             <v-card-text class="pt-4">
-                <v-textarea v-model="denyReason" :label="$t('Reason')" :placeholder=" $t('Please provide a reason for denying this request') " outlined rows="3" counter maxlength="500" ></v-textarea>
+                <v-textarea 
+                v-if="selectedLanguage === 'vi'"
+                v-model="denyReason.vi" 
+                :label="$t('Return reason VietNamese')" 
+                :placeholder="$t('Please provide a VietNamese reason')" 
+                outlined 
+                rows="1" 
+                hide-details
+                class="mb-2"
+                ></v-textarea>
+                <v-textarea
+                v-if="selectedLanguage === 'cn'" 
+                v-model="denyReason.cn"
+                :label="$t('Return reason Chinese')"
+                :placeholder="$t('Please provide a Chinese reason')"
+                outlined
+                hide-details
+                rows="1"
+                ></v-textarea>
             </v-card-text>
             <v-card-actions>
-                <v-btn color="grey darken-1" text @click="confirmDenyDialog = false"> {{ $t("Cancel") }} </v-btn>
+                <v-btn color="grey darken-1" text @click="confirmDenyDialog = false">
+                    {{ $t("Cancel") }}
+                </v-btn>
                 <v-spacer></v-spacer>
-                <v-btn color="error" @click="confirmDeny" :disabled="!denyReason.trim()" > {{ $t("Confirm Denial") }} </v-btn>
+                <v-btn color="error" @click="confirmDeny" :disabled="!isDenyReasonValid">
+                    {{ $t("Confirm Denial") }}
+                </v-btn>
             </v-card-actions>
         </v-card>
     </v-dialog>
@@ -512,15 +538,41 @@
                 <v-icon left dark>mdi-alert</v-icon>
                 {{ $t("Return Request") }}
                 <v-spacer></v-spacer>
+                <v-btn-toggle v-model="selectedLanguage" group class="mr-4" dark>
+                    <v-btn x-small value="vi">VI</v-btn>
+                    <v-btn x-small value="cn">中文</v-btn>
+                </v-btn-toggle>
                 <v-btn icon dark @click="confirmReturnDialog = false"> <v-icon>mdi-close</v-icon> </v-btn>
             </v-card-title>
             <v-card-text class="pt-4">
-                <v-textarea v-model="returnReason" :label="$t('Return reason')" :placeholder=" $t('Please provide a reason for returning this request') " outlined rows="5" counter maxlength="500" class="mb-4" > </v-textarea>
+                <v-textarea 
+                v-if="selectedLanguage === 'vi'"
+                v-model="returnReason.vi" 
+                :label="$t('Return reason VietNamese')" 
+                :placeholder="$t('Please provide a VietNamese reason')" 
+                outlined 
+                rows="1" 
+                hide-details 
+                maxlength="500" 
+                class="mb-2"
+                ></v-textarea>
+                
+                <v-textarea
+                v-if="selectedLanguage === 'cn'" 
+                v-model="returnReason.cn"
+                :label="$t('Return reason Chinese')"
+                :placeholder="$t('Please provide a Chinese reason')"
+                outlined
+                rows="1"
+                hide-details
+                maxlength="500"
+                class="mb-2"
+                ></v-textarea>
             </v-card-text>
             <v-card-actions>
                 <v-btn color="grey darken-1" text @click="confirmReturnDialog = false" > {{ $t("Cancel") }} </v-btn>
                 <v-spacer></v-spacer>
-                <v-btn color="warning" @click="confirmReturn" :disabled="!returnReason.trim()" > {{ $t("Confirm Return") }} </v-btn>
+                <v-btn color="warning" @click="confirmReturn" :disabled="!isReturnReasonValid" > {{ $t("Confirm Return") }} </v-btn>
             </v-card-actions>
         </v-card>
     </v-dialog>
@@ -731,8 +783,8 @@ export default {
             confirmDenyDialog: false,
             confirmReturnDialog: false,
             confirmSubmitDialog: false,
-            denyReason: "",
-            returnReason: "",
+            denyReason: { vi: "", cn: "" },
+            returnReason: { vi: "", cn: "" },
             returnToLevel: "",
             dataFlow: "",
             isLoadingFlow: false,
@@ -777,7 +829,7 @@ export default {
             isLoadingReqId: false,
             dataRecruitmentReason: [],
             changeQtyError: '',
-            
+            selectedLanguage:'vi'
         };
     },
     watch: {
@@ -785,11 +837,9 @@ export default {
             immediate: true,
             async handler(newVal) {
                 if (newVal) {
-                    // Nếu là change request, tạo mã mới
                     const newReqIdChange = await this.generateReqIdChange();
                     this.form.req_id_change = newReqIdChange;
                 } else {
-                    // Reset nếu không phải change request
                     this.form.req_id_change = '';
                 }
             }
@@ -1759,7 +1809,14 @@ export default {
                 jobDesc: false,
                 dimissionList: false,
             };
-            
+            this.denyReason = {
+                vi: '',
+                cn: ''
+            };
+            this.returnReason = {
+                vi: '',
+                cn: ''
+            };
             if (this.isChange) {
                 this.generateReqIdChange().then((newReqId) => {
                     this.form.req_id_change = newReqId;
@@ -2194,14 +2251,19 @@ export default {
         async openDenyDialog() {
             if (!this.editData) return;
             
-            this.denyReason = "";
-            await this.fetchDataFlow();
+            this.denyReason = {
+                vi: '',
+                cn: ''
+            }; await this.fetchDataFlow();
             this.confirmDenyDialog = true;
         },
         async openReturnDialog() {
             if (!this.editData) return;
             
-            this.returnReason = "";
+            this.returnReason = {
+                vi: "",
+                cn: ""
+            };
             this.returnToLevel = null;
             await this.fetchDataFlow();
             this.confirmReturnDialog = true;
@@ -2363,48 +2425,116 @@ export default {
         },
         
         async confirmDeny() {
-            if (!this.denyReason.trim()) {
+            if (!this.denyReason.vi && !this.denyReason.cn) {
                 this.$store.dispatch("showWarning", this.$t("Please provide a reason"));
                 return;
             }
-            let params = {
-                id: this.editData.id,
-                reason: this.denyReason,
-                user_empno: this.activeUser.empno,
-                dataReq: {
-                    dataFlow: this.dataFlow,
-                    id: this.editData.id,
-                    status: this.editData.status,
-                    status_amendent: this.editData.status_amendent,
-                    approval: this.editData.approval,
-                },
-            };
+            
             try {
-                const response = await this.$axios.post(this.api + "denyRequest", params);
-                if (response.data.success) {
-                    this.$store.dispatch(
-                    "showSuccess",
-                    this.$t("Request denied successfully")
+                // Nếu người dùng nhập tiếng Trung, tự động dịch sang tiếng Việt
+                if (this.denyReason.cn && !this.denyReason.vi) {
+                    const formData = new FormData();
+                    formData.append("type", "secret-v"); // Dịch sang tiếng Việt
+                    formData.append("string", this.denyReason.cn);
+                    
+                    const response = await this.$axios.post(
+                    "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
+                    formData
                     );
+                    
+                    if (response.status === 200) {
+                        this.denyReason.vi = response.data;
+                    }
+                }
+                // Nếu người dùng nhập tiếng Việt, tự động dịch sang tiếng Trung
+                else if (this.denyReason.vi && !this.denyReason.cn) {
+                    const formData = new FormData();
+                    formData.append("type", "secret-c"); // Dịch sang tiếng Trung
+                    formData.append("string", this.denyReason.vi);
+                    
+                    const response = await this.$axios.post(
+                    "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
+                    formData
+                    );
+                    
+                    if (response.status === 200) {
+                        this.denyReason.cn = response.data;
+                    }
+                }
+                
+                const response = await this.$axios.post(this.api + "denyRequest", {
+                    id: this.editData.id,
+                    reason: JSON.stringify(this.denyReason),
+                    user_empno: this.activeUser.empno,
+                    dataReq: {
+                        dataFlow: this.dataFlow,
+                        id: this.editData.id,
+                        status: this.editData.status,
+                        status_amendent: this.editData.status_amendent,
+                        approval: this.editData.approval,
+                    },
+                });
+                
+                if (response.data.success) {
+                    this.$notify({
+                        title: "Success",
+                        text: this.$t("Request denied successfully"),
+                        type: "success"
+                    });
                     this.confirmDenyDialog = false;
                     this.$emit("requestUpdated");
                     this.dialog = false;
                 }
             } catch (error) {
                 console.error("Error denying request:", error);
-                this.$store.dispatch("showError", this.$t("Failed to deny request"));
+                this.$notify({
+                    title: "Error",
+                    text: this.$t("Failed to deny request"),
+                    type: "error"
+                });
             }
         },
         async confirmReturn() {
-            if (!this.returnReason.trim()) {
+            if (!this.returnReason.vi && !this.returnReason.cn) {
                 this.$store.dispatch("showWarning", this.$t("Please provide a reason"));
                 return;
             }
             
             try {
+                if (this.returnReason.cn && !this.returnReason.vi) {
+                    const formData = new FormData();
+                    formData.append("type", "secret-v"); 
+                    formData.append("string", this.returnReason.cn);
+                    
+                    const response = await this.$axios.post(
+                    "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
+                    formData
+                    );
+                    
+                    if (response.status === 200) {
+                        this.returnReason.vi = response.data;
+                    }
+                }
+                // Nếu người dùng nhập tiếng Việt, tự động dịch sang tiếng Trung
+                else if (this.returnReason.vi && !this.returnReason.cn) {
+                    const formData = new FormData();
+                    formData.append("type", "secret-c"); // Dịch sang tiếng Trung
+                    formData.append("string", this.returnReason.vi);
+                    
+                    const response = await this.$axios.post(
+                    "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
+                    formData
+                    );
+                    
+                    if (response.status === 200) {
+                        this.returnReason.cn = response.data;
+                    }
+                }
+                
+                // Gửi request với cả 2 ngôn ngữ
                 const response = await this.$axios.post(this.api + "returnRequest", {
                     id: this.editData.id,
-                    reason: this.returnReason,
+                    reason: JSON.stringify(this.returnReason),
                     returnToLevel: "waiting_unit",
                     user_empno: this.activeUser.empno,
                     dataReq: {
@@ -2417,13 +2547,22 @@ export default {
                 });
                 
                 if (response.data.success) {
+                    this.$notify({
+                        title: "Success",
+                        text: this.$t("Request returned successfully"),
+                        type: "success"
+                    });
                     this.confirmReturnDialog = false;
-                    this.$emit("requestUpdated"); 
+                    this.$emit("requestUpdated");
                     this.dialog = false;
                 }
             } catch (error) {
                 console.error("Error returning request:", error);
-                this.$store.dispatch("showError", this.$t("Failed to return request"));
+                this.$notify({
+                    title: "Error",
+                    text: this.$t("Failed to return request"),
+                    type: "error"
+                });
             }
         },
         confirmSubmit() {
@@ -2574,6 +2713,21 @@ export default {
         },
     },
     computed: {
+        isDenyReasonValid() {
+            if (!this.denyReason) return false;
+            return Boolean(
+            (this.denyReason.vi && this.denyReason.vi.trim()) || 
+            (this.denyReason.cn && this.denyReason.cn.trim())
+            );
+        },
+        
+        isReturnReasonValid() {
+            if (!this.returnReason) return false;
+            return Boolean(
+            (this.returnReason.vi && this.returnReason.vi.trim()) || 
+            (this.returnReason.cn && this.returnReason.cn.trim())
+            );
+        },
         getAppCode() {
             // Khi changeReason.id = 2 (hủy đơn), mặc định dùng mpr_flow2
             if (this.form.changeReason && this.form.changeReason.id === 2) {

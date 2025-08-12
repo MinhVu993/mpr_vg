@@ -372,14 +372,19 @@
         <v-card-title class="error white--text">
             <v-icon left dark>mdi-alert</v-icon>
             {{ $t('Deny Request') }}
+            <v-spacer></v-spacer>
+            <v-btn-toggle v-model="selectedLanguage" group class="mr-4" >
+                <v-btn x-small value="vi">VI</v-btn>
+                <v-btn x-small value="cn">中文</v-btn>
+            </v-btn-toggle>
             <v-btn icon dark @click="confirmDenyDialog = false">
                 <v-icon>mdi-close</v-icon>
             </v-btn>
         </v-card-title>
         <v-card-text class="pt-4">
             <v-textarea v-model="denyReason" :label="$t('Reason')"
-            :placeholder="$t('Please provide a reason for denying this request')" outlined rows="3" counter
-            maxlength="500"></v-textarea>
+            :placeholder="$t('Please provide a reason for denying this request')" outlined rows="3"
+            ></v-textarea>
         </v-card-text>
         <v-card-actions>
             <v-btn color="grey darken-1" text @click="confirmDenyDialog = false">
@@ -472,7 +477,7 @@
         <v-card-text class="pt-4">
             <v-textarea v-model="returnReason" :label="$t('Return reason')"
             :placeholder="$t('Please provide a reason for returning this request')" 
-            outlined rows="5" counter maxlength="500" class="mb-4">
+            outlined rows="3"  class="mb-4">
         </v-textarea>
     </v-card-text>
     <v-card-actions>
@@ -694,7 +699,17 @@ export default {
             yearMenu: false,
             approvalDialog: false,
             selectedApprovalData: [],
-            approvalHeaders: [],
+            approvalHeaders: [
+            { text: this.$t('Level'), value: 'level', align: 'center' },
+            { text: this.$t('Type'), value: 'type' },
+            { text: this.$t('Empno'), value: 'empno' },
+            { text: this.$t('Name'), value: 'name' },
+            { text: this.$t('Department'), value: 'dept' },
+            { text: this.$t('Status'), value: 'status', align: 'center' },
+            { text: this.$t('Return Reason'), value: 'return_reason' },
+            { text: this.$t('Deny Reason'), value: 'reason_denied' },
+            { text: this.$t('Date'), value: 'processed_at', align: 'center' }
+            ],
             dataFlow: '',
             selectedItemForAccept: null,
             activeUser: '',
@@ -731,6 +746,8 @@ export default {
             filterValues: {}, 
             dataRecruitmentReason:[],
             unitNames: [],
+            sentNotifications: new Set(),
+            selectedLanguage: 'cn'
         }
     },
     computed: {
@@ -740,21 +757,44 @@ export default {
                 const approvalData = JSON.parse(this.selectedItem.approval);
                 let currentApprovalRecord = {};
                 
-                // Get the current cycle's approval record
                 if (this.selectedItem.approval_record) {
                     try {
                         const allApprovalRecords = JSON.parse(this.selectedItem.approval_record);
-                        // The latest record should be the last one in the array
                         currentApprovalRecord = allApprovalRecords[allApprovalRecords.length - 1] || {};
                     } catch(e) {
                         console.error('Error parsing current approval record:', e);
                     }
                 }
+                
                 return approvalData
                 .filter(level => level.approver && level.approver.empno)
                 .map((level, index) => {
-                    const recordKey = level.type; // e.g., 'unit', 'dept', etc.
+                    const recordKey = level.type;
                     const approvalRecord = currentApprovalRecord[recordKey] || '';
+                    
+                    // Parse return_reason
+                    let returnReasonText = '';
+                    if (level.return_reason) {
+                        try {
+                            const parsedReason = JSON.parse(level.return_reason);
+                            const currentLocale = this.$i18n.locale;
+                            returnReasonText = parsedReason[currentLocale] || parsedReason.vi || parsedReason.cn || '';
+                        } catch (e) {
+                            returnReasonText = level.return_reason;
+                        }
+                    }
+                    
+                    // Parse reason_denied
+                    let reasonDeniedText = '';
+                    if (level.reason_denied) {
+                        try {
+                            const parsedDenied = JSON.parse(level.reason_denied);
+                            const currentLocale = this.$i18n.locale;
+                            reasonDeniedText = parsedDenied[currentLocale] || parsedDenied.vi || parsedDenied.cn || '';
+                        } catch (e) {
+                            reasonDeniedText = level.reason_denied;
+                        }
+                    }
                     
                     return {
                         level: index + 1,
@@ -764,8 +804,8 @@ export default {
                         name: level.approver.name,
                         dept: level.approver.dept,
                         status: level.status || '',
-                        reason_denied: level.reason_denied || '',
-                        return_reason: level.return_reason || '',
+                        reason_denied: reasonDeniedText,
+                        return_reason: returnReasonText,
                         approval_record: approvalRecord,
                         processed_at: level.processed_at ? this.formatDate(level.processed_at) : '',
                         cycleIndex: 'current'
@@ -778,15 +818,58 @@ export default {
             
         },
         groupedApprovalData() {
-            const grouped = {};
-            this.selectedApprovalData.forEach(item => {
-                const cycleIndex = item.cycleIndex - 1;
-                if (!grouped[cycleIndex]) {
-                    grouped[cycleIndex] = [];
-                }
-                grouped[cycleIndex].push(item);
-            });
-            return Object.values(grouped);
+            try {
+                const grouped = {};
+                
+                this.selectedApprovalData.forEach(item => {
+                    if (item.cycleIndex && item.cycleIndex !== 'current') {
+                        const cycleIndex = item.cycleIndex - 1;
+                        if (!grouped[cycleIndex]) {
+                            grouped[cycleIndex] = [];
+                        }
+                        
+                        // Parse return_reason
+                        let returnReasonText = '';
+                        if (item.return_reason) {
+                            try {
+                                const parsedReason = JSON.parse(item.return_reason);
+                                const currentLocale = this.$i18n.locale;
+                                returnReasonText = parsedReason[currentLocale] || parsedReason.vi || parsedReason.cn || '';
+                            } catch (e) {
+                                returnReasonText = item.return_reason;
+                            }
+                        }
+                        
+                        // Parse reason_denied
+                        let reasonDeniedText = '';
+                        if (item.reason_denied) {
+                            try {
+                                const parsedDenied = JSON.parse(item.reason_denied);
+                                const currentLocale = this.$i18n.locale;
+                                reasonDeniedText = parsedDenied[currentLocale] || parsedDenied.vi || parsedDenied.cn || '';
+                            } catch (e) {
+                                reasonDeniedText = item.reason_denied;
+                            }
+                        }
+                        
+                        grouped[cycleIndex].push({
+                            ...item,
+                            return_reason: returnReasonText,
+                            reason_denied: reasonDeniedText,
+                            processed_at: item.processed_at ? this.formatDate(item.processed_at) : ''
+                        });
+                    }
+                });
+                
+                Object.keys(grouped).forEach(cycleIndex => {
+                    grouped[cycleIndex].sort((a, b) => a.level - b.level);
+                });
+                
+                return Object.values(grouped);
+            } catch (error) {
+                console.error('Error in groupedApprovalData:', error);
+                return [];
+            }
         },
         hasTodoData() {
             return this.dataFilteredByYear.some(item => {
@@ -1912,20 +1995,150 @@ export default {
         },
         async openApprovalDetails(item) {
             try {
-                this.selectedApprovalData = this.getApprovalLogsData(item);
                 this.selectedItem = item;
-                this.selectedApprovalData.sort((a, b) => {
-                    if (a.cycleIndex !== b.cycleIndex) {
-                        return a.cycleIndex - b.cycleIndex;
+                
+                // Parse approval data cho current cycle
+                let currentApproval = [];
+                if (item.approval) {
+                    try {
+                        currentApproval = JSON.parse(item.approval);
+                    } catch (e) {
+                        console.error('Error parsing current approval:', e);
                     }
-                    return a.level - b.level;
-                });
+                }
+                
+                // Parse approval history từ logs
+                let historyApproval = [];
+                if (item.logs) {
+                    try {
+                        historyApproval = JSON.parse(item.logs);
+                    } catch (e) {
+                        console.error('Error parsing logs:', e);
+                    }
+                }
+                
+                // Combine và format dữ liệu
+                this.selectedApprovalData = this.formatApprovalData(currentApproval, historyApproval);
+                
                 this.approvalDialog = true;
             } catch (error) {
                 console.error('Error opening approval details:', error);
+                this.$notify({
+                    title: 'Error',
+                    text: this.$t('Failed to load approval details'),
+                    type: 'error'
+                });
             }
         },
-        
+        formatApprovalData(currentApproval, historyApproval) {
+            let formattedData = [];
+            
+            // Format current approval data
+            if (Array.isArray(currentApproval)) {
+                currentApproval.forEach((level, index) => {
+                    if (level.approver && level.approver.empno) {
+                        let returnReasonText = '';
+                        let reasonDeniedText = '';
+                        
+                        // Parse return_reason
+                        if (level.return_reason) {
+                            try {
+                                const parsedReason = JSON.parse(level.return_reason);
+                                returnReasonText = parsedReason[this.$i18n.locale] || 
+                                parsedReason.vi || 
+                                parsedReason.cn || 
+                                level.return_reason;
+                            } catch (e) {
+                                returnReasonText = level.return_reason;
+                            }
+                        }
+                        
+                        // Parse reason_denied
+                        if (level.reason_denied) {
+                            try {
+                                const parsedDenied = JSON.parse(level.reason_denied);
+                                reasonDeniedText = parsedDenied[this.$i18n.locale] || 
+                                parsedDenied.vi || 
+                                parsedDenied.cn || 
+                                level.reason_denied;
+                            } catch (e) {
+                                reasonDeniedText = level.reason_denied;
+                            }
+                        }
+                        
+                        formattedData.push({
+                            level: index + 1,
+                            cycle: 'current',
+                            type: this.getApprovalLevelName(level.type),
+                            empno: level.approver.empno,
+                            name: level.approver.name,
+                            dept: level.approver.dept,
+                            status: level.status || 'waiting',
+                            return_reason: returnReasonText,
+                            reason_denied: reasonDeniedText,
+                            processed_at: level.processed_at ? this.formatDate(level.processed_at) : '',
+                            cycleIndex: 'current'
+                        });
+                    }
+                });
+            }
+            
+            // Format history approval data
+            if (Array.isArray(historyApproval)) {
+                historyApproval.forEach((cycle, cycleIndex) => {
+                    if (Array.isArray(cycle)) {
+                        cycle.forEach((level, levelIndex) => {
+                            if (level.approver && level.approver.empno) {
+                                let returnReasonText = '';
+                                let reasonDeniedText = '';
+                                
+                                // Parse return_reason
+                                if (level.return_reason) {
+                                    try {
+                                        const parsedReason = JSON.parse(level.return_reason);
+                                        returnReasonText = parsedReason[this.$i18n.locale] || 
+                                        parsedReason.vi || 
+                                        parsedReason.cn || 
+                                        level.return_reason;
+                                    } catch (e) {
+                                        returnReasonText = level.return_reason;
+                                    }
+                                }
+                                
+                                // Parse reason_denied
+                                if (level.reason_denied) {
+                                    try {
+                                        const parsedDenied = JSON.parse(level.reason_denied);
+                                        reasonDeniedText = parsedDenied[this.$i18n.locale] || 
+                                        parsedDenied.vi || 
+                                        parsedDenied.cn || 
+                                        level.reason_denied;
+                                    } catch (e) {
+                                        reasonDeniedText = level.reason_denied;
+                                    }
+                                }
+                                
+                                formattedData.push({
+                                    level: levelIndex + 1,
+                                    cycle: cycleIndex + 1,
+                                    type: this.getApprovalLevelName(level.type),
+                                    empno: level.approver.empno,
+                                    name: level.approver.name,
+                                    dept: level.approver.dept,
+                                    status: level.status || '',
+                                    return_reason: returnReasonText,
+                                    reason_denied: reasonDeniedText,
+                                    processed_at: level.processed_at ? this.formatDate(level.processed_at) : '',
+                                    cycleIndex: cycleIndex + 1
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+            
+            return formattedData;
+        },
         getApprovalLogsData(item) {
             try {
                 let logsData = [];

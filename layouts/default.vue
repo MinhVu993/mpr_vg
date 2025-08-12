@@ -1,7 +1,7 @@
 <i18n>
     {
       "en": { 
-          "appName" :"VG - Manpower Request Form",
+          "appName" :"VG - Manpower request",
           "accessDenied": "You do not have permission to access this application.",
             "User manual": "User manual",
             "Go home": "Go home",
@@ -10,7 +10,7 @@
             "Main page - User": "Main page - User"
       },
       "cn": {
-          "appName" :"VG - 人員增補申請系統",
+          "appName" :"VG - 人員增補申請",
           "accessDenied": "您无权访问此应用程序。",
             "User manual": "用户手册",
             "Go home": "回家",
@@ -19,8 +19,7 @@
             "Main page - User": "主頁-使用者"
       },
       "vi": {
-          "appName" :"VG - Hệ thống đơn xin bổ sung công nhân viên",
-          "appname": "Ứng dụng quản lý ký túc xá",
+          "appName" :"VG - Đơn xin bổ sung công nhân viên",
             "accessDenied": "Bạn không được phép truy cập vào ứng dụng này.",
             "User manual": "Hướng dẫn sử dụng",
             "Go home": "Trang chủ",
