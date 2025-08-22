@@ -14,8 +14,9 @@ use App\vgMprEduReqMdl as EduReq;
 use App\vgMprSubPosMdl as SubPos;
 use App\vgMprChangeReasonMdl as ChangeReason;
 use App\vgMprRecReasonMdl as RecReason;
-use App\vgRecruitingReportResignDataMdl_test as ResignData;
+use App\vgRecruitingReportResignDataMdl as ResignData;
 use App\vgRecruitingReportEmpnoInfoMdl as EmpnoInfo;
+use App\vgRecruitingReportDeptCodeMdl as nameDeptCode;
 use Illuminate\Support\Facades\Validator;
 
 class vgMprCtrl extends Controller
@@ -274,7 +275,7 @@ class vgMprCtrl extends Controller
         $dataEduReq = EduReq::where('loc', $loc)->orderBy('id', 'asc')->get();
         $dataLang = Lang::where('loc', $loc)->orderBy('id', 'asc')->get();
         $dataWps = Wps::where('loc', $loc)->orderBy('id', 'asc')->get();
-        $dataDeptHrm = hrmDept::orderBy('id', 'asc')->get();
+        $dataDeptHrm = nameDeptCode::orderBy('id', 'asc')->get();
         $model = [
             'dataRecReason' => $dataRecReason,
             'dataDeptCode' => $dataDeptCode,
@@ -894,22 +895,22 @@ class vgMprCtrl extends Controller
                     }
                     private function sendMsg($params) 
                     {
-                        // try {
-                        //     $client = new \GuzzleHttp\Client();
+                        try {
+                            $client = new \GuzzleHttp\Client();
                             
-                        //     $formData = http_build_query($params);
+                            $formData = http_build_query($params);
                             
-                        //     $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
-                        //         'headers' => [
-                        //             'Content-Type' => 'application/x-www-form-urlencoded'
-                        //         ],
-                        //         'body' => $formData 
-                        //     ]);
+                            $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
+                                'headers' => [
+                                    'Content-Type' => 'application/x-www-form-urlencoded'
+                                ],
+                                'body' => $formData 
+                            ]);
                             
-                        //     return json_decode($response->getBody()->getContents(), true);
-                        // } catch (\Exception $e) {
-                        //     throw $e;
-                        // }
+                            return json_decode($response->getBody()->getContents(), true);
+                        } catch (\Exception $e) {
+                            throw $e;
+                        }
                     }
                     public function denyRequest(Request $req)
                     {

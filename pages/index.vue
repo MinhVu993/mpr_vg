@@ -191,94 +191,86 @@
                 </v-tooltip>
             </div>
         </template>
-        <!-- <template v-slot:[`item.qty_req`]="{ item }">
-            <div>
-                <template v-if="item.status_amendent === 'completed'">
-                    {{ getChangeQuantity(item) }}
-                </template>
-                <template v-else>
-                    {{ getDisplayQuantity(item.qty_req, item) }}
-                    <v-tooltip bottom v-if="hasQuantityChange(item) && !isAmendmentDeniedButOriginalValid(item)" color="warning">
-                        <template v-slot:activator="{ on, attrs }">
-                            <span v-bind="attrs" v-on="on">
-                                <v-icon small color="warning" class="mx-1">mdi-arrow-right-bold</v-icon>
-                                <span class="font-weight-bold">{{ getChangeQuantity(item) }}</span>
-                            </span>
-                        </template>
-                        <span>{{ getChangeReason(item) }}</span>
-                    </v-tooltip>
-                </template>
-            </div>
-        </template> -->
         <template v-slot:[`item.recruited`]="{ item }">
             {{ item.recruited || 0 }}
-        </template>
-        <template v-slot:[`item.resign`]="{ item }">
-            {{ item.resign || 0 }}
-        </template>
-        <template v-slot:[`item.status`]="{ item }">
-            <div class="d-flex align-center flex-wrap">
-                <!-- Main Status Chip with Tooltip -->
-                <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
-                    <template v-slot:activator="{ on, attrs }">
-                        <v-chip 
-                        v-if="item.status" 
-                        label 
-                        outlined
-                        :color="getStatusColor(item.status, item)" 
-                        small 
-                        dark
-                        v-bind="attrs" 
-                        v-on="on" 
-                        class="mr-1 mb-1" 
-                        @click="openApprovalDetails(item)" 
-                        style="cursor: pointer"
-                        >
-                        {{ getStatusWithApprover(item.status, item) }}
-                    </v-chip>
-                </template>
-                <span v-if="getReturnInfo(item).returned">
-                    <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
-                    {{ getNextApproverInfoForStatus(item) }}
-                </span>
-                <span v-else-if="getNextApproverInfoForStatus(item)">
-                    {{ getNextApproverInfoForStatus(item) }}
-                </span>
-            </v-tooltip>
-            
-            <!-- Amendment Status Chip with Separate Tooltip -->
-            <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
-                <template v-slot:activator="{ on: amendmentOn, attrs: amendmentAttrs }">
+            <!-- <div 
+            style="cursor: pointer; color: blue; text-decoration: underline;" 
+            @click="showCandidatesDialog(item.candidates)">
+            {{ item.recruited || 0 }}
+        </div> -->
+    </template>
+    
+    <template v-slot:[`item.resign`]="{ item }">
+        {{ item.resign || 0 }}
+    </template>
+    <template v-slot:[`item.status`]="{ item }">
+        <div class="d-flex align-center flex-wrap">
+            <!-- Main Status Chip with Tooltip -->
+            <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
+                <template v-slot:activator="{ on, attrs }">
                     <v-chip 
+                    v-if="item.status" 
                     label 
-                    :color="getAmendmentStatusColor(item.status_amendent)" 
-                    small 
                     outlined
+                    :color="getStatusColor(item.status, item)" 
+                    small 
                     dark
-                    v-bind="amendmentAttrs"
-                    v-on="amendmentOn"
-                    class="mr-1 mb-1"
-                    @click="openApprovalDetails(item)"
+                    v-bind="attrs" 
+                    v-on="on" 
+                    class="mr-1 mb-1" 
+                    @click="openApprovalDetails(item)" 
                     style="cursor: pointer"
                     >
-                    {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
+                    {{ getStatusWithApprover(item.status, item) }}
                 </v-chip>
             </template>
-            <span>
-                {{ getNextApproverInfoForAmendment(item) }}
+            <span v-if="getReturnInfo(item).returned">
+                <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
+                {{ getNextApproverInfoForStatus(item) }}
+            </span>
+            <span v-else-if="getNextApproverInfoForStatus(item)">
+                {{ getNextApproverInfoForStatus(item) }}
             </span>
         </v-tooltip>
-        <!-- Return Icon -->
-        <!-- <v-icon x-small color="warning" v-if="getReturnInfo(item).returned" class="ml-1">
-            mdi-undo
-        </v-icon> -->
-    </div>
+        
+        <!-- Amendment Status Chip with Separate Tooltip -->
+        <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
+            <template v-slot:activator="{ on: amendmentOn, attrs: amendmentAttrs }">
+                <v-chip 
+                label 
+                :color="getAmendmentStatusColor(item.status_amendent)" 
+                small 
+                outlined
+                dark
+                v-bind="amendmentAttrs"
+                v-on="amendmentOn"
+                class="mr-1 mb-1"
+                @click="openApprovalDetails(item)"
+                style="cursor: pointer"
+                >
+                {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
+            </v-chip>
+        </template>
+        <span>
+            {{ getNextApproverInfoForAmendment(item) }}
+        </span>
+    </v-tooltip>
+    <!-- Return Icon -->
+    <!-- <v-icon x-small color="warning" v-if="getReturnInfo(item).returned" class="ml-1">
+        mdi-undo
+    </v-icon> -->
+</div>
 </template>
 <template v-slot:[`item.action`]="{ item }">
     <v-icon @click="printDocument(item)">mdi-printer</v-icon>
 </template>
 <template v-slot:[`item.reason`]="{ item }">
-    {{ item.reasonInfo.type }}
+    <template v-if="item.reason_exp === 3">
+        {{ getLocalizedOtherReason(item.isOther_reason) }}
+    </template>
+    <template v-else>
+        {{ item.reasonInfo?.type }}
+    </template>
 </template>
 <template v-slot:[`item.computer_skills`]="{ item }">
     <div v-if="item.computerSkillsInfo">
@@ -292,22 +284,7 @@
     <div>{{ getPositionName(item.pos) }}</div>
 </template>
 <template v-slot:[`item.req_id`]="{ item }">
-    <v-tooltip bottom color="#01a6be" dark>
-        <template v-slot:activator="{ on, attrs }">
-            <v-btn
-            text
-            color="teal darken-4"
-            class="pa-0"
-            style="text-decoration: underline"
-            @click="openDetail(item)"
-            v-bind="attrs"
-            v-on="on"
-            >
-            {{ formatID(item.req_id) }}
-        </v-btn>
-    </template>
-    <span>{{ item.req_id }}</span>
-</v-tooltip>
+    <v-btn text small color="teal darken-4" class="pa-0" @click="openDetail(item)"> {{ item.req_id }} </v-btn>
 </template>
 <template #[`footer.prepend`]>
     <v-btn small color="success" @click="exportExcel" :title="$t('Export to Excel')" class="mr-6" dark>
@@ -738,7 +715,7 @@ export default {
         {text:'',value:'select',sortable:false,width:'30px'},
         { text: 'Req ID', value: 'req_id', width: '60px', align: 'center'},
         { text: 'Req date', value: 'date_req', width: '120px' },
-        { text: 'Unit', value: 'unit', width: '100px' },
+        
         { text: 'Position', value: 'pos', width: '100px' },
         { text: 'Demand', value: 'qty_req', align: 'center', width: '100px' },
         { text: 'Reason', value: 'reason', width: '120px' },
@@ -1048,8 +1025,18 @@ export default {
                 
                 // Find matching unit name from unitNames array
                 const unitCode = submitter.unit;
-                const unitInfo = this.unitNames.find(u => u.code === unitCode);
-                const unitName = unitInfo ? unitInfo.name : '';
+                const unitInfo = this.unitNames.find(u => u.dept_code === unitCode); // hoặc 'code' nếu đúng tên
+                let unitName = '';
+                if (unitInfo && unitInfo.name) {
+                    try {
+                        const nameObj = JSON.parse(unitInfo.name);
+                        const locale = this.$i18n?.locale || 'vi';
+                        unitName = nameObj[locale] || nameObj.vi || nameObj.en || '';
+                    } catch (e) {
+                        console.error('Cannot parse unitInfo.name:', e, unitInfo.name);
+                        unitName = '';
+                    }
+                }
                 
                 
                 return {
@@ -1093,6 +1080,7 @@ export default {
         filteredData() {
             let result = this.dataFilteredByYear;
             
+            // 1. Lọc theo role và quyền truy cập
             if (this.activeUser) {
                 if (!['hr', 'admin'].includes(this.activeUser.role?.toLowerCase())) {
                     result = result.filter(item => {
@@ -1105,71 +1093,92 @@ export default {
                     });
                 }
             }
+            
+            // 2. Lọc theo tab status
             if (this.statusFilter === 1) {
+                // Tab To Do
                 result = result.filter(item => this.canApproveItemForTodo(item));
             } else if (this.statusFilter === 2) {
+                // Tab Pending
                 result = result.filter(item => 
-                ['waiting_unit', 'waiting_dept', 'waiting_div','waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
-                ['waiting_unit', 'waiting_dept', 'waiting_div','waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)
+                ['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 
+                'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
+                ['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 
+                'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)
                 );
             } else if (this.statusFilter === 3) {
+                // Tab Returned
                 result = result.filter(item => 
                 item.status === 'returned' || 
                 item.status_amendent === 'returned' ||
                 this.hasReturnedLevel(item)
                 );
             } else if (this.statusFilter === 4) {
+                // Tab Approved
                 result = result.filter(item => 
-                item.status === 'completed' || item.status_amendent === 'completed'
+                item.status === 'completed' || 
+                item.status_amendent === 'completed'
                 );
             } else if (this.statusFilter === 5) {
+                // Tab Rejected
                 result = result.filter(item =>  
                 ['declined', 'cancelled'].includes(item.status) ||
                 ['declined', 'cancelled'].includes(item.status_amendent)
                 );
             }
             
+            // 3. Lọc theo các filter values
             Object.entries(this.filterValues).forEach(([key, values]) => {
                 if (values && values.length) {
                     result = result.filter(item => {
                         switch(key) {
                             case 'req_id':
                             return values.includes(item.req_id);
+                            
                             case 'submitter':
                             return values.includes(item.submiterInfo?.name);
+                            
                             case 'date_req':
                             return values.includes(this.formatDate(item.date_req));
+                            
                             case 'unit':
                             return values.includes(item.unit);
-                            case 'division': 
-                            return values.includes(item.division);
+                            
                             case 'pos':
                             return values.includes(this.getPositionName(item.pos));
+                            
                             case 'reason':
                             return values.includes(item.reason);
+                            
                             case 'status':
                             return values.includes(this.getStatusText(item.status)) ||
                             values.includes(this.getStatusText(item.status_amendent));
+                            
                             case 'sub_pos':
                             const subPosName = this.getSubPositionName(item.sub_pos, true);
                             return values.some(subPos => subPosName.includes(subPos));
+                            
                             case 'recruited':
                             return values.includes(item.recruited);
+                            
                             case 'resign':
                             return values.includes(item.resign);
+                            
                             case 'qty_req':
                             return values.includes(item.qtyInfo.total);
+                            
                             case 'recruited_status':
                             const status = this.getRecruitmentStatus(item);
                             return status.show && values.includes(status.text);
                             
                             default:
-                            
                             return true;
                         }
                     });
                 }
             });
+            
+            // 4. Lọc theo search query
             if (this.search) {
                 const searchTerm = this.search.toLowerCase();
                 result = result.filter(item => {
@@ -1184,9 +1193,9 @@ export default {
                     (item.reason || '').toLowerCase().includes(searchTerm) ||
                     this.getStatusText(item.status).toLowerCase().includes(searchTerm) ||
                     this.getStatusText(item.status_amendent).toLowerCase().includes(searchTerm) ||
-                    (item.recruited || '').toLowerCase().includes(searchTerm) || 
-                    (item.resign || '').toLowerCase().includes(searchTerm) ||
-                    (item.qtyInfo.total || '').toLowerCase().includes(searchTerm) ||
+                    (item.recruited || '').toString().toLowerCase().includes(searchTerm) || 
+                    (item.resign || '').toString().toLowerCase().includes(searchTerm) ||
+                    (item.qtyInfo.total || '').toString().toLowerCase().includes(searchTerm) ||
                     (item.qtyInfo.details || '').toLowerCase().includes(searchTerm) ||
                     (item.sub_pos ? this.getSubPositionName(item.sub_pos, true).toLowerCase().includes(searchTerm) : false)
                     );
@@ -1235,7 +1244,7 @@ export default {
                 submitter: [...new Set(this.formattedData.map(item => item.submiterInfo?.name))].filter(Boolean),
                 date_req: [...new Set(this.formattedData.map(item => this.formatDate(item.date_req)))].filter(Boolean),
                 unit: [...new Set(this.formattedData.map(item => item.unit))].filter(Boolean),
-                division: [...new Set(this.formattedData.map(item => item.division))].filter(Boolean),
+                // division: [...new Set(this.formattedData.map(item => item.division))].filter(Boolean),
                 pos: [...new Set(this.formattedData.map(item => this.getPositionName(item.pos)))].filter(Boolean),
                 reason: [...new Set(this.formattedData.map(item => item.reason))].filter(Boolean),
                 status: [...new Set(this.formattedData.flatMap(item => [
@@ -1268,6 +1277,28 @@ export default {
         },
     },
     methods: {
+        getLocalizedOtherReason(otherReason) {
+    try {
+        // Nếu otherReason là string JSON
+        if (typeof otherReason === 'string' && otherReason.startsWith('{')) {
+            const parsedReason = JSON.parse(otherReason);
+            const locale = this.$i18n?.locale || 'vi';
+            return parsedReason[locale] || parsedReason.vi || parsedReason.en || '';
+        }
+        
+        // Nếu otherReason đã là object
+        if (typeof otherReason === 'object' && otherReason !== null) {
+            const locale = this.$i18n?.locale || 'vi';
+            return otherReason[locale] || otherReason.vi || otherReason.en || '';
+        }
+
+        // Nếu là string thường
+        return otherReason || '';
+    } catch (error) {
+        console.error('Error getting localized other reason:', error);
+        return otherReason || ''; // Trả về nguyên dạng nếu có lỗi
+    }
+},
         setDefaultTab() {
             this.statusFilter = this.defaultTab;
         },
@@ -1726,7 +1757,7 @@ export default {
                     this.lang = res.data.dataLang;
                     this.subPos = res.data.dataSubPos;
                     this.flowCache.clear();
-                    await this.preloadFlowData();
+                    // await this.preloadFlowData();
                     this.filteredItems = [];
                 } else {
                     throw new Error('Failed to fetch data');
@@ -1762,6 +1793,15 @@ export default {
         
         formatReason(reasonId) {
             try {
+                // Kiểm tra nếu reasonId là 3 thì trả về object với type rỗng
+                if (reasonId === 3) {
+                    return {
+                        type: '', // Để trống vì sẽ hiển thị isOther_reason
+                        oldEmpNo: '',
+                        requestDate: ''
+                    };
+                }
+                
                 const reasonObj = this.dataRecruitmentReason.find(reason => reason.id === parseInt(reasonId));
                 if (!reasonObj) {
                     return { 
@@ -1770,16 +1810,18 @@ export default {
                         requestDate: '' 
                     };
                 }
+                
                 const nameObj = JSON.parse(reasonObj.name);
                 const locale = this.$i18n.locale || 'en';
                 const localizedName = nameObj[locale] || nameObj.en || reasonObj.id;
+                
                 return {
                     type: localizedName,
                     oldEmpNo: '',
                     requestDate: ''
                 };
             } catch (error) {
-                console.error('Error formatting reason:', error, reasonId);
+                console.error('Error formatting reason:', error);
                 return { 
                     type: String(reasonId), 
                     oldEmpNo: '', 
@@ -3052,12 +3094,53 @@ export default {
             if (item.change_req) return false;
             return this.selectedItem === item;
         },
-        
+        async transferCandidates() {
+            if (!this.transferMprId || this.selectedCandidates.length === 0) {
+                this.$notify({
+                    title: this.$t('Warning'),
+                    text: this.$t('Please select candidates and enter target Demand ID'),
+                    type: 'warning'
+                });
+                return;
+            }
+            try {
+                const response = await this.$axios.post(this.api + 'transferCandidates', {
+                    fromId: this.selectIdMpr.id,
+                    toId: parseInt(this.transferMprId),
+                    candidates: this.selectedCandidates 
+                });
+                
+                if (response.data.success) {
+                    this.$notify({
+                        title: this.$t('Success'),
+                        text: this.$t('Candidates transferred successfully'),
+                        type: 'success'
+                    });
+                    
+                    // Close dialog and reset selection
+                    this.candidatesDialog = false;
+                    this.selectedCandidates = [];
+                    this.transferMprId = '';
+                    this.selectAll = false;
+                    
+                    // Reload data
+                    await this.getAllData();
+                }
+            } catch (error) {
+                console.error('Error transferring candidates:', error);
+                this.$notify({
+                    title: this.$t('Error'),
+                    text: error.response?.data?.message || this.$t('Failed to transfer candidates'),
+                    type: 'error'
+                });
+            }
+        },
         toggleItemSelection(item) {
-            if (item.change_req) return; if (this.selectedItem === item) {
-                this.selectedItem = null;  
+            const index = this.selectedCandidates.findIndex(selected => selected.empno === item.empno);
+            if (index === -1) {
+                this.selectedCandidates.push(item);
             } else {
-                this.selectedItem = item;
+                this.selectedCandidates.splice(index, 1);
             }
         },
         
@@ -3267,15 +3350,15 @@ export default {
             immediate: true
         },
         
-        filteredData: {
-            handler() {
-                this.$nextTick(() => {
-                    this.preloadFlowData();
-                });
-            },
-            immediate: true,
-            deep: true
-        },
+        // filteredData: {
+        //     handler() {
+        //         this.$nextTick(() => {
+        //             this.preloadFlowData();
+        //         });
+        //     },
+        //     immediate: true,
+        //     deep: true
+        // },
         
         statusFilter: {
             handler() {
@@ -3353,7 +3436,9 @@ export default {
             "Export": "Export",
             "remaining": "remaining",
             "Hold period expired": "Hold period expired",
-            "days": "days"
+            "days": "days",
+            "Approval History":"Approval History",
+            "Current Cycle":"Current Cycle"
         },
         "vi": {
             "ID": "ID",
@@ -3377,7 +3462,7 @@ export default {
             "Returned": "Trả lại người đề nghị",
             "Approved": "Đã duyệt",
             "Rejected": "Từ chối",
-            "Manpower listing": "Danh sách đơn yêu cầu nhân sự",
+            "Manpower listing": "Đơn xin bổ sung công nhân nhân viên",
             "Reload": "Tải lại dữ liệu",
             "New request": "Yêu cầu mới",
             "Amendment request": "Yêu cầu sửa đổi",
@@ -3406,7 +3491,9 @@ export default {
             "Export": "Xuất Excel",
             "remaining": "còn lại",
             "Hold period expired": "Đã hết thời gian tạm dừng",
-            "days": "ngày"
+            "days": "ngày",
+            "Approval History":"Lịch sử phê duyệt",
+            "Current Cycle":"Chu kỳ hiện tại"
         },
         "cn": {
             "ID": "表單編號",
@@ -3459,7 +3546,9 @@ export default {
             "Export": "導出",
             "remaining": "天数",
             "Hold period expired": "暂停期已过",
-            "days": "天"
+            "days": "天",
+            "Approval History":"审批历史",
+            "Current Cycle":"当前周期"
         }
     }  
 </i18n>     

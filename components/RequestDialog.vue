@@ -176,7 +176,63 @@
                                     <v-text-field :disabled="formDisabled" v-model="form.recruitment.oldempno" :label="$t('Old empno')" outlined dense hide-details></v-text-field>
                                 </v-col>
                                 <v-col cols="12" v-if="form.recruitment.reason === 3"> <!-- For other -->
-                                    <v-textarea :disabled="formDisabled" v-model="form.recruitment.isOther_reason" :label="$t('Other reason')" outlined auto-grow rows="1" dense hide-details></v-textarea>
+                                    <v-card outlined class="pa-0">
+                                        <v-tabs v-model="otherReasonTab" background-color="teal" dark show-arrows>
+                                            <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> Tiếng Việt </v-tab>
+                                            <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> English </v-tab>
+                                            <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> 中文 </v-tab>
+                                        </v-tabs>
+                                        
+                                        <v-tabs-items v-model="otherReasonTab" class="mt-2">
+                                            <v-tab-item>
+                                                <v-textarea
+                                                :disabled="formDisabled"
+                                                v-model="form.recruitment.isOther_reason.vi"
+                                                outlined
+                                                auto-grow
+                                                rows="2"
+                                                :rules="[rules.required]"
+                                                :error-messages="!form.recruitment.isOther_reason.vi ? $t('This field is required') : ''"
+                                                placeholder="Nhập lý do bằng tiếng Việt..."
+                                                background-color="grey lighten-5"
+                                                class="other-reason-textarea"
+                                                required
+                                                ></v-textarea>
+                                            </v-tab-item>
+                                            
+                                            <v-tab-item>
+                                                <v-textarea
+                                                :disabled="formDisabled"
+                                                v-model="form.recruitment.isOther_reason.en" 
+                                                outlined
+                                                auto-grow
+                                                rows="2"
+                                                :rules="[rules.required]"
+                                                :error-messages="!form.recruitment.isOther_reason.en ? $t('This field is required') : ''"
+                                                placeholder="Enter reason in English..."
+                                                background-color="grey lighten-5"
+                                                class="other-reason-textarea"
+                                                required
+                                                ></v-textarea>
+                                            </v-tab-item>
+                                            
+                                            <v-tab-item>
+                                                <v-textarea
+                                                :disabled="formDisabled"
+                                                v-model="form.recruitment.isOther_reason.cn"
+                                                outlined
+                                                auto-grow
+                                                rows="2"
+                                                :rules="[rules.required]"
+                                                :error-messages="!form.recruitment.isOther_reason.cn ? $t('This field is required') : ''"
+                                                placeholder="用中文输入原因..."
+                                                background-color="grey lighten-5" 
+                                                class="other-reason-textarea"
+                                                required
+                                                ></v-textarea>
+                                            </v-tab-item>
+                                        </v-tabs-items>
+                                    </v-card>
                                 </v-col>
                             </v-row>
                         </v-card>
@@ -624,6 +680,7 @@ export default {
     },
     data() {
         return {
+            otherReasonTab: 0,
             api: "http://gmo021.cansportsvg.com/api/vg-mpr/",
             storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
             dateKeyInMenu: false,
@@ -1505,7 +1562,7 @@ export default {
                     empno: this.activeUser.empno,
                     name: this.activeUser.name,
                     dept_sumt: this.activeUser.dept_sumt,
-                    high_dept: this.activeUser.email,
+                    high_dept: this.activeUser.division,
                     email: this.activeUser.email,
                     dept: this.user.dept,
                     div: this.user.div,
@@ -1531,7 +1588,15 @@ export default {
                 formData.append("w_exp", this.form.workExperience);
                 formData.append("reason_exp", this.form.recruitment.reason);
                 formData.append("old_emp", this.form.recruitment.oldempno);
-                formData.append("isOther_reason", this.form.recruitment.isOther_reason);
+                if (this.form.recruitment.reason === 3) {
+                    formData.append("isOther_reason", JSON.stringify({
+                        vi: this.form.recruitment.isOther_reason.vi || '',
+                        en: this.form.recruitment.isOther_reason.en || '',
+                        cn: this.form.recruitment.isOther_reason.cn || ''
+                    }));
+                } else {
+                    formData.append("isOther_reason", "");
+                }
                 formData.append("date_req", this.form.recruitment.requestDate);
                 formData.append("qty_req", JSON.stringify(this.form.staffCount));
                 
@@ -1754,7 +1819,11 @@ export default {
                 recruitment: {
                     reason: "",
                     oldempno: "",
-                    isOther_reason: "",
+                    isOther_reason:{
+                        vi: "",
+                        en: "",
+                        cn: ""
+                    },
                     requestDate: new Date().toISOString().substr(0, 10),
                 },
                 staffCount: {
@@ -2122,7 +2191,16 @@ export default {
                 isOther_reason: data.isOther_reason || "",
                 requestDate: data.date_req
             };
-            
+            this.form.recruitment = {
+                reason: typeof data.reason_exp === "string" ? parseInt(data.reason_exp) : data.reason_exp || "",
+                oldempno: data.old_emp || "",
+                isOther_reason: data.isOther_reason ? 
+                (typeof data.isOther_reason === 'string' ? 
+                JSON.parse(data.isOther_reason) : 
+                data.isOther_reason) : 
+                { vi: "", en: "", cn: "" },
+                requestDate: data.date_req
+            };
             // 11. Handle staff count
             try {
                 let qtyData = typeof data.qty_req === "string" ? JSON.parse(data.qty_req) : data.qty_req;
@@ -2645,7 +2723,11 @@ export default {
         handleReasonChange(reasonId) {
             // Reset fields
             this.form.recruitment.oldempno = "";
-            this.form.recruitment.isOther_reason = "";
+            this.form.recruitment.isOther_reason = {
+                vi: "",
+                en: "",
+                cn: ""
+            };
             
             // Handle based on ID
             if (reasonId === 2) { // Replacement ID
@@ -2697,7 +2779,7 @@ export default {
                     empno: this.activeUser.empno,
                     name: this.activeUser.name,
                     dept: this.activeUser.dept_sumt,
-                    high_dept: this.activeUser.hight_dept,
+                    high_dept: this.activeUser.division,
                     app_code: "mpr",
                     location: this.activeUser.location,
                 };
@@ -3483,7 +3565,8 @@ export default {
             "Change quantity cannot be greater than request quantity": "Change quantity cannot be greater than request quantity",
             "Change quantity cannot be greater than or equal to request quantity": "Change quantity cannot be greater than or equal to request quantity",
             "Min": "Min",
-            "Max": "Max"
+            "Max": "Max",
+            "This field is required": "This field is required"
         },
         "vi": {
             "Create new request": "Tạo yêu cầu mới",
@@ -3605,7 +3688,8 @@ export default {
             "Change quantity cannot be greater than request quantity": "Số lượng thay đổi không được lớn hơn số lượng yêu cầu",
             "Change quantity cannot be greater than or equal to request quantity": "Số lượng thay đổi không được lớn hơn hoặc bằng số lượng yêu cầu",
             "Min": "Tối thiểu",
-            "Max": "Tối đa"
+            "Max": "Tối đa",
+             "This field is required": "Trường này là bắt buộc"
         },
         "cn": {
             "Create new request": "创建新请求",
@@ -3725,7 +3809,8 @@ export default {
             "Change quantity cannot be greater than request quantity": "更改数量不能大于请求数量",
             "Change quantity cannot be greater than or equal to request quantity": "更改数量不能大于或等于请求数量",
             "Min": "最少",
-            "Max": "最多"
+            "Max": "最多",
+            "This field is required": "此字段为必填项"
         }
     }
 </i18n>
@@ -3813,5 +3898,21 @@ export default {
 
 .v-expansion-panel-header {
     background-color: #fff9c4 !important;
+}
+.other-reason-textarea ::v-deep .v-input__slot {
+    min-height: 80px !important;
+}
+
+.other-reason-textarea ::v-deep textarea {
+    line-height: 1.5;
+}
+
+.v-tabs-items {
+    background-color: transparent !important;
+}
+
+.v-tab {
+    text-transform: none !important;
+    font-weight: 500;
 }
 </style>

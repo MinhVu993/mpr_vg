@@ -257,9 +257,14 @@
             </v-chip>
         </div>
     </template>
-    <template v-slot:[`item.reason`]="{ item }">
-        {{ item.reasonInfo.type }}
+<template v-slot:[`item.reason`]="{ item }">
+    <template v-if="item.reason_exp === 3">
+        {{ getLocalizedOtherReason(item.isOther_reason) }}
     </template>
+    <template v-else>
+        {{ item.reasonInfo?.type }}
+    </template>
+</template>
     <template v-slot:[`item.computer_skills`]="{ item }">
         <div v-if="item.computerSkillsInfo">
             <div>{{ item.computerSkillsInfo.selected.join(', ') }}</div>
@@ -272,22 +277,7 @@
         <div>{{ getPositionName(item.pos) }}</div>
     </template>
     <template v-slot:[`item.req_id`]="{ item }">
-        <v-tooltip bottom color="#01a6be" dark>
-            <template v-slot:activator="{ on, attrs }">
-                <v-btn
-                text
-                color="teal darken-4"
-                class="pa-0"
-                style="text-decoration: underline"
-                @click="openDetail(item)"
-                v-bind="attrs"
-                v-on="on"
-                >
-                {{ formatID(item.req_id) }}
-            </v-btn>
-        </template>
-        <span>{{ item.req_id }}</span>
-    </v-tooltip>
+    <v-btn text small color="teal darken-4" class="pa-0" @click="openDetail(item)"> {{ item.req_id }} </v-btn>
 </template>
 <template #[`footer.prepend`]>
     <v-btn small color="success" @click="exportExcel" :title="$t('Export to Excel')" class="mr-6" dark>
@@ -963,8 +953,19 @@ export default {
                 
                 // Find matching unit name from unitNames array
                 const unitCode = submitter.unit;
-                const unitInfo = this.unitNames.find(u => u.code === unitCode);
-                const unitName = unitInfo ? unitInfo.name : '';
+                // Lưu ý: field ở DB và JS có thể khác nhau ("dept_code" vs "code")
+                const unitInfo = this.unitNames.find(u => u.dept_code === unitCode); // hoặc 'code' nếu đúng tên
+                let unitName = '';
+                if (unitInfo && unitInfo.name) {
+                    try {
+                        const nameObj = JSON.parse(unitInfo.name);
+                        const locale = this.$i18n?.locale || 'vi';
+                        unitName = nameObj[locale] || nameObj.vi || nameObj.en || '';
+                    } catch (e) {
+                        console.error('Cannot parse unitInfo.name:', e, unitInfo.name);
+                        unitName = '';
+                    }
+                }
                 
                 return {
                     ...item,
@@ -1137,7 +1138,7 @@ export default {
                 submitter: [...new Set(this.formattedData.map(item => item.submiterInfo?.name))].filter(Boolean),
                 date_req: [...new Set(this.formattedData.map(item => this.formatDate(item.date_req)))].filter(Boolean),
                 unit: [...new Set(this.formattedData.map(item => item.unit))].filter(Boolean),
-                division: [...new Set(this.formattedData.map(item => item.division))].filter(Boolean), 
+                // division: [...new Set(this.formattedData.map(item => item.division))].filter(Boolean), 
                 pos: [...new Set(this.formattedData.map(item => this.getPositionName(item.pos)))].filter(Boolean),
                 language: [...new Set(this.formattedData.map(item => item.language))].filter(Boolean),
                 reason: [...new Set(this.formattedData.map(item => item.reason))].filter(Boolean),
@@ -1193,6 +1194,28 @@ export default {
         },
     },
     methods: {
+        getLocalizedOtherReason(otherReason) {
+    try {
+        // Nếu otherReason là string JSON
+        if (typeof otherReason === 'string' && otherReason.startsWith('{')) {
+            const parsedReason = JSON.parse(otherReason);
+            const locale = this.$i18n?.locale || 'vi';
+            return parsedReason[locale] || parsedReason.vi || parsedReason.en || '';
+        }
+        
+        // Nếu otherReason đã là object
+        if (typeof otherReason === 'object' && otherReason !== null) {
+            const locale = this.$i18n?.locale || 'vi';
+            return otherReason[locale] || otherReason.vi || otherReason.en || '';
+        }
+
+        // Nếu là string thường
+        return otherReason || '';
+    } catch (error) {
+        console.error('Error getting localized other reason:', error);
+        return otherReason || ''; // Trả về nguyên dạng nếu có lỗi
+    }
+},
         getRecruitmentStatus(item) {
             const stocknumber = parseInt(item.stocknumber);
             const recruited = parseInt(item.recruited);
@@ -1580,10 +1603,10 @@ export default {
                 const res = await this.$axios.post(this.api + 'getDataModel', params);
                 if (res.status === 200) {
                     this.dataRecruitmentReason = res.data.dataRecReason;
-                    this.unitNames = res.data.dataDeptHrm || [];
+                    this.unitNames = res.data.dataDeptHrm;
                     this.pos = res.data.dataTypeApply;
                     this.flowCache.clear();
-                    await this.preloadFlowData();
+                    // await this.preloadFlowData();
                     this.filteredItems = [];
                 } else {
                     throw new Error('Failed to fetch data');
@@ -3112,15 +3135,15 @@ export default {
             immediate: true
         },
         
-        filteredData: {
-            handler() {
-                this.$nextTick(() => {
-                    this.preloadFlowData();
-                });
-            },
-            immediate: true,
-            deep: true
-        },
+        // filteredData: {
+        //     handler() {
+        //         this.$nextTick(() => {
+        //             this.preloadFlowData();
+        //         });
+        //     },
+        //     immediate: true,
+        //     deep: true
+        // },
         selectedCandidates(newVal) {
             this.selectAll = newVal.length === this.parsedCandidates.length;
         },
@@ -3185,7 +3208,9 @@ export default {
             "Manpower listing": "Manpower listing",
             "Applicant": "Applicant",
             "Search": "Search",
-            "Export": "Export"
+            "Export": "Export",
+            "Approval History":"Approval History",
+            "Current Cycle":"Current Cycle"
         },
         "vi": {
             "ID": "ID",
@@ -3209,7 +3234,7 @@ export default {
             "Returned": "Trả lại người đề nghị",
             "Approved": "Đã duyệt",
             "Rejected": "Từ chối",
-            "Manpower listing": "Danh sách đơn yêu cầu nhân sự",
+            "Manpower listing": "Đơn xin bổ sung công nhân nhân viên",
             "Reload": "Tải lại dữ liệu",
             "New request": "Yêu cầu mới",
             "Amendment request": "Yêu cầu sửa đổi",
@@ -3230,10 +3255,11 @@ export default {
             "Select Year": "Chọn năm",
             "Close": "Đóng",
             "Clear": "Xóa",
-            "Manpower listing": "Danh sách đơn yêu cầu nhân sự",
             "Applicant": "Người nộp đơn",
             "Search": "Tìm kiếm",
-            "Export": "Xuất Excel"
+            "Export": "Xuất Excel",
+             "Approval History":"Lịch sử phê duyệt",
+            "Current Cycle":"Chu kỳ hiện tại"
         },
         "cn": {
             "ID": "表單編號",
@@ -3278,10 +3304,11 @@ export default {
             "Select Year": "選擇年份",
             "Close": "關閉",
             "Clear": "清除",
-            "Manpower listing": "人力資源申請列表",
             "Applicant": "申請人",
             "Search": "搜尋",
-            "Export": "匯出"
+            "Export": "匯出",
+            "Approval History":"审批历史",
+            "Current Cycle":"当前周期"
         }
     }  
 </i18n>       

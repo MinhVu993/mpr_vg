@@ -96,7 +96,17 @@
                                         <label><input type="checkbox" readonly @click.prevent ref="reasonReplace" style="margin: 5px;">Bổ sung thôi việc (離職補充)</label>
                                         <label>MST(工號):&nbsp;<input type="text" ref="oldEmpNo"
                                             style="width: 100px; margin: 5px; border-bottom: 1px solid black;"></label>
-                                            <label><input type="checkbox" readonly @click.prevent ref="reasonOther" style="margin: 5px;">Nguyên nhân khác (其他原因):_____{{ formData?.isOther_reason }}__________</label>
+                                            <label>
+                                                <input 
+                                                type="checkbox" 
+                                                readonly 
+                                                @click.prevent 
+                                                ref="reasonOther" 
+                                                style="margin: 5px;"
+                                                >Nguyên nhân khác (其他原因):_____ 
+                                                {{ getLocalizedOtherReason(formData?.isOther_reason) }} 
+                                                _____
+                                            </label>
                                         </div>
                                     </td>
                                     <td style="text-align: center; vertical-align: top; width: 25%;"><strong>Ngày yêu cầu công nhân – nhân viên đến </br> (希望報到日期)</strong>
@@ -510,6 +520,28 @@
                                                                 });
                                                             },
                                                             methods: {
+                                                                getLocalizedOtherReason(reason) {
+                                                                    try {
+                                                                        if (!reason) return '';
+                                                                        
+                                                                        // Nếu reason là string JSON
+                                                                        if (typeof reason === 'string' && reason.startsWith('{')) {
+                                                                            const parsedReason = JSON.parse(reason);
+                                                                            return `${parsedReason.vi}/${parsedReason.cn}`; // Hiển thị cả tiếng Việt và tiếng Trung
+                                                                        }
+                                                                        
+                                                                        // Nếu reason đã là object
+                                                                        if (typeof reason === 'object' && reason !== null) {
+                                                                            return `${reason.vi}/${reason.cn}`; // Hiển thị cả tiếng Việt và tiếng Trung
+                                                                        }
+                                                                        
+                                                                        // Nếu là string thường
+                                                                        return reason;
+                                                                    } catch (error) {
+                                                                        console.error('Error parsing other reason:', error);
+                                                                        return reason || '';
+                                                                    }
+                                                                },
                                                                 updateFormFields() {
                                                                     if (!this.formData) return;
                                                                     
