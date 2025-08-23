@@ -196,14 +196,14 @@
         <template v-slot:[`item.recruited`]="{ item }">
             <!-- {{ item.recruited || 0 }} -->
             <div 
-            style="cursor: pointer; color: blue; text-decoration: underline;" 
+            style="cursor: pointer; color: blue;" 
             @click="showCandidatesDialog(item.candidates)">
             {{ item.recruited || 0 }}
         </div>
     </template>
     <template v-slot:[`item.resign`]="{ item }">
         <div 
-        style="cursor: pointer; color: blue; text-decoration: underline;" 
+        style="cursor: pointer; color: red;" 
         @click="showResignDialog(item.resignList)">
         {{ item.resign || 0 }}
     </div>
@@ -657,6 +657,11 @@
             <template v-slot:[`item.date`]="{ item }">
                 <div class="d-flex align-center">
                     {{ formatDate(item.date) }}
+                </div>
+            </template>
+            <template v-slot:[`item.position`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ (item.position) }}
                 </div>
             </template>
             <template v-slot:[`header.empno`]> {{ $t('Empno') }} </template>
