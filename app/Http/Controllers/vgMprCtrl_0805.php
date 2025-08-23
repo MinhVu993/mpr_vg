@@ -3,7 +3,7 @@
         <v-col cols="12">
             <v-card>
                 <div class="progress-bar" />
-                <v-toolbar dense color="teal darken-2" dark>
+                <v-toolbar dense color="#01a6be darken-2" dark>
                     <v-toolbar-title class="d-flex" style="align-items: center">
                         <v-icon left>mdi-google-classroom</v-icon>
                         {{ $t("Manpower listing") }}
@@ -25,7 +25,7 @@
                         {{ $t("Amendment request") }}
                     </v-btn>
                 </v-toolbar>
-                <v-tabs background-color="teal darken-2" color="yellow" dark v-model="statusFilter"  center-active>
+                <v-tabs background-color="#01a6be darken-2" color="yellow" dark v-model="statusFilter"  center-active>
                     <v-tab>
                         {{ $t("All") }}
                         <v-badge :content="statusCounts().all > 9 ? '9+' : statusCounts().all.toString()" color="" :value="statusCounts().all" ></v-badge>
@@ -54,7 +54,7 @@
                     <v-menu v-model="yearMenu" :close-on-content-click="false" transition="scale-transition" offset-y
                     min-width="100">
                     <template v-slot:activator="{ on, attrs }">
-                        <v-chip label v-bind="attrs" v-on="on" class="mr-4" color="teal darken-4" dark>
+                        <v-chip label v-bind="attrs" v-on="on" class="mr-4" color="#01a6be darken-4" dark>
                             <v-icon left>mdi-calendar</v-icon>
                             {{ $t('Select year') }}: {{ selectedYears.join(', ') || $t('All years') }}
                         </v-chip>
@@ -65,14 +65,14 @@
                             <v-list-item v-for="year in availableYears" :key="year">
                                 <v-list-item-action>
                                     <v-checkbox v-model="selectedYears" :value="year" :label="year"
-                                    color="teal darken-2"></v-checkbox>
+                                    color="#01a6be darken-2"></v-checkbox>
                                 </v-list-item-action>
                             </v-list-item>
                         </v-list>
                         <v-card-actions>
                             <v-spacer></v-spacer>
                             <v-btn text color="grey" @click="yearMenu = false">{{ $t('Close') }}</v-btn>
-                            <v-btn text color="teal darken-2" @click="clearYearSelection">{{ $t('Clear') }}</v-btn>
+                            <v-btn text color="#01a6be darken-2" @click="clearYearSelection">{{ $t('Clear') }}</v-btn>
                         </v-card-actions>
                     </v-card>
                 </v-menu>
@@ -296,7 +296,7 @@
         <template v-slot:activator="{ on, attrs }">
             <v-btn
             text
-            color="teal darken-4"
+            color="#01a6be darken-4"
             class="pa-0"
             style="text-decoration: underline"
             @click="openDetail(item)"
@@ -362,7 +362,7 @@
             label
             outlined
             class="mr-1"
-            color="teal darken-2"
+            color="#01a6be darken-2"
             dark
             >
             {{ lang.type }}: {{ lang.level }}
@@ -408,7 +408,7 @@
 <!-- Accept Confirmation Dialog -->
 <v-dialog v-model="confirmAcceptDialog" max-width="500px">
     <v-card>
-        <v-card-title class="teal darken-2 white--text">
+        <v-card-title class="#01a6be darken-2 white--text">
             <v-icon left dark>mdi-check</v-icon>
             {{ $t('Confirm Action') }}
             <v-spacer></v-spacer>
@@ -460,7 +460,7 @@
 
 <v-dialog v-model="approvalDialog" max-width="1400px">
     <v-card>
-        <v-card-title class="teal darken-2 white--text">
+        <v-card-title class="#01a6be darken-2 white--text">
             <v-icon dark left>mdi-history</v-icon>
             {{ $t('Approval History') }}
             <v-spacer></v-spacer>
@@ -554,7 +554,7 @@
 
 <v-dialog v-model="cancelDialog" max-width="500">
     <v-card>
-        <v-card-title class="teal darken-4 white--text">
+        <v-card-title class="#01a6be darken-4 white--text">
             {{ $t('Cancel request') }}
             <v-spacer></v-spacer>
             <v-btn icon dark @click="cancelDialog = false">
@@ -571,7 +571,7 @@
                 @click:clear="selectedCancelDate = ''"></v-text-field>
             </template>
             <v-date-picker v-model="selectedCancelDate" @input="showCancelDatePicker = false"
-            color="teal darken-4"></v-date-picker>
+            color="#01a6be darken-4"></v-date-picker>
         </v-menu>
         <v-textarea v-model="cancelReason" :label="$t('Cancel reason')" outlined hide-details="auto"
         rows="3" counter prepend-inner-icon="mdi-text-box" clearable></v-textarea>
@@ -589,7 +589,7 @@
 </v-dialog>
 <v-dialog v-model="candidatesDialog" max-width="1000px">
     <v-card>
-        <v-card-title class="teal darken-4 white--text">
+        <v-card-title class="#01a6be darken-4 white--text">
             <span>{{ $t("Manpower Details") }}</span>
             <v-spacer></v-spacer>
             <v-btn icon dark @click="candidatesDialog = false">
@@ -1248,7 +1248,7 @@ export default {
                         text: this.$t('Recruiting'),
                         // detail: `${recruited}/${stocknumber}`,
                         show: true,
-                        color: 'teal accent-3',
+                        color: '#01a6be accent-3',
                         dark: false
                     };
                 }
@@ -1259,7 +1259,7 @@ export default {
                     text: this.$t('Recruiting'),
                     // detail: `(${this.formatDate(item.completed_date)})`,
                     show: true,
-                    color: 'teal accent-3',
+                    color: '#01a6be accent-3',
                     dark: false
                 };
             }
@@ -1268,7 +1268,7 @@ export default {
                     text: this.$t('Recruiting'),
                     detail: '', // hoặc detail phù hợp
                     show: true,
-                    color: 'teal accent-3',
+                    color: '#01a6be accent-3',
                     dark: false
                 };
             }
@@ -1313,7 +1313,7 @@ export default {
                     text: this.$t('Recruiting'),
                     detail: `(${this.formatDate(item.hold_date)} - ${this.$t('Resumed')}, ${this.formatDate(item.resumed_date)} - ${this.$t('hold')})`,
                     show: true,
-                    color: 'teal accent-3',
+                    color: '#01a6be accent-3',
                     dark: false
                 };
             }
@@ -1427,7 +1427,7 @@ export default {
         },
         getCycleColor(cycleIndex) {
             const colors = {
-                1: 'teal darken-2',
+                1: '#01a6be darken-2',
                 2: 'blue darken-2', 
                 3: 'deep-orange darken-2',
                 4: 'purple darken-2'
@@ -2385,7 +2385,7 @@ export default {
                 case "pending":
                 return "lime darken-2";
                 case "processing":
-                return "teal";
+                return "#01a6be";
                 case "returned":
                 return "amber";
                 

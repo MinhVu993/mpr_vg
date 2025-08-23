@@ -1,7 +1,7 @@
 <template>
     <v-dialog v-model="dialog" fullscreen persistent hide-overlay>
         <v-card class="request-page">
-            <v-toolbar dark color="teal">
+            <v-toolbar dark color="#01a6be">
                 <v-btn color="warning" small class="mr-3" dark @click="onCloseDialog">
                     <v-icon>mdi-arrow-left-bold</v-icon>
                 </v-btn>
@@ -177,7 +177,7 @@
                                 </v-col>
                                 <v-col cols="12" v-if="form.recruitment.reason === 3"> <!-- For other -->
                                     <v-card outlined class="pa-0">
-                                        <v-tabs v-model="otherReasonTab" background-color="teal" dark show-arrows>
+                                        <v-tabs v-model="otherReasonTab" background-color="#01a6be" dark show-arrows>
                                             <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> Tiếng Việt </v-tab>
                                             <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> English </v-tab>
                                             <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> 中文 </v-tab>
@@ -489,7 +489,7 @@
                     <v-row class="dialog-actions">
                         <v-col cols="12" class="d-flex justify-end align-center">
                             <template v-if="isEdit && canApproveItem">
-                                <v-btn color="teal" class="mr-3 white--text" @click="openAcceptDialog" >
+                                <v-btn color="#01a6be" class="mr-3 white--text" @click="openAcceptDialog" >
                                     <v-icon left>mdi-check</v-icon> {{ $t("Accept") }}
                                 </v-btn>
                                 <v-btn v-if="editData && editData.status !== 'declined'" color="#FFA500" class="mr-3 white--text" @click="openReturnDialog" >
@@ -512,7 +512,7 @@
     </v-card>
     <v-dialog v-model="confirmAcceptDialog" max-width="500px">
         <v-card>
-            <v-card-title class="teal darken-2 white--text">
+            <v-card-title class="#01a6be darken-2 white--text">
                 <v-icon left dark>mdi-check</v-icon>
                 {{ $t("Confirm Action") }}
                 <v-spacer></v-spacer>
@@ -635,7 +635,7 @@
     <!-- Submit Confirmation Dialog -->
     <v-dialog v-model="confirmSubmitDialog" max-width="500px">
         <v-card>
-            <v-card-title class="teal darken-2 white--text">
+            <v-card-title class="#01a6be darken-2 white--text">
                 <v-icon left dark>mdi-send</v-icon>
                 {{ $t("Confirm Action") }}
                 <v-spacer></v-spacer>

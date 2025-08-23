@@ -3,7 +3,7 @@
         <v-col cols="12">
             <v-card>
                 <div class="progress-bar" />
-                <v-toolbar dense color="teal darken-2" dark>
+                <v-toolbar dense color="#00838F" dark>
                     <v-toolbar-title class="d-flex" style="align-items: center">
                         <v-icon left>mdi-google-classroom</v-icon>
                         {{ $t("Manpower listing") }}
@@ -25,54 +25,53 @@
                         {{ $t("Amendment request") }}
                     </v-btn>
                 </v-toolbar>
-                <v-tabs background-color="teal darken-2" color="yellow" dark v-model="statusFilter"  center-active>
+                <v-tabs background-color="#00838F" color="yellow" dark v-model="statusFilter"  center-active>
                     <v-tab>
                         {{ $t("All") }}
-                        <v-badge :content="statusCounts().all > 9 ? '9+' : statusCounts().all.toString()" color="" :value="statusCounts().all" ></v-badge>
+                        <!-- <v-badge :content="statusCounts().all > 9 ? '9+' : statusCounts().all.toString()" color="" :value="statusCounts().all" ></v-badge> -->
                     </v-tab>
                     <v-tab v-show="hasTodoData">
                         {{ $t("To Do") }}
-                        <v-badge :content="statusCounts().todo > 9 ? '9+' : statusCounts().todo.toString()" color="error" :value="statusCounts().todo" ></v-badge>
+                        <v-badge :content="statusCounts().todo.toString()" color="error" :value="statusCounts().todo" ></v-badge>
                     </v-tab>
                     <v-tab>
                         {{ $t("Pending") }}
-                        <v-badge :content="statusCounts().processing > 9 ? '9+' : statusCounts().processing.toString()" color="purple" :value="statusCounts().processing" ></v-badge>
+                        <v-badge :content="statusCounts().processing.toString()" color="purple" :value="statusCounts().processing" ></v-badge>
                     </v-tab>
                     <v-tab>
                         {{ $t("Returned") }}
-                        <v-badge color="orange" :content="statusCounts().return > 9 ? '9+' : statusCounts().return.toString()" :value="statusCounts().return" ></v-badge>
+                        <v-badge color="orange" :content="statusCounts().return.toString()" :value="statusCounts().return" ></v-badge>
                     </v-tab>
                     <v-tab>
                         {{ $t("Approved") }}
-                        <v-badge :content="statusCounts().completed > 9 ? '9+' : statusCounts().completed.toString()" color="" :value="statusCounts().completed" ></v-badge>
+                        <!-- <v-badge :content="statusCounts().completed > 9 ? '9+' : statusCounts().completed.toString()" color="" :value="statusCounts().completed" ></v-badge> -->
                     </v-tab>
                     <v-tab>
                         {{ $t("Rejected") }}
-                        <v-badge :content="statusCounts().decline > 9 ? '9+' : statusCounts().decline.toString()" color=""  :value="statusCounts().decline" ></v-badge>
+                        <v-badge :content="statusCounts().decline.toString()" color=""  :value="statusCounts().decline" ></v-badge>
                     </v-tab>
                     <v-spacer></v-spacer>
                     <v-menu v-model="yearMenu" :close-on-content-click="false" transition="scale-transition" offset-y
                     min-width="100">
                     <template v-slot:activator="{ on, attrs }">
-                        <v-chip label v-bind="attrs" v-on="on" class="mr-4" color="teal darken-4" dark>
+                        <v-chip label v-bind="attrs" v-on="on" class="mr-4" color="#01a6be darken-4" dark>
                             <v-icon left>mdi-calendar</v-icon>
                             {{ $t('Select year') }}: {{ selectedYears.join(', ') || $t('All years') }}
                         </v-chip>
                     </template>
                     <v-card>
                         <v-list>
-                            <v-subheader>{{ $t('Select year') }}</v-subheader>
                             <v-list-item v-for="year in availableYears" :key="year">
                                 <v-list-item-action>
                                     <v-checkbox v-model="selectedYears" :value="year" :label="year"
-                                    color="teal darken-2"></v-checkbox>
+                                    color="#01a6be darken-2"></v-checkbox>
                                 </v-list-item-action>
                             </v-list-item>
                         </v-list>
                         <v-card-actions>
                             <v-spacer></v-spacer>
                             <v-btn text color="grey" @click="yearMenu = false">{{ $t('Close') }}</v-btn>
-                            <v-btn text color="teal darken-2" @click="clearYearSelection">{{ $t('Clear') }}</v-btn>
+                            <v-btn text color="#01a6be darken-2" @click="clearYearSelection">{{ $t('Clear') }}</v-btn>
                         </v-card-actions>
                     </v-card>
                 </v-menu>
@@ -99,7 +98,8 @@
                 @changed="updateFilter('unit', $event)" />
             </template>
             <template #[`header.unit_name`]>
-                {{ $t('Unit name') }}
+                <DsFilter :name="$t('Unit name')" :in-items="filterItems.unit_name"
+                @changed="updateFilter('unit_name', $event)" />
             </template>
             <template #[`header.pos`]>
                 <DsFilter :name="$t('Position')" :in-items="filterItems.pos"
@@ -152,10 +152,12 @@
             </template>
             <template v-slot:[`item.recruited_status`]="{ item }">
                 <v-card v-if="getRecruitmentStatus(item).show" 
+                dark 
+                :style="{ backgroundColor: getRecruitmentStatus(item).color }"
                 outlined 
                 class="pa-1" 
                 :color="getRecruitmentStatus(item).color"
-                :dark="getRecruitmentStatus(item).dark">
+                >
                 <div class="d-flex align-center flex-column">
                     <span class="text-body-2 font-weight-medium">
                         {{ getRecruitmentStatus(item).text }}
@@ -192,73 +194,77 @@
             </div>
         </template>
         <template v-slot:[`item.recruited`]="{ item }">
-            {{ item.recruited || 0 }}
-            <!-- <div 
+            <!-- {{ item.recruited || 0 }} -->
+            <div 
             style="cursor: pointer; color: blue; text-decoration: underline;" 
             @click="showCandidatesDialog(item.candidates)">
             {{ item.recruited || 0 }}
-        </div> -->
+        </div>
     </template>
-    
     <template v-slot:[`item.resign`]="{ item }">
+        <div 
+        style="cursor: pointer; color: blue; text-decoration: underline;" 
+        @click="showResignDialog(item.resignList)">
         {{ item.resign || 0 }}
-    </template>
-    <template v-slot:[`item.status`]="{ item }">
-        <div class="d-flex align-center flex-wrap">
-            <!-- Main Status Chip with Tooltip -->
-            <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
-                <template v-slot:activator="{ on, attrs }">
-                    <v-chip 
-                    v-if="item.status" 
-                    label 
-                    outlined
-                    :color="getStatusColor(item.status, item)" 
-                    small 
-                    dark
-                    v-bind="attrs" 
-                    v-on="on" 
-                    class="mr-1 mb-1" 
-                    @click="openApprovalDetails(item)" 
-                    style="cursor: pointer"
-                    >
-                    {{ getStatusWithApprover(item.status, item) }}
-                </v-chip>
-            </template>
-            <span v-if="getReturnInfo(item).returned">
-                <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
-                {{ getNextApproverInfoForStatus(item) }}
-            </span>
-            <span v-else-if="getNextApproverInfoForStatus(item)">
-                {{ getNextApproverInfoForStatus(item) }}
-            </span>
-        </v-tooltip>
-        
-        <!-- Amendment Status Chip with Separate Tooltip -->
-        <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
-            <template v-slot:activator="{ on: amendmentOn, attrs: amendmentAttrs }">
+    </div>
+</template>
+
+<!-- <template v-slot:[`item.resign`]="{ item }">
+    {{ item.resign || 0 }}
+</template> -->
+<template v-slot:[`item.status`]="{ item }">
+    <div class="d-flex align-center flex-wrap">
+        <!-- Main Status Chip with Tooltip -->
+        <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
+            <template v-slot:activator="{ on, attrs }">
                 <v-chip 
+                v-if="item.status" 
                 label 
-                :color="getAmendmentStatusColor(item.status_amendent)" 
-                small 
                 outlined
+                :color="getStatusColor(item.status, item)" 
+                small 
                 dark
-                v-bind="amendmentAttrs"
-                v-on="amendmentOn"
-                class="mr-1 mb-1"
-                @click="openApprovalDetails(item)"
+                v-bind="attrs" 
+                v-on="on" 
+                class="mr-1 mb-1" 
+                @click="openApprovalDetails(item)" 
                 style="cursor: pointer"
                 >
-                {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
+                {{ getStatusWithApprover(item.status, item) }}
             </v-chip>
         </template>
-        <span>
-            {{ getNextApproverInfoForAmendment(item) }}
+        <span v-if="getReturnInfo(item).returned">
+            <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
+            {{ getNextApproverInfoForStatus(item) }}
+        </span>
+        <span v-else-if="getNextApproverInfoForStatus(item)">
+            {{ getNextApproverInfoForStatus(item) }}
         </span>
     </v-tooltip>
-    <!-- Return Icon -->
-    <!-- <v-icon x-small color="warning" v-if="getReturnInfo(item).returned" class="ml-1">
-        mdi-undo
-    </v-icon> -->
+    
+    <!-- Amendment Status Chip with Separate Tooltip -->
+    <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
+        <template v-slot:activator="{ on: amendmentOn, attrs: amendmentAttrs }">
+            <v-chip 
+            label 
+            :color="getAmendmentStatusColor(item.status_amendent)" 
+            small 
+            outlined
+            dark
+            v-bind="amendmentAttrs"
+            v-on="amendmentOn"
+            class="mr-1 mb-1"
+            @click="openApprovalDetails(item)"
+            style="cursor: pointer"
+            >
+            {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
+        </v-chip>
+    </template>
+    <span>
+        {{ getNextApproverInfoForAmendment(item) }}
+    </span>
+</v-tooltip>
+
 </div>
 </template>
 <template v-slot:[`item.action`]="{ item }">
@@ -284,7 +290,7 @@
     <div>{{ getPositionName(item.pos) }}</div>
 </template>
 <template v-slot:[`item.req_id`]="{ item }">
-    <v-btn text small color="teal darken-4" class="pa-0" @click="openDetail(item)"> {{ item.req_id }} </v-btn>
+    <v-btn text small color="#DD2C00" class="pa-0" @click="openDetail(item)"> {{ item.req_id }} </v-btn>
 </template>
 <template #[`footer.prepend`]>
     <v-btn small color="success" @click="exportExcel" :title="$t('Export to Excel')" class="mr-6" dark>
@@ -332,45 +338,28 @@
     <!-- Language Display -->
     <div class="d-flex align-center flex-wrap mb-1">
         <template v-if="getLanguageRequirements(item).length > 0">
-            <v-chip 
-            v-for="lang in getLanguageRequirements(item)" 
-            :key="lang.type"
+            <v-chip v-for="lang in getLanguageRequirements(item)" :key="lang.type" small label outlined class="mr-1" color="#01a6be darken-2" dark > {{ lang.type }}: {{ lang.level }}
+            </v-chip>
+        </template>
+    </div>
+    
+    <!-- Computer Skills Display -->
+    <div class="d-flex align-center flex-wrap">
+        <template v-if="item.comp_skill">
+            <!-- Regular computer skills -->
+            <img v-for="skill in getComputerSkillImages(JSON.parse(item.comp_skill).skills)" :key="skill.name" :src="skill.src" :alt="skill.name" :title="skill.name" class="skill-icon mr-1" />
+            <!-- Other computer skills -->
+            <v-chip
+            v-if="JSON.parse(item.comp_skill).skills.includes('Other')"
             small
             label
+            color="info"
             outlined
-            class="mr-1"
-            color="teal darken-2"
-            dark
             >
-            {{ lang.type }}: {{ lang.level }}
+            <v-icon left x-small>mdi-laptop</v-icon>
+            <span>{{ JSON.parse(item.comp_skill).others }}</span>
         </v-chip>
     </template>
-</div>
-
-<!-- Computer Skills Display -->
-<div class="d-flex align-center flex-wrap">
-    <template v-if="item.comp_skill">
-        <!-- Regular computer skills -->
-        <img 
-        v-for="skill in getComputerSkillImages(JSON.parse(item.comp_skill).skills)"
-        :key="skill.name"
-        :src="skill.src"
-        :alt="skill.name"
-        :title="skill.name"
-        class="skill-icon mr-1"
-        />
-        <!-- Other computer skills -->
-        <v-chip
-        v-if="JSON.parse(item.comp_skill).skills.includes('Other')"
-        small
-        label
-        color="info"
-        outlined
-        >
-        <v-icon left x-small>mdi-laptop</v-icon>
-        <span>{{ JSON.parse(item.comp_skill).others }}</span>
-    </v-chip>
-</template>
 </div>
 </template>
 </v-data-table>
@@ -385,7 +374,7 @@
 <!-- Accept Confirmation Dialog -->
 <v-dialog v-model="confirmAcceptDialog" max-width="500px">
     <v-card>
-        <v-card-title class="teal darken-2 white--text">
+        <v-card-title class="#01a6be darken-2 white--text">
             <v-icon left dark>mdi-check</v-icon>
             {{ $t('Confirm Action') }}
             <v-spacer></v-spacer>
@@ -436,7 +425,7 @@
 </v-dialog>
 <v-dialog v-model="approvalDialog" max-width="1400px">
     <v-card>
-        <v-card-title class="teal darken-2 white--text">
+        <v-card-title style="background-color: #00838F; color: white;">
             <v-icon dark left>mdi-history</v-icon>
             {{ $t('Approval History') }}
             <v-spacer></v-spacer>
@@ -530,7 +519,7 @@
 
 <v-dialog v-model="cancelDialog" max-width="500">
     <v-card>
-        <v-card-title class="teal darken-4 white--text">
+        <v-card-title class="#01a6be darken-4 white--text">
             {{ $t('Cancel request') }}
             <v-spacer></v-spacer>
             <v-btn icon dark @click="cancelDialog = false">
@@ -547,7 +536,7 @@
                 @click:clear="selectedCancelDate = ''"></v-text-field>
             </template>
             <v-date-picker v-model="selectedCancelDate" @input="showCancelDatePicker = false"
-            color="teal darken-4"></v-date-picker>
+            color="#01a6be"></v-date-picker>
         </v-menu>
         <v-textarea v-model="cancelReason" :label="$t('Cancel reason')" outlined hide-details="auto"
         rows="3" counter prepend-inner-icon="mdi-text-box" clearable></v-textarea>
@@ -565,79 +554,120 @@
 </v-dialog>
 <v-dialog v-model="candidatesDialog" max-width="1000px">
     <v-card>
-        <v-card-title class="teal darken-4 white--text">
-            <span>{{ $t("Manpower Details") }}</span>
+        <v-card-title class="pa-3 white--text" style="background-color: #00838F;">
+            <span>{{ $t("Recruitment listing details") }}</span>
             <v-spacer></v-spacer>
             <v-btn icon dark @click="candidatesDialog = false">
                 <v-icon>mdi-close</v-icon>
             </v-btn>
         </v-card-title>
         <v-card-text class="pt-4">
-            <v-data-table :headers="candidateHeaders" :items="parsedCandidates" :items-per-page="5"
-            class="elevation-3 data-table" :footer-props="{
-                'items-per-page-options': [10, 15, 30, 100],
-                'show-current-page': true, 'show-first-last-page': true
-            }">
-            <template v-slot:[`header.select`]>
-                <v-checkbox v-model="selectAll" color="primary" hide-details @click="toggleSelectAll" ></v-checkbox>
+            <v-data-table :headers="candidateHeaders" :items="parsedCandidates" :items-per-page="5" class="elevation-3 data-table" :footer-props="{ 'show-current-page': true, 'show-first-last-page': true }">
+                <template v-slot:[`header.select`]>
+                    <v-checkbox v-model="selectAll" color="primary" hide-details @click="toggleSelectAll" ></v-checkbox>
+                </template>
+                <template v-slot:[`item.select`]="{ item }">
+                    <v-checkbox 
+                    :input-value="isItemSelected(item)"
+                    @change="toggleItemSelection(item)"
+                    color="primary" 
+                    hide-details 
+                    dense>
+                </v-checkbox>
             </template>
-            <template v-slot:[`item.select`]="{ item }">
-                <v-checkbox 
-                :input-value="isItemSelected(item)"
-                @change="toggleItemSelection(item)"
+            <template v-slot:[`item.empno`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ item.empno }}
+                </div>
+            </template>
+            <template v-slot:[`item.name`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ item.name }}
+                </div>
+            </template>
+            <template v-slot:[`item.date`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ formatDate(item.date) }}
+                </div>
+            </template>
+            <template v-slot:[`header.empno`]> {{ $t('Empno') }} </template>
+            <template v-slot:[`header.name`]> {{ $t('Name') }} </template>
+            <template v-slot:[`header.date`]> {{ $t('In date') }} </template>
+            <template v-slot:[`header.key_in`]>{{ $t('Key in') }} </template>
+            <template v-slot:[`header.position`]>{{ $t('Position') }} </template>
+            
+            <template #[`footer.prepend`]>
+                <div class="mr-2" style="width: 250px">
+                    <v-select
+                    v-model="transferMprId"
+                    :items="mprOptions"
+                    :label="$t('ID MPR')"
+                    item-text="text"
+                    item-value="value"
+                    outlined
+                    dense
+                    hide-details
+                    ></v-select>
+                </div>
+                <v-btn 
                 color="primary" 
-                hide-details 
-                dense>
-            </v-checkbox>
+                class="mr-5"
+                :disabled="selectedCandidates.length === 0 || !transferMprId"
+                @click="transferCandidates"
+                >
+                <v-icon left>mdi-arrow-right</v-icon>
+                {{ $t('Transfer') }}
+            </v-btn>
+            
         </template>
-        <template v-slot:[`item.empno`]="{ item }">
-            <div class="d-flex align-center">
-                {{ item.empno }}
-            </div>
-        </template>
-        <template v-slot:[`item.name`]="{ item }">
-            <div class="d-flex align-center">
-                {{ item.name }}
-            </div>
-        </template>
-        <template v-slot:[`item.date`]="{ item }">
-            <div class="d-flex align-center">
-                {{ formatDate(item.date) }}
-            </div>
-        </template>
-        <template v-slot:[`header.empno`]> {{ $t('Empno') }} </template>
-        <template v-slot:[`header.name`]> {{ $t('Name') }} </template>
-        <template v-slot:[`header.date`]> {{ $t('In date') }} </template>
-        
-        <template #[`footer.prepend`]>
-            <div class="mr-2" style="width: 150px">
-                <v-select
-                v-model="transferMprId"
-                :items="mprOptions"
-                :label="$t('ID MPR')"
-                item-text="text"
-                item-value="value"
-                outlined
-                dense
-                hide-details
-                ></v-select>
-            </div>
-            <v-btn 
-            color="primary" 
-            class="mr-5"
-            :disabled="selectedCandidates.length === 0 || !transferMprId"
-            @click="transferCandidates"
-            >
-            <v-icon left>mdi-arrow-right</v-icon>
-            {{ $t('Transfer') }}
-        </v-btn>
-        
-    </template>
-</v-data-table>
+    </v-data-table>
 </v-card-text>
 </v-card>
 </v-dialog>
-
+<v-dialog v-model="resignDialog" max-width="1000px">
+    <v-card>
+        <v-card-title class="pa-2 white--text" style="background-color: #00838F;">
+            <span>{{ $t("Resign Listing Details") }}</span>
+            <v-spacer></v-spacer>
+            <v-btn icon dark @click="resignDialog = false">
+                <v-icon>mdi-close</v-icon>
+            </v-btn>
+        </v-card-title>
+        <v-card-text class="pt-4">
+            <v-data-table 
+            :headers="resignHeaders" 
+            :items="parsedResignList" 
+            :items-per-page="5"
+            class="elevation-3 data-table" 
+            :footer-props="{
+                'show-current-page': true, 
+                'show-first-last-page': true
+            }"
+            >
+            <template v-slot:[`item.empno`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ item.empno }}
+                </div>
+            </template>
+            <template v-slot:[`item.name`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ item.name }}
+                </div>
+            </template>
+            <template v-slot:[`item.date`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ formatDate(item.date) }}
+                </div>
+            </template>
+            <template v-slot:[`header.empno`]> {{ $t('Empno') }} </template>
+            <template v-slot:[`header.name`]> {{ $t('Name') }} </template>
+            <template v-slot:[`header.date`]> {{ $t('Resign date') }} </template>
+            <template v-slot:[`header.key_in`]>{{ $t('Key in') }} </template>
+            <template v-slot:[`header.position`]>{{ $t('Position') }} </template>
+        </v-data-table>
+    </v-card-text>
+</v-card>
+</v-dialog>
 <!-- Add this new dialog -->
 <v-dialog v-model="rejectionDialog" max-width="800px">
     <v-card>
@@ -775,9 +805,11 @@ export default {
             parsedCandidates: [],
             candidateHeaders: [
             { text: '', value: 'select', sortable: false, width: '50px' },
+            { text: 'Key in', value: 'key_in', align: 'start' },
             { text: 'Empno', value: 'empno', align: 'start' },
             { text: 'Name', value: 'name' },
-            { text: 'In date', value: 'date' }
+            { text: 'Position', value: 'position' },
+            { text: 'Actual date', value: 'date' }
             ],
             candidatesDialog: false,
             selectedCandidates: [],
@@ -800,6 +832,15 @@ export default {
             lang: [],
             subPos: [],
             sentNotifications: new Set(),
+            resignDialog: false,
+            parsedResignList: [],
+            resignHeaders: [
+            { text: 'Key in', value: 'key_in', align: 'start' },
+            { text: 'Empno', value: 'empno', align: 'start' },
+            { text: 'Name', value: 'name' },
+            { text: 'Position', value: 'position' },
+            { text: 'Resign date', value: 'date' }
+            ],
             
         }
     },
@@ -1136,13 +1177,18 @@ export default {
                             return values.includes(item.req_id);
                             
                             case 'submitter':
-                            return values.includes(item.submiterInfo?.name);
+                            return values.some(value => {
+                                const empno = value.split(' - ')[0]; // Lấy phần empno từ chuỗi "empno - name"
+                                return item.submiterInfo?.empno === empno;
+                            });
                             
                             case 'date_req':
                             return values.includes(this.formatDate(item.date_req));
                             
                             case 'unit':
                             return values.includes(item.unit);
+                            case 'unit_name':
+                            return values.includes(item.unit_name);
                             
                             case 'pos':
                             return values.includes(this.getPositionName(item.pos));
@@ -1207,7 +1253,10 @@ export default {
         availableYears() {
             const currentYear = new Date().getFullYear();
             const years = [];
-            for (let i = currentYear - 5; i <= currentYear + 5; i++) {
+            const startYear = 2024; // Cố định năm bắt đầu là 2024
+            const endYear = currentYear + 3; // Hiển thị thêm 3 năm kể từ năm hiện tại
+            
+            for (let i = startYear; i <= endYear; i++) {
                 years.push(i.toString());
             }
             return years;
@@ -1240,8 +1289,11 @@ export default {
         },
         filterItems() {
             return {
+                unit_name: [...new Set(this.formattedData.map(item => item.unit_name))].filter(Boolean),
                 req_id: [...new Set(this.formattedData.map(item => item.req_id))].filter(Boolean),
-                submitter: [...new Set(this.formattedData.map(item => item.submiterInfo?.name))].filter(Boolean),
+                submitter: [...new Set(this.formattedData.map(item => 
+                item.submiterInfo?.empno ? `${item.submiterInfo.empno} - ${item.submiterInfo.name}` : ''
+                ))].filter(Boolean),
                 date_req: [...new Set(this.formattedData.map(item => this.formatDate(item.date_req)))].filter(Boolean),
                 unit: [...new Set(this.formattedData.map(item => item.unit))].filter(Boolean),
                 // division: [...new Set(this.formattedData.map(item => item.division))].filter(Boolean),
@@ -1277,28 +1329,48 @@ export default {
         },
     },
     methods: {
+        showResignDialog(resignList) {
+            try {
+                this.parsedResignList = JSON.parse(resignList || '[]');
+                if (this.parsedResignList.length > 0) {
+                    this.resignDialog = true;
+                } else {
+                    this.$notify({
+                        title: this.$t('No Resigned Employees'),
+                        text: this.$t('No resigned employees data available'),
+                        type: 'info'
+                    });
+                }
+            } catch (error) {
+                this.$notify({
+                    title: this.$t('Error'),
+                    text: this.$t('Error loading resigned employees data'),
+                    type: 'error'
+                });
+            }
+        },
         getLocalizedOtherReason(otherReason) {
-    try {
-        // Nếu otherReason là string JSON
-        if (typeof otherReason === 'string' && otherReason.startsWith('{')) {
-            const parsedReason = JSON.parse(otherReason);
-            const locale = this.$i18n?.locale || 'vi';
-            return parsedReason[locale] || parsedReason.vi || parsedReason.en || '';
-        }
-        
-        // Nếu otherReason đã là object
-        if (typeof otherReason === 'object' && otherReason !== null) {
-            const locale = this.$i18n?.locale || 'vi';
-            return otherReason[locale] || otherReason.vi || otherReason.en || '';
-        }
-
-        // Nếu là string thường
-        return otherReason || '';
-    } catch (error) {
-        console.error('Error getting localized other reason:', error);
-        return otherReason || ''; // Trả về nguyên dạng nếu có lỗi
-    }
-},
+            try {
+                // Nếu otherReason là string JSON
+                if (typeof otherReason === 'string' && otherReason.startsWith('{')) {
+                    const parsedReason = JSON.parse(otherReason);
+                    const locale = this.$i18n?.locale || 'vi';
+                    return parsedReason[locale] || parsedReason.vi || parsedReason.en || '';
+                }
+                
+                // Nếu otherReason đã là object
+                if (typeof otherReason === 'object' && otherReason !== null) {
+                    const locale = this.$i18n?.locale || 'vi';
+                    return otherReason[locale] || otherReason.vi || otherReason.en || '';
+                }
+                
+                // Nếu là string thường
+                return otherReason || '';
+            } catch (error) {
+                console.error('Error getting localized other reason:', error);
+                return otherReason || ''; // Trả về nguyên dạng nếu có lỗi
+            }
+        },
         setDefaultTab() {
             this.statusFilter = this.defaultTab;
         },
@@ -1348,7 +1420,7 @@ export default {
                         text: this.$t('Cancelled'),
                         detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
                         show: true,
-                        color: 'red lighten-4',
+                        color: '#6c757d',
                         dark: false,
                     };
                 }
@@ -1361,6 +1433,7 @@ export default {
                         text: this.$t('Closed'),
                         // detail: `${recruited}/${stocknumber}`,
                         show: true,
+                        color: '#f44336',
                         
                     };
                 }
@@ -1369,7 +1442,7 @@ export default {
                         text: this.$t('Recruiting'),
                         // detail: `${recruited}/${stocknumber}`,
                         show: true,
-                        color: 'teal accent-3',
+                        color: '#01a6be',
                         dark: false
                     };
                 }
@@ -1380,7 +1453,7 @@ export default {
                     text: this.$t('Recruiting'),
                     // detail: `(${this.formatDate(item.completed_date)})`,
                     show: true,
-                    color: 'teal accent-3',
+                    color: '#01a6be',
                     dark: false
                 };
             }
@@ -1389,7 +1462,7 @@ export default {
                     text: this.$t('Recruiting'),
                     detail: '', // hoặc detail phù hợp
                     show: true,
-                    color: 'teal accent-3',
+                    color: '#01a6be',
                     dark: false
                 };
             }
@@ -1398,7 +1471,7 @@ export default {
                     text: this.$t('Closed'),
                     detail: '', // hoặc detail phù hợp
                     show: true,
-                    color: 'green lighten-4',
+                    color: '#f44336',
                     dark: false
                 };
             }
@@ -1432,7 +1505,7 @@ export default {
                     text: this.$t('Recruiting'),
                     detail: `(${this.formatDate(item.hold_date)} - ${this.$t('Resumed')}, ${this.formatDate(item.resumed_date)} - ${this.$t('hold')})`,
                     show: true,
-                    color: 'teal accent-3',
+                    color: '#01a6be',
                     dark: false
                 };
             }
@@ -1549,7 +1622,7 @@ export default {
         },
         getCycleColor(cycleIndex) {
             const colors = {
-                1: 'teal darken-2',
+                1: '#01a6be darken-2',
                 2: 'blue darken-2', 
                 3: 'deep-orange darken-2',
                 4: 'purple darken-2'
@@ -1878,6 +1951,7 @@ export default {
                 (item.submiterInfo?.dept_sumt || '').toLowerCase().includes(searchTerm) ||
                 
                 (item.unit || '').toLowerCase().includes(searchTerm) ||
+                (item.unit_name || '').toLowerCase().includes(searchTerm) ||
                 (item.division || '').toLowerCase().includes(searchTerm) ||
                 
                 (item.positions || []).join(' ').toLowerCase().includes(searchTerm) ||
@@ -2504,7 +2578,7 @@ export default {
                 case "pending":
                 return "lime darken-2";
                 case "processing":
-                return "teal";
+                return "#01a6be";
                 case "returned":
                 return "amber";
                 
@@ -3438,7 +3512,15 @@ export default {
             "Hold period expired": "Hold period expired",
             "days": "days",
             "Approval History":"Approval History",
-            "Current Cycle":"Current Cycle"
+            "Current Cycle":"Current Cycle",
+            "Recruitment listing details":"Recruitment listing details",
+            "Empno": "Empno",
+            "Key in": "Key in",
+            "Position": "Position",
+            "Name":"Name",
+            "In date":"In date",
+            "Resign date":"Resign date",
+            "Resign Listing Details":"Resign Listing Details"          
         },
         "vi": {
             "ID": "ID",
@@ -3493,7 +3575,14 @@ export default {
             "Hold period expired": "Đã hết thời gian tạm dừng",
             "days": "ngày",
             "Approval History":"Lịch sử phê duyệt",
-            "Current Cycle":"Chu kỳ hiện tại"
+            "Current Cycle":"Chu kỳ hiện tại",
+            "Recruitment listing details":"Chi tiết danh sách tuyển dụng",
+            "Empno": "Mã số thẻ",
+            "Key in": "Ngày nộp hồ sơ",
+            "Name":"Họ tên",
+            "In date":"Ngày tuyển dụng",     
+            "Resign date":"Ngày thôi việc",
+            "Resign Listing Details":"Chi tiết danh sách nghỉ việc"
         },
         "cn": {
             "ID": "表單編號",
@@ -3548,7 +3637,14 @@ export default {
             "Hold period expired": "暂停期已过",
             "days": "天",
             "Approval History":"审批历史",
-            "Current Cycle":"当前周期"
+            "Current Cycle":"当前周期",
+            "Recruitment listing details":"招聘列表详情",
+            "Empno": "卡号",
+            "Key in": "提交日期",
+            "Name": "姓名",
+            "In date": "入职日期",
+            "Resign date": "离职日期",
+            "Resign Listing Details": "离职列表详情"
         }
     }  
 </i18n>     
@@ -3566,13 +3662,13 @@ export default {
 }
 
 .total-row {
-    background-color: #004D40 !important;
+    background-color: #00838F !important;
 }
 
 .total-row td {
     color: white !important;
     font-size: 1.1em !important;
-    border-top: 2px solid #004D40 !important;
+    border-top: 2px solid #00838F !important;
     border-bottom: none !important;
 }
 
@@ -3601,7 +3697,7 @@ export default {
 }
 .v-data-table ::v-deep thead th {
     font-weight: 600 !important;
-    color: #004D40 !important;
+    color: #00838F !important;
     background: white;
     position: sticky;
     top: 0;

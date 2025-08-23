@@ -1958,6 +1958,70 @@ class vgMprCtrl extends Controller
                                                             ], 500);
                                                         }
                                                     }
-                                                    
+                                                    public function updateMprCandidates()
+                                                        {
+                                                            try {
+                                                                // Get all registered candidates
+                                                                $candidates = EmpnoInfo::where('reg', 'yes')
+                                                                ->whereNotNull('emp_demandid')
+                                                                ->get();
+                                                                
+                                                                // Group candidates by emp_demandid
+                                                                $groupedCandidates = $candidates->groupBy('emp_demandid');
+                                                                
+                                                                foreach ($groupedCandidates as $demandId => $candidateGroup) {
+                                                                    // Find corresponding MPR record
+                                                                    $mpr = Mpr::find($demandId);
+                                                                    
+                                                                    if (!$mpr) {
+                                                                        continue;
+                                                                    }
+                                                                    
+                                                                    // Transform candidates data into required format
+                                                                    $formattedCandidates = $candidateGroup->map(function($candidate) {
+                                                                        return [
+                                                                            'empno' => $candidate->newEmpno,
+                                                                            'date' => $candidate->act_en_date,
+                                                                            'name' => $candidate->candidate_name,
+                                                                            'key_in' => $candidate->key_in_date,
+                                                                            'position' => $candidate->position
+                                                                        ];
+                                                                    })->values()->toArray();
+                                                                    
+                                                                    // Update MPR candidates field
+                                                                    $mpr->candidates = json_encode($formattedCandidates);
+                                                                    
+                                                                    // Update recruited count
+                                                                    $mpr->recruited = count($formattedCandidates);
+                                                                    
+                                                                    // Calculate and update stocknumber
+                                                                    $qtyReq = json_decode($mpr->qty_req, true);
+                                                                    $totalQty = array_sum(array_filter($qtyReq));
+                                                                    $mpr->stocknumber = $totalQty - $mpr->recruited;
+                                                                    
+                                                                    // Update fulfilled status
+                                                                    $mpr->fulfilled = $mpr->stocknumber <= 0 ? 'yes' : 'no';
+                                                                    
+                                                                    // Set fullfilldate if becoming fulfilled
+                                                                    if ($mpr->stocknumber <= 0 && empty($mpr->fullfilldate)) {
+                                                                        $mpr->fullfilldate = date('Y-m-d');
+                                                                    }
+                                                                    
+                                                                    $mpr->save();
+                                                                }
+                                                                
+                                                                return response()->json([
+                                                                    'success' => true,
+                                                                    'message' => 'MPR candidates updated successfully',
+                                                                    'updated_count' => $groupedCandidates->count()
+                                                                ]);
+                                                                
+                                                            } catch (\Exception $e) {
+                                                                return response()->json([
+                                                                    'success' => false,
+                                                                    'message' => 'Error updating MPR candidates: ' . $e->getMessage()
+                                                                ], 500);
+                                                            }
+                                                        }
                                                 }
                                                 

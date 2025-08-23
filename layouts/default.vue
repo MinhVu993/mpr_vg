@@ -32,7 +32,7 @@
 <template>
     <div>
         <v-app v-if="loaded" dark>
-            <v-navigation-drawer temporary color="teal" dark v-model="drawer" :mini-variant="miniVariant"
+            <v-navigation-drawer temporary color="#01a6be" dark v-model="drawer" :mini-variant="miniVariant"
                 :clipped="clipped" fixed app>
                 <v-list>
                     <v-list-item v-for="(item, i) in items" :key="i" :to="item.to" :href="item.href" router exact>
@@ -45,7 +45,7 @@
                     </v-list-item>
                 </v-list>
             </v-navigation-drawer>
-            <v-app-bar class="noPrint" dense color="teal" dark :clipped-left="clipped" fixed app>
+            <v-app-bar class="noPrint" dense color="#01a6be" dark :clipped-left="clipped" fixed app>
                 <v-app-bar-nav-icon @click.stop="drawer = !drawer" />
                 <v-toolbar-title v-text="$t('appName')" />
                 <v-chip class="ma-2" color="white" label small outlined @click:close="chip4 = false">

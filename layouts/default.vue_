@@ -17,7 +17,7 @@
 <template>
 <v-app dark>
     <notifications position="top center" animation-type="velocity" />
-    <v-app-bar dense app absolute color="teal" dark>
+    <v-app-bar dense app absolute color="#01a6be" dark>
         <v-toolbar-title>
             <v-btn text to="/">
                 <h3>

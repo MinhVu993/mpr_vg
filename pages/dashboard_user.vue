@@ -3,7 +3,7 @@
         <v-col cols="12">
             <v-card>
                 <div class="progress-bar" />
-                <v-toolbar dense color="teal darken-2" dark>
+                <v-toolbar dense color="#00838F" dark>
                     <v-toolbar-title class="d-flex" style="align-items: center">
                         <v-icon left>mdi-google-classroom</v-icon>
                         {{ $t("Manpower listing") }}                                                                                                                                                                                                                                                                                                                                                                                                     
@@ -25,238 +25,238 @@
                         {{ $t("Amendment request") }}
                     </v-btn>
                 </v-toolbar>
-                <v-tabs background-color="teal darken-2" color="yellow" dark v-model="statusFilter">
+                <v-tabs background-color="#00838F" color="yellow" dark v-model="statusFilter">
                     <v-tab>
                         {{ $t("All") }}
-                        <v-badge :content="statusCounts.all > 9 ? '9+' : statusCounts.all.toString()":value="statusCounts.all" color=""></v-badge>
+                        <!-- <v-badge :content="statusCounts.all > 9 ? '9+' : statusCounts.all.toString()":value="statusCounts.all" color=""></v-badge> -->
                     </v-tab>
                     <v-tab v-show="hasTodoData">
                         {{ $t("To Do") }}
-                        <v-badge :content="statusCounts.todo > 9 ? '9+' : statusCounts.todo.toString()" color="error" :value="statusCounts.todo" />
-                        </v-tab>
-                        <v-tab>
-                            {{ $t("Pending") }}
-                            <v-badge :content="statusCounts.processing > 9 ? '9+' : statusCounts.processing.toString()" color="purple" :value="statusCounts.processing" ></v-badge>
-                        </v-tab>
-                        <v-tab>
-                            {{ $t("Returned") }}
-                            <v-badge color="orange" :content="statusCounts.return > 9 ? '9+' : statusCounts.return.toString()" :value="statusCounts.return" ></v-badge>
-                        </v-tab>
-                        <v-tab>
-                            {{ $t("Approved") }}
-                            <v-badge :content="statusCounts.completed > 9 ? '9+' : statusCounts.completed.toString()" color="" :value="statusCounts.completed" ></v-badge>
-                        </v-tab>
-                        <v-tab>
-                            {{ $t("Rejected") }}
-                            <v-badge :content="statusCounts.decline > 9 ? '9+' : statusCounts.decline.toString()" color="" :value="statusCounts.decline" ></v-badge>
-                        </v-tab>
-                        <v-spacer></v-spacer>
-                        <!-- export excel -->
-                        <v-menu v-model="yearMenu" :close-on-content-click="false" transition="scale-transition" offset-y
-                        min-width="100">
-                        <template v-slot:activator="{ on, attrs }">
-                            <v-chip label v-bind="attrs" v-on="on" class="mr-4" color="teal darken-4" dark>
-                                <v-icon left>mdi-calendar</v-icon>
-                                {{ $t('Select year') }}: {{ selectedYears.join(', ') || $t('All years') }}
-                            </v-chip>
-                        </template>
-                        <v-card>
-                            <v-list>
-                                <v-subheader>{{ $t('Select year') }}</v-subheader>
-                                <v-list-item v-for="year in availableYears" :key="year">
-                                    <v-list-item-action>
-                                        <v-checkbox v-model="selectedYears" :value="year" :label="year"
-                                        color="teal darken-2"></v-checkbox>
-                                    </v-list-item-action>
-                                </v-list-item>
-                            </v-list>
-                            <v-card-actions>
-                                <v-spacer></v-spacer>
-                                <v-btn text color="grey" @click="yearMenu = false">{{ $t('Close') }}</v-btn>
-                                <v-btn text color="teal darken-2" @click="clearYearSelection">{{ $t('Clear') }}</v-btn>
-                            </v-card-actions>
-                        </v-card>
-                    </v-menu>
-                </v-tabs>
-                <v-data-table :headers="originalHeaders" :items="filteredData" :search="search" class="elevation-1"  
-                :footer-props="{
-                    showFirstLastPage: true,
-                    firstIcon: 'mdi-arrow-collapse-left',
-                    lastIcon: 'mdi-arrow-collapse-right',
-                    prevIcon: 'mdi-minus',
-                    nextIcon: 'mdi-plus',
-                    'items-per-page-text': $t('Rows per page'),
-                }">
-                <template #[`header.submitter`]>
-                    <DsFilter :name="$t('Submitted by')" :in-items="filterItems.submitter"
-                    @changed="updateFilter('submitter', $event)" />
-                </template>
-                <template #[`header.date_req`]>
-                    <DsFilter :name="$t('Apply Date')" :in-items="filterItems.date_req"
-                    @changed="updateFilter('date_req', $event)" />
-                </template>
-                <template #[`header.unit`]>
-                    <DsFilter :name="$t('Unit code')" :in-items="filterItems.unit"
-                    @changed="updateFilter('unit', $event)" />
-                </template>
-                <template #[`header.unit_name`]>
-                    {{ $t('Unit name') }}
-                </template>
-                <template #[`header.pos`]>
-                    <DsFilter :name="$t('Position')" :in-items="filterItems.pos"
-                    @changed="updateFilter('pos', $event)" />
-                </template>
-                <template #[`header.conditions`]>
-                    {{ $t('Conditions') }}
-                </template>            
-                <template #[`header.qty_req`]>
-                    <DsFilter :name="$t('Demand')" :in-items="filterItems.qty_req"
-                    @changed="updateFilter('qty_req', $event)" />
-                </template>
-                <template #[`header.req_id`]>
-                    <DsFilter :name="$t('ID')" :in-items="filterItems.req_id"
-                    @changed="updateFilter('req_id', $event)" />
-                </template>
-                <template #[`header.recruited`]>
-                    <!-- {{ $t('Recruited') }} -->
-                    <DsFilter :name="$t('Recruited')" :in-items="filterItems.recruited"
-                    @changed="updateFilter('recruited', $event)" />
-                </template>
-                <template #[`header.reason`]>
-                    <DsFilter :name="$t('Reason')" :in-items="filterItems.reason"
-                    @changed="updateFilter('reason', $event)" />
-                </template>
-                <template #[`header.resign`]>
-                    <!-- {{ $t('Resign') }} -->
-                    <DsFilter :name="$t('Resign')" :in-items="filterItems.resign"
-                    @changed="updateFilter('resign', $event)" />
-                </template>
-                <template #[`header.status`]>
-                    <DsFilter :name="$t('Approval Status')" :in-items="filterItems.status"
-                    @changed="updateFilter('status', $event)" />
-                </template>
-                <template #[`header.action`]>
-                    {{ $t('Print') }}
-                </template>
-                <template #[`header.recruited_status`]>
-                    <DsFilter :name="$t('Recruitment status')" 
-                    :in-items="filterItems.recruited_status"
-                    @changed="updateFilter('recruited_status', $event)" />
-                </template>
-                <template v-slot:[`item.recruited_status`]="{ item }">
-                    <v-card v-if="getRecruitmentStatus(item).show" 
-                    outlined 
-                    class="pa-1" 
-                    :color="getRecruitmentStatus(item).color"
-                    :dark="getRecruitmentStatus(item).dark">
-                    <div class="d-flex align-center flex-column">
-                        <span class="text-body-2 font-weight-medium">
-                            {{ getRecruitmentStatus(item).text }}
-                        </span>
-                        <span class="text-caption text-center black--text">
-                            {{ getRecruitmentStatus(item).detail }}
-                        </span>
-                    </div>
-                </v-card>
-            </template>
-            <template v-slot:[`item.submitter`]="{ item }">
-                <v-btn v-if="item.submitter" color="blue" small text>
-                    <v-icon left>mdi-account</v-icon>
-                    {{ item.submiterInfo.name }}
-                </v-btn>
-                <br />
-                <v-btn v-if="item.submitter" color="blue" small text>
-                    <v-icon left>mdi-card-account-details-outline</v-icon>
-                    {{ item.submiterInfo.empno }} - {{ item.submiterInfo.dept_sumt }}
-                </v-btn>
-            </template>
-            <template v-slot:[`item.qty_req`]="{ item }">
-                <div>
-                    {{ getDisplayQuantity(item.qty_req, item) }}
-                    <v-tooltip bottom v-if="hasQuantityChange(item) && !isAmendmentDeniedButOriginalValid(item) && item.status_amendent === 'completed'" color="warning">
-                        <template v-slot:activator="{ on, attrs }">
-                            <span v-bind="attrs" v-on="on">
-                                <v-icon small color="warning" class="mx-1">mdi-arrow-right-bold</v-icon>
-                                <span class="font-weight-bold">{{ getChangeQuantity(item) }}</span>
-                            </span>
-                        </template>
-                        <span>{{ getChangeReason(item) }}</span>
-                    </v-tooltip>
-                </div>
-            </template>
-            <template v-slot:[`item.recruited`]="{ item }">
-                {{ item.recruited || 0 }}
-            </template>
-            <template v-slot:[`item.resign`]="{ item }">
-                {{ item.resign || 0 }}
-            </template>
-            <template v-slot:[`item.status`]="{ item }">
-                <div class="d-flex align-center flex-wrap">
-                    <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
-                        <template v-slot:activator="{ on, attrs }">
-                            <v-chip 
-                            v-if="item.status" 
-                            label 
-                            :color="getStatusColor(item.status, item)" 
-                            small 
-                            outlined
-                            dark
-                            v-bind="attrs" 
-                            v-on="on" 
-                            class="mr-1 mb-1" 
-                            @click="openApprovalDetails(item)" 
-                            style="cursor: pointer"
-                            >
-                            {{ getStatusWithApprover(item.status, item) }}
+                        <v-badge :content="statusCounts.todo.toString()" color="error" :value="statusCounts.todo" />
+                    </v-tab>
+                    <v-tab>
+                        {{ $t("Pending") }}
+                        <v-badge :content="statusCounts.processing.toString()" color="purple" :value="statusCounts.processing" ></v-badge>
+                    </v-tab>
+                    <v-tab>
+                        {{ $t("Returned") }}
+                        <v-badge color="orange" :content="statusCounts.return.toString()" :value="statusCounts.return" ></v-badge>
+                    </v-tab>
+                    <v-tab>
+                        {{ $t("Approved") }}
+                        <!-- <v-badge :content="statusCounts.completed > 9 ? '9+' : statusCounts.completed.toString()" color="" :value="statusCounts.completed" ></v-badge> -->
+                    </v-tab>
+                    <v-tab>
+                        {{ $t("Rejected") }}
+                        <v-badge :content="statusCounts.decline.toString()" color="" :value="statusCounts.decline" ></v-badge>
+                    </v-tab>
+                    <v-spacer></v-spacer>
+                    <!-- export excel -->
+                    <v-menu v-model="yearMenu" :close-on-content-click="false" transition="scale-transition" offset-y
+                    min-width="100">
+                    <template v-slot:activator="{ on, attrs }">
+                        <v-chip label v-bind="attrs" v-on="on" class="mr-4" color="#01a6be darken-4" dark>
+                            <v-icon left>mdi-calendar</v-icon>
+                            {{ $t('Select year') }}: {{ selectedYears.join(', ') || $t('All years') }}
                         </v-chip>
                     </template>
-                    <span v-if="getReturnInfo(item).returned">
-                        <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
-                        {{ getNextApproverInfoForStatus(item) }}
+                    <v-card>
+                        <v-list>
+                            <v-list-item v-for="year in availableYears" :key="year">
+                                <v-list-item-action>
+                                    <v-checkbox v-model="selectedYears" :value="year" :label="year"
+                                    color="#01a6be darken-2"></v-checkbox>
+                                </v-list-item-action>
+                            </v-list-item>
+                        </v-list>
+                        <v-card-actions>
+                            <v-spacer></v-spacer>
+                            <v-btn text color="grey" @click="yearMenu = false">{{ $t('Close') }}</v-btn>
+                            <v-btn text color="#01a6be darken-2" @click="clearYearSelection">{{ $t('Clear') }}</v-btn>
+                        </v-card-actions>
+                    </v-card>
+                </v-menu>
+            </v-tabs>
+            <v-data-table :headers="originalHeaders" :items="filteredData" :search="search" class="elevation-1"  
+            :footer-props="{
+                showFirstLastPage: true,
+                firstIcon: 'mdi-arrow-collapse-left',
+                lastIcon: 'mdi-arrow-collapse-right',
+                prevIcon: 'mdi-minus',
+                nextIcon: 'mdi-plus',
+                'items-per-page-text': $t('Rows per page'),
+            }">
+            <template #[`header.submitter`]>
+                <DsFilter :name="$t('Submitted by')" :in-items="filterItems.submitter"
+                @changed="updateFilter('submitter', $event)" />
+            </template>
+            <template #[`header.date_req`]>
+                <DsFilter :name="$t('Apply Date')" :in-items="filterItems.date_req"
+                @changed="updateFilter('date_req', $event)" />
+            </template>
+            <template #[`header.unit`]>
+                <DsFilter :name="$t('Unit code')" :in-items="filterItems.unit"
+                @changed="updateFilter('unit', $event)" />
+            </template>
+            <template #[`header.unit_name`]>
+                <DsFilter :name="$t('Unit name')" :in-items="filterItems.unit_name"
+                @changed="updateFilter('unit_name', $event)" />
+            </template>
+            <template #[`header.pos`]>
+                <DsFilter :name="$t('Position')" :in-items="filterItems.pos"
+                @changed="updateFilter('pos', $event)" />
+            </template>
+            <template #[`header.conditions`]>
+                {{ $t('Conditions') }}
+            </template>            
+            <template #[`header.qty_req`]>
+                <DsFilter :name="$t('Demand')" :in-items="filterItems.qty_req"
+                @changed="updateFilter('qty_req', $event)" />
+            </template>
+            <template #[`header.req_id`]>
+                <DsFilter :name="$t('ID')" :in-items="filterItems.req_id"
+                @changed="updateFilter('req_id', $event)" />
+            </template>
+            <template #[`header.recruited`]>
+                <!-- {{ $t('Recruited') }} -->
+                <DsFilter :name="$t('Recruited')" :in-items="filterItems.recruited"
+                @changed="updateFilter('recruited', $event)" />
+            </template>
+            <template #[`header.reason`]>
+                <DsFilter :name="$t('Reason')" :in-items="filterItems.reason"
+                @changed="updateFilter('reason', $event)" />
+            </template>
+            <template #[`header.resign`]>
+                <!-- {{ $t('Resign') }} -->
+                <DsFilter :name="$t('Resign')" :in-items="filterItems.resign"
+                @changed="updateFilter('resign', $event)" />
+            </template>
+            <template #[`header.status`]>
+                <DsFilter :name="$t('Approval Status')" :in-items="filterItems.status"
+                @changed="updateFilter('status', $event)" />
+            </template>
+            <template #[`header.action`]>
+                {{ $t('Print') }}
+            </template>
+            <template #[`header.recruited_status`]>
+                <DsFilter :name="$t('Recruitment status')" 
+                :in-items="filterItems.recruited_status"
+                @changed="updateFilter('recruited_status', $event)" />
+            </template>
+            <template v-slot:[`item.recruited_status`]="{ item }">
+                <v-card v-if="getRecruitmentStatus(item).show" 
+                outlined 
+                class="pa-1" 
+                :color="getRecruitmentStatus(item).color"
+                :dark="getRecruitmentStatus(item).dark">
+                <div class="d-flex align-center flex-column">
+                    <span class="text-body-2 font-weight-medium">
+                        {{ getRecruitmentStatus(item).text }}
                     </span>
-                    <span v-else-if="getNextApproverInfoForStatus(item)">
-                        {{ getNextApproverInfoForStatus(item) }}
+                    <span class="text-caption text-center black--text">
+                        {{ getRecruitmentStatus(item).detail }}
                     </span>
+                </div>
+            </v-card>
+        </template>
+        <template v-slot:[`item.submitter`]="{ item }">
+            <v-btn v-if="item.submitter" color="blue" small text>
+                <v-icon left>mdi-account</v-icon>
+                {{ item.submiterInfo.name }}
+            </v-btn>
+            <br />
+            <v-btn v-if="item.submitter" color="blue" small text>
+                <v-icon left>mdi-card-account-details-outline</v-icon>
+                {{ item.submiterInfo.empno }} - {{ item.submiterInfo.dept_sumt }}
+            </v-btn>
+        </template>
+        <template v-slot:[`item.qty_req`]="{ item }">
+            <div>
+                {{ getDisplayQuantity(item.qty_req, item) }}
+                <v-tooltip bottom v-if="hasQuantityChange(item) && !isAmendmentDeniedButOriginalValid(item) && item.status_amendent === 'completed'" color="warning">
+                    <template v-slot:activator="{ on, attrs }">
+                        <span v-bind="attrs" v-on="on">
+                            <v-icon small color="warning" class="mx-1">mdi-arrow-right-bold</v-icon>
+                            <span class="font-weight-bold">{{ getChangeQuantity(item) }}</span>
+                        </span>
+                    </template>
+                    <span>{{ getChangeReason(item) }}</span>
                 </v-tooltip>
-                
-                <!-- Amendment Status Chip with Separate Tooltip -->
-                <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
-                    <template v-slot:activator="{ on: amendmentOn, attrs: amendmentAttrs }">
+            </div>
+        </template>
+        <template v-slot:[`item.recruited`]="{ item }">
+            {{ item.recruited || 0 }}
+        </template>
+        <template v-slot:[`item.resign`]="{ item }">
+            {{ item.resign || 0 }}
+        </template>
+        <template v-slot:[`item.status`]="{ item }">
+            <div class="d-flex align-center flex-wrap">
+                <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
+                    <template v-slot:activator="{ on, attrs }">
                         <v-chip 
+                        v-if="item.status" 
                         label 
-                        :color="getAmendmentStatusColor(item.status_amendent)" 
+                        :color="getStatusColor(item.status, item)" 
                         small 
                         outlined
                         dark
-                        v-bind="amendmentAttrs"
-                        v-on="amendmentOn"
-                        class="mr-1 mb-1"
-                        @click="openApprovalDetails(item)"
+                        v-bind="attrs" 
+                        v-on="on" 
+                        class="mr-1 mb-1" 
+                        @click="openApprovalDetails(item)" 
                         style="cursor: pointer"
                         >
-                        {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
+                        {{ getStatusWithApprover(item.status, item) }}
                     </v-chip>
                 </template>
-                <span>
-                    {{ getNextApproverInfoForAmendment(item) }}
+                <span v-if="getReturnInfo(item).returned">
+                    <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
+                    {{ getNextApproverInfoForStatus(item) }}
+                </span>
+                <span v-else-if="getNextApproverInfoForStatus(item)">
+                    {{ getNextApproverInfoForStatus(item) }}
                 </span>
             </v-tooltip>
-            <!-- <v-icon x-small color="warning" v-if="getReturnInfo(item).returned" class="ml-1">
-                mdi-undo
-            </v-icon> -->
-        </div>
-    </template>
-    
-    <template v-slot:[`item.action`]="{ item }">
-        <v-icon @click="printDocument(item)">mdi-printer</v-icon>
-    </template>
-    <template v-slot:[`item.work_exp`]="{ item }">
-        <div v-if="item.workExpInfo">
-            <v-chip x-small :color="item.workExpInfo.color">
-                {{ item.workExpInfo.text }}
-            </v-chip>
-        </div>
-    </template>
+            
+            <!-- Amendment Status Chip with Separate Tooltip -->
+            <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
+                <template v-slot:activator="{ on: amendmentOn, attrs: amendmentAttrs }">
+                    <v-chip 
+                    label 
+                    :color="getAmendmentStatusColor(item.status_amendent)" 
+                    small 
+                    outlined
+                    dark
+                    v-bind="amendmentAttrs"
+                    v-on="amendmentOn"
+                    class="mr-1 mb-1"
+                    @click="openApprovalDetails(item)"
+                    style="cursor: pointer"
+                    >
+                    {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
+                </v-chip>
+            </template>
+            <span>
+                {{ getNextApproverInfoForAmendment(item) }}
+            </span>
+        </v-tooltip>
+        <!-- <v-icon x-small color="warning" v-if="getReturnInfo(item).returned" class="ml-1">
+            mdi-undo
+        </v-icon> -->
+    </div>
+</template>
+
+<template v-slot:[`item.action`]="{ item }">
+    <v-icon @click="printDocument(item)">mdi-printer</v-icon>
+</template>
+<template v-slot:[`item.work_exp`]="{ item }">
+    <div v-if="item.workExpInfo">
+        <v-chip x-small :color="item.workExpInfo.color">
+            {{ item.workExpInfo.text }}
+        </v-chip>
+    </div>
+</template>
 <template v-slot:[`item.reason`]="{ item }">
     <template v-if="item.reason_exp === 3">
         {{ getLocalizedOtherReason(item.isOther_reason) }}
@@ -265,19 +265,19 @@
         {{ item.reasonInfo?.type }}
     </template>
 </template>
-    <template v-slot:[`item.computer_skills`]="{ item }">
-        <div v-if="item.computerSkillsInfo">
-            <div>{{ item.computerSkillsInfo.selected.join(', ') }}</div>
-            <div v-if="item.computerSkillsInfo.other" class="text-caption">
-                {{ $t('Other:') }} {{ item.computerSkillsInfo.other }}
-            </div>
+<template v-slot:[`item.computer_skills`]="{ item }">
+    <div v-if="item.computerSkillsInfo">
+        <div>{{ item.computerSkillsInfo.selected.join(', ') }}</div>
+        <div v-if="item.computerSkillsInfo.other" class="text-caption">
+            {{ $t('Other:') }} {{ item.computerSkillsInfo.other }}
         </div>
-    </template>
-    <template v-slot:[`item.pos`]="{ item }">
-        <div>{{ getPositionName(item.pos) }}</div>
-    </template>
-    <template v-slot:[`item.req_id`]="{ item }">
-    <v-btn text small color="teal darken-4" class="pa-0" @click="openDetail(item)"> {{ item.req_id }} </v-btn>
+    </div>
+</template>
+<template v-slot:[`item.pos`]="{ item }">
+    <div>{{ getPositionName(item.pos) }}</div>
+</template>
+<template v-slot:[`item.req_id`]="{ item }">
+    <v-btn text small color="#DD2C00" class="pa-0" @click="openDetail(item)"> {{ item.req_id }} </v-btn>
 </template>
 <template #[`footer.prepend`]>
     <v-btn small color="success" @click="exportExcel" :title="$t('Export to Excel')" class="mr-6" dark>
@@ -333,7 +333,7 @@
 <!-- Accept Confirmation Dialog -->
 <v-dialog v-model="confirmAcceptDialog" max-width="500px">
     <v-card>
-        <v-card-title class="teal darken-2 white--text">
+        <v-card-title class="#01a6be darken-2 white--text">
             <v-icon left dark>mdi-check</v-icon>
             {{ $t('Confirm Action') }}
             <v-spacer></v-spacer>
@@ -390,7 +390,7 @@
 
 <v-dialog v-model="approvalDialog" max-width="1400px">
     <v-card>
-        <v-card-title class="teal darken-2 white--text">
+        <v-card-title class="#01a6be darken-2 white--text">
             <v-icon dark left>mdi-history</v-icon>
             {{ $t('Approval History') }}
             <v-spacer></v-spacer>
@@ -484,7 +484,7 @@
 
 <v-dialog v-model="cancelDialog" max-width="500">
     <v-card>
-        <v-card-title class="teal darken-4 white--text">
+        <v-card-title class="#01a6be darken-4 white--text">
             {{ $t('Cancel request') }}
             <v-spacer></v-spacer>
             <v-btn icon dark @click="cancelDialog = false">
@@ -501,7 +501,7 @@
                 @click:clear="selectedCancelDate = ''"></v-text-field>
             </template>
             <v-date-picker v-model="selectedCancelDate" @input="showCancelDatePicker = false"
-            color="teal darken-4"></v-date-picker>
+            color="#01a6be darken-4"></v-date-picker>
         </v-menu>
         <v-textarea v-model="cancelReason" :label="$t('Cancel reason')" outlined hide-details="auto"
         rows="3" counter prepend-inner-icon="mdi-text-box" clearable></v-textarea>
@@ -519,7 +519,7 @@
 </v-dialog>
 <v-dialog v-model="candidatesDialog" max-width="1000px">
     <v-card>
-        <v-card-title class="teal darken-4 white--text">
+        <v-card-title class="#01a6be darken-4 white--text">
             <span>{{ $t("Manpower Details") }}</span>
             <v-spacer></v-spacer>
             <v-btn icon dark @click="candidatesDialog = false">
@@ -1044,6 +1044,8 @@ export default {
                             return values.includes(this.formatDate(item.date_req));
                             case 'unit':
                             return values.includes(item.unit);
+                            case 'unit_name':
+                            return values.includes(item.unit_name);
                             case 'division': 
                             return values.includes(item.division);
                             case 'pos':
@@ -1101,7 +1103,10 @@ export default {
         availableYears() {
             const currentYear = new Date().getFullYear();
             const years = [];
-            for (let i = currentYear - 5; i <= currentYear + 5; i++) {
+            const startYear = 2024; // Cố định năm bắt đầu là 2024
+            const endYear = currentYear + 3; // Hiển thị thêm 3 năm kể từ năm hiện tại
+            
+            for (let i = startYear; i <= endYear; i++) {
                 years.push(i.toString());
             }
             return years;
@@ -1135,7 +1140,10 @@ export default {
         filterItems() {
             return {
                 req_id: [...new Set(this.formattedData.map(item => item.req_id))].filter(Boolean),
-                submitter: [...new Set(this.formattedData.map(item => item.submiterInfo?.name))].filter(Boolean),
+                unit_name: [...new Set(this.formattedData.map(item => item.unit_name))].filter(Boolean),
+                submitter: [...new Set(this.formattedData.map(item => 
+                item.submiterInfo?.empno ? `${item.submiterInfo.empno} - ${item.submiterInfo.name}` : ''
+                ))].filter(Boolean),
                 date_req: [...new Set(this.formattedData.map(item => this.formatDate(item.date_req)))].filter(Boolean),
                 unit: [...new Set(this.formattedData.map(item => item.unit))].filter(Boolean),
                 // division: [...new Set(this.formattedData.map(item => item.division))].filter(Boolean), 
@@ -1195,27 +1203,27 @@ export default {
     },
     methods: {
         getLocalizedOtherReason(otherReason) {
-    try {
-        // Nếu otherReason là string JSON
-        if (typeof otherReason === 'string' && otherReason.startsWith('{')) {
-            const parsedReason = JSON.parse(otherReason);
-            const locale = this.$i18n?.locale || 'vi';
-            return parsedReason[locale] || parsedReason.vi || parsedReason.en || '';
-        }
-        
-        // Nếu otherReason đã là object
-        if (typeof otherReason === 'object' && otherReason !== null) {
-            const locale = this.$i18n?.locale || 'vi';
-            return otherReason[locale] || otherReason.vi || otherReason.en || '';
-        }
-
-        // Nếu là string thường
-        return otherReason || '';
-    } catch (error) {
-        console.error('Error getting localized other reason:', error);
-        return otherReason || ''; // Trả về nguyên dạng nếu có lỗi
-    }
-},
+            try {
+                // Nếu otherReason là string JSON
+                if (typeof otherReason === 'string' && otherReason.startsWith('{')) {
+                    const parsedReason = JSON.parse(otherReason);
+                    const locale = this.$i18n?.locale || 'vi';
+                    return parsedReason[locale] || parsedReason.vi || parsedReason.en || '';
+                }
+                
+                // Nếu otherReason đã là object
+                if (typeof otherReason === 'object' && otherReason !== null) {
+                    const locale = this.$i18n?.locale || 'vi';
+                    return otherReason[locale] || otherReason.vi || otherReason.en || '';
+                }
+                
+                // Nếu là string thường
+                return otherReason || '';
+            } catch (error) {
+                console.error('Error getting localized other reason:', error);
+                return otherReason || ''; // Trả về nguyên dạng nếu có lỗi
+            }
+        },
         getRecruitmentStatus(item) {
             const stocknumber = parseInt(item.stocknumber);
             const recruited = parseInt(item.recruited);
@@ -1255,7 +1263,7 @@ export default {
                         text: this.$t('Recruiting'),
                         // detail: `${recruited}/${stocknumber}`,
                         show: true,
-                        color: 'teal accent-3',
+                        color: '#01a6be accent-3',
                         dark: false
                     };
                 }
@@ -1266,7 +1274,7 @@ export default {
                     text: this.$t('Recruiting'),
                     // detail: `(${this.formatDate(item.completed_date)})`,
                     show: true,
-                    color: 'teal accent-3',
+                    color: '#01a6be accent-3',
                     dark: false
                 };
             }
@@ -1275,7 +1283,7 @@ export default {
                     text: this.$t('Recruiting'),
                     detail: '', // hoặc detail phù hợp
                     show: true,
-                    color: 'teal accent-3',
+                    color: '#01a6be accent-3',
                     dark: false
                 };
             }
@@ -1320,7 +1328,7 @@ export default {
                     text: this.$t('Recruiting'),
                     detail: `(${this.formatDate(item.hold_date)} - ${this.$t('Resumed')}, ${this.formatDate(item.resumed_date)} - ${this.$t('hold')})`,
                     show: true,
-                    color: 'teal accent-3',
+                    color: '#01a6be accent-3',
                     dark: false
                 };
             }
@@ -1438,7 +1446,7 @@ export default {
         },
         getCycleColor(cycleIndex) {
             const colors = {
-                1: 'teal darken-2',
+                1: '#01a6be darken-2',
                 2: 'blue darken-2', 
                 3: 'deep-orange darken-2',
                 4: 'purple darken-2'
@@ -2425,7 +2433,7 @@ export default {
                 case "pending":
                 return "lime darken-2";
                 case "processing":
-                return "teal";
+                return "#01a6be";
                 case "returned":
                 return "amber";
                 
@@ -3258,7 +3266,7 @@ export default {
             "Applicant": "Người nộp đơn",
             "Search": "Tìm kiếm",
             "Export": "Xuất Excel",
-             "Approval History":"Lịch sử phê duyệt",
+            "Approval History":"Lịch sử phê duyệt",
             "Current Cycle":"Chu kỳ hiện tại"
         },
         "cn": {
@@ -3330,21 +3338,21 @@ export default {
 }
 
 .total-row {
-    background-color: #004D40 !important;
-    /* teal darken-4 */
+    background-color: #00838F!important;
+    /* #01a6be darken-4 */
 }
 
 .total-row td {
     color: white !important;
     font-size: 1.1em !important;
-    border-top: 2px solid #004D40 !important;
-    /* teal darken-3 for border */
+    border-top: 2px solid #00838F!important;
+    /* #01a6be darken-3 for border */
     border-bottom: none !important;
     /* text-align: center !important; */
 }
 
 .total-row td:first-child {
-    background-color: #004D40 !important;
+    background-color: #00838F!important;
     /* slightly lighter for first column */
     position: sticky;
     left: 0;
@@ -3379,7 +3387,7 @@ export default {
 }
 .v-data-table ::v-deep thead th {
     font-weight: 600 !important;
-    color: #004D40 !important;
+    color: #00838F!important;
     background: white;
     position: sticky;
     top: 0;
