@@ -146,9 +146,9 @@
             <template v-slot:[`item.recruited_status`]="{ item }">
                 <v-card v-if="getRecruitmentStatus(item).show" 
                 outlined 
+                dark
                 class="pa-1" 
-                :color="getRecruitmentStatus(item).color"
-                :dark="getRecruitmentStatus(item).dark">
+                :color="getRecruitmentStatus(item).color">
                 <div class="d-flex align-center flex-column">
                     <span class="text-body-2 font-weight-medium">
                         {{ getRecruitmentStatus(item).text }}
@@ -3290,7 +3290,7 @@ export default {
             "Returned": "Returned",
             "Approved": "Approved",
             "Rejected": "Rejected",
-            "Manpower listing": "Manpower listing",
+            "Manpower listing": "Manpower request",
             "Reload": "Reload",
             "New request": "New request",
             "Amendment request": "Amendment request",
@@ -3311,7 +3311,6 @@ export default {
             "Select year": "Select Year",
             "Close": "Close",
             "Clear": "Clear",
-            "Manpower listing": "Manpower listing",
             "Applicant": "Applicant",
             "Search": "Search",
             "Export": "Export",
