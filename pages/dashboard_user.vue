@@ -185,66 +185,75 @@
             </div>
         </template>
         <template v-slot:[`item.recruited`]="{ item }">
+            <!-- {{ item.recruited || 0 }} -->
+            <div 
+            style="cursor: pointer; color: blue;" 
+            @click="showCandidatesDialog(item.candidates)">
             {{ item.recruited || 0 }}
-        </template>
-        <template v-slot:[`item.resign`]="{ item }">
-            {{ item.resign || 0 }}
-        </template>
-        <template v-slot:[`item.status`]="{ item }">
-            <div class="d-flex align-center flex-wrap">
-                <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
-                    <template v-slot:activator="{ on, attrs }">
-                        <v-chip 
-                        v-if="item.status" 
-                        label 
-                        :color="getStatusColor(item.status, item)" 
-                        small 
-                        outlined
-                        dark
-                        v-bind="attrs" 
-                        v-on="on" 
-                        class="mr-1 mb-1" 
-                        @click="openApprovalDetails(item)" 
-                        style="cursor: pointer"
-                        >
-                        {{ getStatusWithApprover(item.status, item) }}
-                    </v-chip>
-                </template>
-                <span v-if="getReturnInfo(item).returned">
-                    <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
-                    {{ getNextApproverInfoForStatus(item) }}
-                </span>
-                <span v-else-if="getNextApproverInfoForStatus(item)">
-                    {{ getNextApproverInfoForStatus(item) }}
-                </span>
-            </v-tooltip>
-            
-            <!-- Amendment Status Chip with Separate Tooltip -->
-            <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
-                <template v-slot:activator="{ on: amendmentOn, attrs: amendmentAttrs }">
-                    <v-chip 
-                    label 
-                    :color="getAmendmentStatusColor(item.status_amendent)" 
-                    small 
-                    outlined
-                    dark
-                    v-bind="amendmentAttrs"
-                    v-on="amendmentOn"
-                    class="mr-1 mb-1"
-                    @click="openApprovalDetails(item)"
-                    style="cursor: pointer"
-                    >
-                    {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
-                </v-chip>
-            </template>
-            <span>
-                {{ getNextApproverInfoForAmendment(item) }}
-            </span>
-        </v-tooltip>
-        <!-- <v-icon x-small color="warning" v-if="getReturnInfo(item).returned" class="ml-1">
-            mdi-undo
-        </v-icon> -->
+        </div>
+    </template>
+    <template v-slot:[`item.resign`]="{ item }">
+        <div 
+        style="cursor: pointer; color: red;" 
+        @click="showResignDialog(item.resignList)">
+        {{ item.resign || 0 }}
     </div>
+</template>
+<template v-slot:[`item.status`]="{ item }">
+    <div class="d-flex align-center flex-wrap">
+        <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
+            <template v-slot:activator="{ on, attrs }">
+                <v-chip 
+                v-if="item.status" 
+                label 
+                :color="getStatusColor(item.status, item)" 
+                small 
+                outlined
+                dark
+                v-bind="attrs" 
+                v-on="on" 
+                class="mr-1 mb-1" 
+                @click="openApprovalDetails(item)" 
+                style="cursor: pointer"
+                >
+                {{ getStatusWithApprover(item.status, item) }}
+            </v-chip>
+        </template>
+        <span v-if="getReturnInfo(item).returned">
+            <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
+            {{ getNextApproverInfoForStatus(item) }}
+        </span>
+        <span v-else-if="getNextApproverInfoForStatus(item)">
+            {{ getNextApproverInfoForStatus(item) }}
+        </span>
+    </v-tooltip>
+    
+    <!-- Amendment Status Chip with Separate Tooltip -->
+    <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
+        <template v-slot:activator="{ on: amendmentOn, attrs: amendmentAttrs }">
+            <v-chip 
+            label 
+            :color="getAmendmentStatusColor(item.status_amendent)" 
+            small 
+            outlined
+            dark
+            v-bind="amendmentAttrs"
+            v-on="amendmentOn"
+            class="mr-1 mb-1"
+            @click="openApprovalDetails(item)"
+            style="cursor: pointer"
+            >
+            {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
+        </v-chip>
+    </template>
+    <span>
+        {{ getNextApproverInfoForAmendment(item) }}
+    </span>
+</v-tooltip>
+<!-- <v-icon x-small color="warning" v-if="getReturnInfo(item).returned" class="ml-1">
+    mdi-undo
+</v-icon> -->
+</div>
 </template>
 
 <template v-slot:[`item.action`]="{ item }">
@@ -390,7 +399,7 @@
 
 <v-dialog v-model="approvalDialog" max-width="1400px">
     <v-card>
-        <v-card-title class="#01a6be darken-2 white--text">
+        <v-card-title style="background-color: #00838F; color: white;">
             <v-icon dark left>mdi-history</v-icon>
             {{ $t('Approval History') }}
             <v-spacer></v-spacer>
@@ -519,76 +528,128 @@
 </v-dialog>
 <v-dialog v-model="candidatesDialog" max-width="1000px">
     <v-card>
-        <v-card-title class="#01a6be darken-4 white--text">
-            <span>{{ $t("Manpower Details") }}</span>
+        <v-card-title class="pa-3 white--text" style="background-color: #00838F;">
+            <span>{{ $t("Recruitment listing details") }}</span>
             <v-spacer></v-spacer>
             <v-btn icon dark @click="candidatesDialog = false">
                 <v-icon>mdi-close</v-icon>
             </v-btn>
         </v-card-title>
         <v-card-text class="pt-4">
-            <v-data-table :headers="candidateHeaders" :items="parsedCandidates" :items-per-page="5"
-            class="elevation-3 data-table" :footer-props="{
-                'items-per-page-options': [10, 15, 30, 100],
-                'show-current-page': true, 'show-first-last-page': true
-            }">
-            <template v-slot:[`header.select`]>
-                <v-checkbox v-model="selectAll" color="primary" hide-details @click="toggleSelectAll" ></v-checkbox>
+            <v-data-table :headers="candidateHeaders" :items="parsedCandidates" :items-per-page="5" class="elevation-3 data-table" :footer-props="{ 'show-current-page': true, 'show-first-last-page': true }">
+                <template v-slot:[`header.select`]>
+                    <v-checkbox v-model="selectAll" color="primary" hide-details @click="toggleSelectAll" ></v-checkbox>
+                </template>
+                <!-- <template v-slot:[`item.select`]="{ item }">
+                    <v-checkbox 
+                    :input-value="isItemSelected(item)"
+                    @change="toggleItemSelection(item)"
+                    color="primary" 
+                    hide-details 
+                    dense>
+                </v-checkbox>
+            </template> -->
+            <template v-slot:[`item.empno`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ item.empno }}
+                </div>
             </template>
-            <template v-slot:[`item.select`]="{ item }">
-                <v-checkbox 
-                :input-value="isItemSelected(item)"
-                @change="toggleItemSelection(item)"
+            <template v-slot:[`item.name`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ item.name }}
+                </div>
+            </template>
+            <template v-slot:[`item.position`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ getPositionName(item.position) }}
+                </div>
+            </template>
+            <template v-slot:[`item.date`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ formatDate(item.date) }}
+                </div>
+            </template>
+            <template v-slot:[`header.empno`]> {{ $t('Empno') }} </template>
+            <template v-slot:[`header.name`]> {{ $t('Name') }} </template>
+            <template v-slot:[`header.date`]> {{ $t('In date') }} </template>
+            <template v-slot:[`header.key_in`]>{{ $t('Key in') }} </template>
+            <template v-slot:[`header.position`]>{{ $t('Position') }} </template>
+            
+            <!-- <template #[`footer.prepend`]>
+                <div class="mr-2" style="width: 250px">
+                    <v-select
+                    v-model="transferMprId"
+                    :items="mprOptions"
+                    :label="$t('ID MPR')"
+                    item-text="text"
+                    item-value="value"
+                    outlined
+                    dense
+                    hide-details
+                    ></v-select>
+                </div>
+                <v-btn 
                 color="primary" 
-                hide-details 
-                dense>
-            </v-checkbox>
-        </template>
-        <template v-slot:[`item.empno`]="{ item }">
-            <div class="d-flex align-center">
-                {{ item.empno }}
-            </div>
-        </template>
-        <template v-slot:[`item.name`]="{ item }">
-            <div class="d-flex align-center">
-                {{ item.name }}
-            </div>
-        </template>
-        <template v-slot:[`item.date`]="{ item }">
-            <div class="d-flex align-center">
-                {{ formatDate(item.date) }}
-            </div>
-        </template>
-        <template v-slot:[`header.empno`]> {{ $t('Empno') }} </template>
-        <template v-slot:[`header.name`]> {{ $t('Name') }} </template>
-        <template v-slot:[`header.date`]> {{ $t('In date') }} </template>
-        
-        <template #[`footer.prepend`]>
-            <div class="mr-2" style="width: 150px">
-                <v-select
-                v-model="transferMprId"
-                :items="mprOptions"
-                :label="$t('ID MPR')"
-                item-text="text"
-                item-value="value"
-                outlined
-                dense
-                hide-details
-                ></v-select>
-            </div>
-            <v-btn 
-            color="primary" 
-            class="mr-5"
-            :disabled="selectedCandidates.length === 0 || !transferMprId"
-            @click="transferCandidates"
-            >
-            <v-icon left>mdi-arrow-right</v-icon>
-            {{ $t('Transfer') }}
-        </v-btn>
-        
-    </template>
-</v-data-table>
+                class="mr-5"
+                :disabled="selectedCandidates.length === 0 || !transferMprId"
+                @click="transferCandidates"
+                >
+                <v-icon left>mdi-arrow-right</v-icon>
+                {{ $t('Transfer') }}
+            </v-btn>
+            
+        </template> -->
+    </v-data-table>
 </v-card-text>
+</v-card>
+</v-dialog>
+<v-dialog v-model="resignDialog" max-width="1000px">
+    <v-card>
+        <v-card-title class="pa-2 white--text" style="background-color: #00838F;">
+            <span>{{ $t("Resign Listing Details") }}</span>
+            <v-spacer></v-spacer>
+            <v-btn icon dark @click="resignDialog = false">
+                <v-icon>mdi-close</v-icon>
+            </v-btn>
+        </v-card-title>
+        <v-card-text class="pt-4">
+            <v-data-table 
+            :headers="resignHeaders" 
+            :items="parsedResignList" 
+            :items-per-page="5"
+            class="elevation-3 data-table" 
+            :footer-props="{
+                'show-current-page': true, 
+                'show-first-last-page': true
+            }"
+            >
+            <template v-slot:[`item.empno`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ item.empno }}
+                </div>
+            </template>
+            <template v-slot:[`item.name`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ item.name }}
+                </div>
+            </template>
+            <template v-slot:[`item.date`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ formatDate(item.date) }}
+                </div>
+            </template>
+            <template v-slot:[`item.position`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ getPositionName(item.position) }}
+                </div>
+            </template>
+            <template v-slot:[`header.empno`]> {{ $t('Empno') }} </template>
+            <template v-slot:[`header.name`]> {{ $t('Name') }} </template>
+            <template v-slot:[`header.date`]> {{ $t('Resign date') }} </template>
+            <template v-slot:[`header.key_in`]>{{ $t('Key in') }} </template>
+            <template v-slot:[`header.position`]>{{ $t('Position') }} </template>
+        </v-data-table>
+    </v-card-text>
 </v-card>
 </v-dialog>
 
@@ -713,10 +774,12 @@ export default {
             flowCache: new Map(), 
             parsedCandidates: [],
             candidateHeaders: [
-            { text: '', value: 'select', sortable: false, width: '50px' },
+            // { text: '', value: 'select', sortable: false, width: '50px' },
+            { text: 'Key in', value: 'key_in', align: 'start' },
             { text: 'Empno', value: 'empno', align: 'start' },
             { text: 'Name', value: 'name' },
-            { text: 'In date', value: 'date' }
+            { text: 'Position', value: 'position' },
+            { text: 'Actual date', value: 'date' }
             ],
             candidatesDialog: false,
             selectedCandidates: [],
@@ -737,7 +800,16 @@ export default {
             dataRecruitmentReason:[],
             unitNames: [],
             sentNotifications: new Set(),
-            selectedLanguage: 'cn'
+            selectedLanguage: 'cn',
+            resignDialog: false,
+            parsedResignList: [],
+            resignHeaders: [
+            { text: 'Key in', value: 'key_in', align: 'start' },
+            { text: 'Empno', value: 'empno', align: 'start' },
+            { text: 'Name', value: 'name' },
+            { text: 'Position', value: 'position' },
+            { text: 'Resign date', value: 'date' }
+            ],
         }
     },
     computed: {
@@ -1242,7 +1314,7 @@ export default {
                         text: this.$t('Cancelled'),
                         detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
                         show: true,
-                        color: 'red lighten-4',
+                        color: '#6c757d',
                         dark: false,
                     };
                 }
@@ -1255,6 +1327,7 @@ export default {
                         text: this.$t('Closed'),
                         // detail: `${recruited}/${stocknumber}`,
                         show: true,
+                        color: '#f44336',
                         
                     };
                 }
@@ -1263,7 +1336,7 @@ export default {
                         text: this.$t('Recruiting'),
                         // detail: `${recruited}/${stocknumber}`,
                         show: true,
-                        color: '#01a6be accent-3',
+                        color: '#01a6be',
                         dark: false
                     };
                 }
@@ -1274,7 +1347,7 @@ export default {
                     text: this.$t('Recruiting'),
                     // detail: `(${this.formatDate(item.completed_date)})`,
                     show: true,
-                    color: '#01a6be accent-3',
+                    color: '#01a6be',
                     dark: false
                 };
             }
@@ -1283,7 +1356,7 @@ export default {
                     text: this.$t('Recruiting'),
                     detail: '', // hoặc detail phù hợp
                     show: true,
-                    color: '#01a6be accent-3',
+                    color: '#01a6be',
                     dark: false
                 };
             }
@@ -1292,7 +1365,7 @@ export default {
                     text: this.$t('Closed'),
                     detail: '', // hoặc detail phù hợp
                     show: true,
-                    color: 'green lighten-4',
+                    color: '#f44336',
                     dark: false
                 };
             }
@@ -1304,9 +1377,7 @@ export default {
                 if (daysRemaining > 0) {
                     detailText += ` ${this.$t('remaining')} \n${daysRemaining} ${this.$t('days')}`;
                 } else {
-                    // Chỉ thực hiện auto decline nếu chưa bị declined
                     if (item.status_amendent !== 'declined' && item.status !== 'declined') {
-                        // Kiểm tra xem đã thực hiện auto decline chưa
                         if (!this.sentNotifications.has(`declined_${item.id}`)) {
                             this.sentNotifications.add(`declined_${item.id}`);
                             this.handleExpiredHold(item);
@@ -1328,7 +1399,7 @@ export default {
                     text: this.$t('Recruiting'),
                     detail: `(${this.formatDate(item.hold_date)} - ${this.$t('Resumed')}, ${this.formatDate(item.resumed_date)} - ${this.$t('hold')})`,
                     show: true,
-                    color: '#01a6be accent-3',
+                    color: '#01a6be',
                     dark: false
                 };
             }
@@ -1527,6 +1598,26 @@ export default {
                 });
             }
         },
+        showResignDialog(resignList) {
+            try {
+                this.parsedResignList = JSON.parse(resignList || '[]');
+                if (this.parsedResignList.length > 0) {
+                    this.resignDialog = true;
+                } else {
+                    this.$notify({
+                        title: this.$t('No Resigned Employees'),
+                        text: this.$t('No resigned employees data available'),
+                        type: 'info'
+                    });
+                }
+            } catch (error) {
+                this.$notify({
+                    title: this.$t('Error'),
+                    text: this.$t('Error loading resigned employees data'),
+                    type: 'error'
+                });
+            }
+        },
         async updateCancelDate() {
             if (!this.selectIdMpr) return;
             
@@ -1718,28 +1809,35 @@ export default {
                 this.filteredItems = this.formattedData;
                 return;
             }
+            
             const searchTerm = this.search.toLowerCase();
+            const searchFields = [
+            'req_id',
+            'date_req',
+            'unit_name',
+            'division',
+            'reason',
+            'recruited',
+            'resign'
+            ];
+            
             this.filteredItems = this.formattedData.filter(item => {
-                return (
-                String(item.id).toLowerCase().includes(searchTerm) ||
-                String(item.req_id).toLowerCase().includes(searchTerm) ||
-                String(item.key_in_date).toLowerCase().includes(searchTerm) ||
-                String(item.date_req).toLowerCase().includes(searchTerm) ||
+                const matchesSearchTerm = field => {
+                    const value = item[field];
+                    if (Array.isArray(value)) {
+                        return value.join(', ').toLowerCase().includes(searchTerm);
+                    }
+                    return String(value || '').toLowerCase().includes(searchTerm);
+                };
                 
+                return searchFields.some(matchesSearchTerm) ||
                 (item.submiterInfo?.name || '').toLowerCase().includes(searchTerm) ||
-                (item.submiterInfo?.empno || '').toLowerCase().includes(searchTerm) ||
-                (item.submiterInfo?.dept_sumt || '').toLowerCase().includes(searchTerm) ||
-                
-                (item.unit || '').toLowerCase().includes(searchTerm) ||
-                (item.division || '').toLowerCase().includes(searchTerm) ||
-                
-                (item.positions || []).join(' ').toLowerCase().includes(searchTerm) ||
-                (item.language || '').toLowerCase().includes(searchTerm) ||
-                
-                (item.reasonInfo?.type || '').toLowerCase().includes(searchTerm) ||
-                
-                (item.status || '').toLowerCase().includes(searchTerm)
-                );
+                this.getPositionName(item.pos).toLowerCase().includes(searchTerm) || // Kiểm tra vị trí chính
+                (item.sub_pos ? this.getSubPositionName(item.sub_pos, true).toLowerCase().includes(searchTerm) : false) || // Kiểm tra sub position
+                (item.computerSkillsInfo?.selected && Array.isArray(item.computerSkillsInfo.selected) && 
+                item.computerSkillsInfo.selected.join(', ').toLowerCase().includes(searchTerm)) ||
+                this.getStatusText(item.status).toLowerCase().includes(searchTerm) ||
+                this.getStatusText(item.status_amendent).toLowerCase().includes(searchTerm);
             });
         },
         openDetail(item) {
@@ -3210,7 +3308,7 @@ export default {
             "hold": "hold",
             "Resumed": "Resumed",
             "#Change in hiring requirements": "#Change in hiring requirements",
-            "Select Year": "Select Year",
+            "Select year": "Select Year",
             "Close": "Close",
             "Clear": "Clear",
             "Manpower listing": "Manpower listing",
@@ -3218,7 +3316,16 @@ export default {
             "Search": "Search",
             "Export": "Export",
             "Approval History":"Approval History",
-            "Current Cycle":"Current Cycle"
+            "Current Cycle":"Current Cycle",
+            "Recruitment listing details":"Recruitment listing details",
+            "Empno": "Empno",
+            "Key in": "Key in",
+            "Position": "Position",
+            "Name":"Name",
+            "In date":"In date",
+            "Resign date":"Resign date",
+            "Resign Listing Details":"Resign Listing Details"          
+            
         },
         "vi": {
             "ID": "ID",
@@ -3260,14 +3367,21 @@ export default {
             "hold": "tạm dừng",
             "Resumed": "Đã tiếp tục",
             "#Change in hiring requirements": "#Thay đổi yêu cầu tuyển dụng",
-            "Select Year": "Chọn năm",
+            "Select year": "Chọn năm",
             "Close": "Đóng",
             "Clear": "Xóa",
             "Applicant": "Người nộp đơn",
             "Search": "Tìm kiếm",
             "Export": "Xuất Excel",
             "Approval History":"Lịch sử phê duyệt",
-            "Current Cycle":"Chu kỳ hiện tại"
+            "Current Cycle":"Chu kỳ hiện tại",
+            "Recruitment listing details":"Chi tiết danh sách tuyển dụng",
+            "Empno": "Mã số thẻ",
+            "Key in": "Ngày nộp hồ sơ",
+            "Name":"Họ tên",
+            "In date":"Ngày tuyển dụng",     
+            "Resign date":"Ngày thôi việc",
+            "Resign Listing Details":"Chi tiết danh sách nghỉ việc"
         },
         "cn": {
             "ID": "表單編號",
@@ -3291,7 +3405,7 @@ export default {
             "Returned": "退回申請人",
             "Approved": "已核准",
             "Rejected": "否決",
-            "Manpower listing": "人力資源申請列表",
+            "Manpower listing": "人員增補申請",
             "Reload": "重新載入資料",
             "New request": "新需求",
             "Amendment request": "需求變更申請",
@@ -3309,14 +3423,21 @@ export default {
             "hold": "暫停",
             "Resumed": "恢復",
             "#Change in hiring requirements": "#招聘要求變更",
-            "Select Year": "選擇年份",
+            "Select year": "選擇年份",
             "Close": "關閉",
             "Clear": "清除",
             "Applicant": "申請人",
             "Search": "搜尋",
             "Export": "匯出",
             "Approval History":"审批历史",
-            "Current Cycle":"当前周期"
+            "Current Cycle":"当前周期",
+            "Recruitment listing details":"招聘列表详情",
+            "Empno": "卡号",
+            "Key in": "提交日期",
+            "Name": "姓名",
+            "In date": "入职日期",
+            "Resign date": "离职日期",
+            "Resign Listing Details": "离职列表详情"
         }
     }  
 </i18n>       

@@ -151,8 +151,7 @@
                                 <v-date-picker
                                 v-model="form.recruitment.requestDate"
                                 @input="dateRequestMenu = false"
-                                :min="getCurrentDate()"
-                                :max="getMaxDate()"
+                                :min="getEffectiveDate()"
                                 ></v-date-picker>
                             </v-menu>
                         </v-col>
@@ -512,7 +511,7 @@
     </v-card>
     <v-dialog v-model="confirmAcceptDialog" max-width="500px">
         <v-card>
-            <v-card-title class="#01a6be darken-2 white--text">
+            <v-card-title style="background-color: #01a6be; color: white;">
                 <v-icon left dark>mdi-check</v-icon>
                 {{ $t("Confirm Action") }}
                 <v-spacer></v-spacer>
@@ -534,7 +533,7 @@
                     {{ $t("Cancel") }}
                 </v-btn>
                 <v-spacer></v-spacer>
-                <v-btn color="success" @click="confirmAccept" >
+                <v-btn color="#01a6be" dark @click="confirmAccept" >
                     {{ $t("Confirm") }}
                 </v-btn>
             </v-card-actions>
@@ -635,7 +634,7 @@
     <!-- Submit Confirmation Dialog -->
     <v-dialog v-model="confirmSubmitDialog" max-width="500px">
         <v-card>
-            <v-card-title class="#01a6be darken-2 white--text">
+            <v-card-title  style="background-color: #01a6be; color: white;">
                 <v-icon left dark>mdi-send</v-icon>
                 {{ $t("Confirm Action") }}
                 <v-spacer></v-spacer>
@@ -773,7 +772,11 @@ export default {
                     reason: "",
                     oldempno: "",
                     isOther_reason: "",
-                    requestDate: new Date().toISOString().substr(0, 10),
+                    requestDate: (() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + 7);             // cộng thêm 7 ngày
+                        return d.toISOString().substr(0, 10);   // lấy yyyy-mm-dd
+                    })(),
                 },
                 staffCount: {
                     workers: "",
@@ -1097,15 +1100,13 @@ export default {
         },
     },
     methods: {
-        getCurrentDate() {
-            return new Date().toISOString().substr(0, 10);
-        },
-        getMaxDate() 
-        {
+        
+        getEffectiveDate() {
             const today = new Date();
-            today.setDate(today.getDate() + 7);
-            return today.toISOString().substr(0, 10);
+            today.setDate(today.getDate() + 7); // Cộng thêm 7 ngày
+            return today.toISOString().substr(0, 10); // YYYY-MM-DD
         },
+        
         onCloseDialog(){
             this.dialog = false;
             this.reqId = null;
@@ -1824,7 +1825,11 @@ export default {
                         en: "",
                         cn: ""
                     },
-                    requestDate: new Date().toISOString().substr(0, 10),
+                    requestDate: (() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + 7);             // cộng thêm 7 ngày
+                        return d.toISOString().substr(0, 10);   // lấy yyyy-mm-dd
+                    })(),
                 },
                 staffCount: {
                     workers: 0,
@@ -3689,7 +3694,7 @@ export default {
             "Change quantity cannot be greater than or equal to request quantity": "Số lượng thay đổi không được lớn hơn hoặc bằng số lượng yêu cầu",
             "Min": "Tối thiểu",
             "Max": "Tối đa",
-             "This field is required": "Trường này là bắt buộc"
+            "This field is required": "Trường này là bắt buộc"
         },
         "cn": {
             "Create new request": "创建新请求",

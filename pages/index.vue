@@ -338,7 +338,7 @@
     <!-- Language Display -->
     <div class="d-flex align-center flex-wrap mb-1">
         <template v-if="getLanguageRequirements(item).length > 0">
-            <v-chip v-for="lang in getLanguageRequirements(item)" :key="lang.type" small label outlined class="mr-1" color="#01a6be darken-2" dark > {{ lang.type }}: {{ lang.level }}
+            <v-chip v-for="lang in getLanguageRequirements(item)" :key="lang.type" small label outlined class="mr-1" color="#01a6be" dark > {{ lang.type }}: {{ lang.level }}
             </v-chip>
         </template>
     </div>
@@ -374,7 +374,7 @@
 <!-- Accept Confirmation Dialog -->
 <v-dialog v-model="confirmAcceptDialog" max-width="500px">
     <v-card>
-        <v-card-title class="#01a6be darken-2 white--text">
+        <v-card-title style="background-color: #01a6be; color: white;">
             <v-icon left dark>mdi-check</v-icon>
             {{ $t('Confirm Action') }}
             <v-spacer></v-spacer>
@@ -390,7 +390,7 @@
                 {{ $t('Cancel') }}
             </v-btn>
             <v-spacer></v-spacer>
-            <v-btn color="success" @click="confirmAccept">
+            <v-btn color="#01a6be" @click="confirmAccept">
                 {{ $t('Confirm') }}
             </v-btn>
         </v-card-actions>
@@ -563,9 +563,9 @@
         </v-card-title>
         <v-card-text class="pt-4">
             <v-data-table :headers="candidateHeaders" :items="parsedCandidates" :items-per-page="5" class="elevation-3 data-table" :footer-props="{ 'show-current-page': true, 'show-first-last-page': true }">
-                <template v-slot:[`header.select`]>
+                <!-- <template v-slot:[`header.select`]>
                     <v-checkbox v-model="selectAll" color="primary" hide-details @click="toggleSelectAll" ></v-checkbox>
-                </template>
+                </template> -->
                 <template v-slot:[`item.select`]="{ item }">
                     <v-checkbox 
                     :input-value="isItemSelected(item)"
@@ -585,6 +585,11 @@
                     {{ item.name }}
                 </div>
             </template>
+            <template v-slot:[`item.position`]="{ item }">
+                <div class="d-flex align-center">
+                    {{ getPositionName(item.position) }}
+                </div>
+            </template>
             <template v-slot:[`item.date`]="{ item }">
                 <div class="d-flex align-center">
                     {{ formatDate(item.date) }}
@@ -596,7 +601,7 @@
             <template v-slot:[`header.key_in`]>{{ $t('Key in') }} </template>
             <template v-slot:[`header.position`]>{{ $t('Position') }} </template>
             
-            <template #[`footer.prepend`]>
+            <!-- <template #[`footer.prepend`]>
                 <div class="mr-2" style="width: 250px">
                     <v-select
                     v-model="transferMprId"
@@ -619,7 +624,7 @@
                 {{ $t('Transfer') }}
             </v-btn>
             
-        </template>
+        </template> -->
     </v-data-table>
 </v-card-text>
 </v-card>
@@ -661,7 +666,7 @@
             </template>
             <template v-slot:[`item.position`]="{ item }">
                 <div class="d-flex align-center">
-                    {{ (item.position) }}
+                    {{ getPositionName(item.position) }}
                 </div>
             </template>
             <template v-slot:[`header.empno`]> {{ $t('Empno') }} </template>
@@ -809,7 +814,7 @@ export default {
             defaultHeaders,
             parsedCandidates: [],
             candidateHeaders: [
-            { text: '', value: 'select', sortable: false, width: '50px' },
+            // { text: '', value: 'select', sortable: false, width: '50px' },
             { text: 'Key in', value: 'key_in', align: 'start' },
             { text: 'Empno', value: 'empno', align: 'start' },
             { text: 'Name', value: 'name' },
@@ -1918,23 +1923,18 @@ export default {
         
         formatLanguageSkills(eng, chn, either) {
             const languages = [];
-            // Nếu tất cả đều rỗng thì trả đơn null
             if ((!eng || eng.length === 0) && (!chn || chn.length === 0) && (!either || either.length === 0)) {
                 return null;
             }
-            // Nếu có English
             if (eng && eng.length > 0) {
                 languages.push(this.$t('English'));
             }
-            // Nếu có Chinese
             if (chn && chn.length > 0) {
                 languages.push(this.$t('Chinese'));
             }
-            // Nếu có Either
             if (either && either.length > 0) {
                 languages.push(this.$t('Either - or'));
             }
-            // Nếu không có gì thì trả đơn "No required"
             return languages.length > 0 ? languages.join('/') : this.$t('No required');
         },
         
@@ -1943,27 +1943,35 @@ export default {
                 this.filteredItems = this.formattedData;
                 return;
             }
+            
             const searchTerm = this.search.toLowerCase();
+            const searchFields = [
+            'req_id',
+            'date_req',
+            'unit_name',
+            'division',
+            'reason',
+            'recruited',
+            'resign'
+            ];
+            
             this.filteredItems = this.formattedData.filter(item => {
-                return (
-                String(item.id).toLowerCase().includes(searchTerm) ||
-                String(item.req_id).toLowerCase().includes(searchTerm) ||
-                String(item.key_in_date).toLowerCase().includes(searchTerm) ||
-                String(item.date_req).toLowerCase().includes(searchTerm) ||
+                const matchesSearchTerm = field => {
+                    const value = item[field];
+                    if (Array.isArray(value)) {
+                        return value.join(', ').toLowerCase().includes(searchTerm);
+                    }
+                    return String(value || '').toLowerCase().includes(searchTerm);
+                };
                 
+                return searchFields.some(matchesSearchTerm) ||
                 (item.submiterInfo?.name || '').toLowerCase().includes(searchTerm) ||
-                (item.submiterInfo?.empno || '').toLowerCase().includes(searchTerm) ||
-                (item.submiterInfo?.dept_sumt || '').toLowerCase().includes(searchTerm) ||
-                
-                (item.unit || '').toLowerCase().includes(searchTerm) ||
-                (item.unit_name || '').toLowerCase().includes(searchTerm) ||
-                (item.division || '').toLowerCase().includes(searchTerm) ||
-                
-                (item.positions || []).join(' ').toLowerCase().includes(searchTerm) ||
-                (item.reasonInfo?.type || '').toLowerCase().includes(searchTerm) ||
-                
-                (item.status || '').toLowerCase().includes(searchTerm)
-                );
+                this.getPositionName(item.pos).toLowerCase().includes(searchTerm) || // Kiểm tra vị trí chính
+                (item.sub_pos ? this.getSubPositionName(item.sub_pos, true).toLowerCase().includes(searchTerm) : false) || // Kiểm tra sub position
+                (item.computerSkillsInfo?.selected && Array.isArray(item.computerSkillsInfo.selected) && 
+                item.computerSkillsInfo.selected.join(', ').toLowerCase().includes(searchTerm)) ||
+                this.getStatusText(item.status).toLowerCase().includes(searchTerm) ||
+                this.getStatusText(item.status_amendent).toLowerCase().includes(searchTerm);
             });
         },
         openDetail(item) {
