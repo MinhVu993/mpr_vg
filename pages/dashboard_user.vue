@@ -153,7 +153,7 @@
                     <span class="text-body-2 font-weight-medium">
                         {{ getRecruitmentStatus(item).text }}
                     </span>
-                    <span class="text-caption text-center black--text">
+                    <span class="text-caption text-center">
                         {{ getRecruitmentStatus(item).detail }}
                     </span>
                 </div>
@@ -1314,68 +1314,72 @@ export default {
                         text: this.$t('Cancelled'),
                         detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
                         show: true,
-                        color: '#6c757d',
+                        color: '#f44336', // Đỏ cảnh báo, hủy
                         dark: false,
                     };
                 }
-                
             }
             
             if (isCompleted) {
-                if (stocknumber ===0) {
+                if (stocknumber === 0) {
                     return {
                         text: this.$t('Closed'),
-                        // detail: `${recruited}/${stocknumber}`,
                         show: true,
-                        color: '#f44336',
-                        
+                        color: '#6c757d', // Xám trung tính
                     };
                 }
                 if (stocknumber > recruited) {
                     return {
                         text: this.$t('Recruiting'),
-                        // detail: `${recruited}/${stocknumber}`,
                         show: true,
-                        color: '#01a6be',
-                        dark: false
+                        color: '#43A047', // Xanh lá, đang tuyển
+                        dark: false,
                     };
                 }
-                
             }
-            if(status === 'completed' && statusAmendent !== 'completed') {
+            
+            if (status === 'completed' && statusAmendent !== 'completed') {
                 return {
                     text: this.$t('Recruiting'),
-                    // detail: `(${this.formatDate(item.completed_date)})`,
                     show: true,
-                    color: '#01a6be',
-                    dark: false
+                    color: '#43A047',
+                    dark: false,
                 };
             }
+            
             if (statusAmendent === 'completed' && stocknumber > recruited) {
                 return {
                     text: this.$t('Recruiting'),
-                    detail: '', // hoặc detail phù hợp
+                    detail: '',
                     show: true,
-                    color: '#01a6be',
-                    dark: false
+                    color: '#43A047',
+                    dark: false,
                 };
             }
+            
             if (statusAmendent === 'completed' && stocknumber === recruited) {
                 return {
                     text: this.$t('Closed'),
-                    detail: '', // hoặc detail phù hợp
+                    detail: '',
                     show: true,
-                    color: '#f44336',
-                    dark: false
+                    color: '#6c757d', // Đổi từ đỏ sang xám cho Closed cho đồng bộ, tránh nhầm với Cancelled
                 };
             }
-            if ( hold === 1 && item.hold_date && resumed === 0 ) {
+            
+            if (hold === 1 && item.hold_date && resumed === 0) {
                 const daysRemaining = this.calculateDaysRemaining(item.hold_date);
                 let statusText = this.$t('Recruitment hold');
                 let detailText = `(${this.formatDate(item.hold_date)} ${this.$t('hold')})`;
                 
                 if (daysRemaining > 0) {
                     detailText += ` ${this.$t('remaining')} \n${daysRemaining} ${this.$t('days')}`;
+                    return {
+                        text: statusText,
+                        detail: detailText,
+                        show: true,
+                        color: '#FFC107', // Màu vàng chuẩn cho hold còn hiệu lực
+                        dark: false,
+                    };
                 } else {
                     if (item.status_amendent !== 'declined' && item.status !== 'declined') {
                         if (!this.sentNotifications.has(`declined_${item.id}`)) {
@@ -1384,23 +1388,23 @@ export default {
                         }
                     }
                     detailText += `\n${this.$t('Hold period expired')}`;
+                    return {
+                        text: statusText,
+                        detail: detailText,
+                        show: true,
+                        color: '#f44336', // Đỏ cảnh báo hold hết hạn
+                        dark: false,
+                    };
                 }
-                
-                return {
-                    text: statusText,
-                    detail: detailText,
-                    show: true,
-                    color: daysRemaining > 0 ? 'amber lighten-1' : 'red lighten-1',
-                    dark: false
-                };
             }
-            if ( resumed === 1 && item.resumed_date) {
+            
+            if (resumed === 1 && item.resumed_date) {
                 return {
                     text: this.$t('Recruiting'),
                     detail: `(${this.formatDate(item.hold_date)} - ${this.$t('Resumed')}, ${this.formatDate(item.resumed_date)} - ${this.$t('hold')})`,
                     show: true,
-                    color: '#01a6be',
-                    dark: false
+                    color: '#2196F3', // Xanh dương tiêu chuẩn cho recruiting resumed
+                    dark: false,
                 };
             }
             
@@ -1409,17 +1413,17 @@ export default {
                     text: this.$t('Recruiting'),
                     detail: this.$t('#Change in hiring requirements'),
                     show: true,
-                    color: 'amber lighten-1',
-                    dark: false
-                    
+                    color: '#FFC107', // Vàng cho thay đổi yêu cầu tuyển dụng
+                    dark: false,
                 };
             }
+            
             return {
                 text: '',
                 detail: '',
                 show: false,
                 color: '',
-                dark: false
+                dark: false,
             };
         },
         async handleExpiredHold(item) {
@@ -2499,7 +2503,7 @@ export default {
         getStatusColor(status,item = {}) {
             
             switch (status) {
-               
+                
                 case "waiting_dept":
                 return "deep-orange";
                 case "waiting_div":
@@ -3306,7 +3310,8 @@ export default {
             "Name":"Name",
             "In date":"In date",
             "Resign date":"Resign date",
-            "Resign Listing Details":"Resign Listing Details"          
+            "Resign Listing Details":"Resign Listing Details",
+            "Cancelled":"Cancelled" 
             
         },
         "vi": {
@@ -3363,7 +3368,8 @@ export default {
             "Name":"Họ tên",
             "In date":"Ngày tuyển dụng",     
             "Resign date":"Ngày thôi việc",
-            "Resign Listing Details":"Chi tiết danh sách nghỉ việc"
+            "Resign Listing Details":"Chi tiết danh sách nghỉ việc",
+            "Cancelled":"Đã hủy"
         },
         "cn": {
             "ID": "表單編號",
@@ -3419,7 +3425,8 @@ export default {
             "Name": "姓名",
             "In date": "入职日期",
             "Resign date": "离职日期",
-            "Resign Listing Details": "离职列表详情"
+            "Resign Listing Details": "离职列表详情",
+            "Cancelled": "已取消"
         }
     }  
 </i18n>       

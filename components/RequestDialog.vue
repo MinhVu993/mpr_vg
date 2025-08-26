@@ -725,14 +725,14 @@ export default {
             flow_sign: [
             {
                 id: 1,
-                cn: "填表人➜ 單位主管➜ 部級主管 ➜ 處級主管 ➜ 人力資源部 (適用於越籍課長級(含)以下幹部/職員/工人)",
-                en: "Submitter ➜ Unit manager ➜ Department manager ➜ Division manager ➜ HR Department (Applicable to Vietnamese Section Chief level (inclusive) and below – Managers/Staff/Workers)",
+                cn: "填表人 ➜ 部級主管 ➜ 處級主管 ➜ 人力資源部 (適用於越籍課長級(含)以下幹部/職員/工人)",
+                en: "Submitter  ➜ Department manager ➜ Division manager ➜ HR Department (Applicable to Vietnamese Section Chief level (inclusive) and below – Managers/Staff/Workers)",
                 vi: "Người Điền Biểu ➜ Chủ Quản Đơn Vị ➜ Chủ quản bộ phận ➜ Chủ Quản Cấp Sở ➜ Bộ phận ADHR  (Áp dụng đối với CNV, cán bộ Việt Nam cấp Trưởng ngành trở xuống)",
             },
             {
                 id: 2,
                 cn: "填表人 ➜ 單位主管 ➜ 部級主管 ➜ 處級主管 ➜人力資源部 ➜ 管理處 ➜ 總經理室 (適用於越籍資深課長級(含)以上幹部)",
-                en: "Submitter ➜ Unit manager ➜ Department manager ➜ Division manager ➜ HR Department ➜ Management Department ➜ General Manager's Office (Applicable to Vietnamese Senior Section Chief level (inclusive) and above – Managers/Staff)",
+                en: "Submitter ➜ Department manager ➜ Division manager ➜ HR Department ➜ Management Department ➜ General Manager's Office (Applicable to Vietnamese Senior Section Chief level (inclusive) and above – Managers/Staff)",
                 vi: "Người Điền Biểu ➜ Chủ Quản Đơn Vị ➜ Chủ quản bộ phận ➜ Chủ Quản Cấp Sở ➜ Bộ phận ADHR ➜ Khu quản lý  ➜ Văn Phòng TGĐ (Áp dụng đối với cán bộ Việt Nam cấp Trưởng ngành thâm niên trở lên)",
             },
             ],
@@ -2444,7 +2444,6 @@ export default {
                 // If there are no existing records, create one
                 if (approvalRecords.length === 0) {
                     approvalRecords.push({
-                        unit: "",
                         dept: "",
                         div: "",
                         hr_rec_sf: "",
@@ -3346,13 +3345,12 @@ export default {
                 const currentApprovalRecord = approvalRecords.length > 0 ? approvalRecords[approvalRecords.length - 1] : {};
                 
                 const levelNames = {
-                    1: this.$t("Unit Manager"),
-                    2: this.$t("Department Manager"),
-                    3: this.$t("Division Manager"),
-                    4: this.$t("HR Recruitment Staff"),
-                    5: this.$t("HR Manager"),
-                    6: this.$t("AD Manager"),
-                    7: this.$t("GM Manager"),
+                    1: this.$t("Department Manager"),
+                    2: this.$t("Division Manager"),
+                    3: this.$t("HR Recruitment Staff"),
+                    4: this.$t("HR Manager"),
+                    5: this.$t("AD Manager"),
+                    6: this.$t("GM Manager"),
                 };
                 
                 return approvalArr .filter( (lv) => lv.status && ["waiting", "approved", "rejected"].includes(lv.status) )
