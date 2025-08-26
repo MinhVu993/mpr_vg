@@ -132,8 +132,8 @@ export default {
       img: ({ isDev }) => isDev ? '[path][name].[ext]' : 'img/[name].[contenthash:7].[ext]',
       font: ({ isDev }) => isDev ? '[path][name].[ext]' : 'fonts/[name].[contenthash:7].[ext]'
     },
-    // hotMiddleware: {
-    //   reload: false
-    // }
+    hotMiddleware: {
+      reload: false
+    }
   },
 };

@@ -1,4 +1,4 @@
-<template>
+ <template>
     <v-dialog v-model="dialog" fullscreen persistent hide-overlay>
         <v-card class="request-page">
             <v-toolbar dark color="#01a6be">
@@ -1528,17 +1528,17 @@ export default {
                 // Set status dựa trên loại request
                 if (isAmendmentRequest) {
                     // Amendment request - chỉ tạo status_amendent riêng
-                    formData.append("status_amendent", "waiting_unit");
+                    formData.append("status_amendent", "waiting_dept");
                     formData.append("is_amendment", "true");
                     // Giữ nguyên status gốc nếu đã tồn tại
                     if (this.editData && this.editData.status) {
                         formData.append("status", this.editData.status);
                     } else {
-                        formData.append("status", "waiting_unit");
+                        formData.append("status", "waiting_dept");
                     }
                 } else {
                     // Đơn thường
-                    formData.append("status", "waiting_unit");
+                    formData.append("status", "waiting_dept");
                     formData.append("is_amendment", "false");
                     formData.append("status_amendent", null);
                 }
@@ -1574,7 +1574,7 @@ export default {
                 formData.append("loc", this.activeUser.location);
                 formData.append("key_in_date", this.form.keyInDate);
                 formData.append("submitter", JSON.stringify(submitterData));
-                formData.append("status", "waiting_unit");
+                formData.append("status", "waiting_dept");
                 formData.append("supp_type", this.form.suppType);
                 
                 formData.append("edu", this.form.educationLevel);
@@ -1710,13 +1710,12 @@ export default {
                 formData.append('resumed_date', resumed_date);
                 
                 const defaultApproval = [
-                { level: 1, type: "unit", approver: { empno: "", name: "", dept: "" }, status: "waiting" },
-                { level: 2, type: "dept", approver: { empno: "", name: "", dept: "" }, status: "" },
-                { level: 3, type: "div", approver: { empno: "", name: "", dept: "" }, status: "" },
-                { level: 4, type: "hr_rec_sf", approver: { empno: "", name: "", dept: "" }, status: "" },
-                { level: 5, type: "hr", approver: { empno: "", name: "", dept: "" }, status: "" },
-                { level: 6, type: "ad", approver: { empno: "", name: "", dept: "" }, status: "" },
-                { level: 7, type: "gm", approver: { empno: "", name: "", dept: "" }, status: "" }
+                { level: 1, type: "dept", approver: { empno: "", name: "", dept: "" }, status: "waiting" },
+                { level: 2, type: "div", approver: { empno: "", name: "", dept: "" }, status: "" },
+                { level: 3, type: "hr_rec_sf", approver: { empno: "", name: "", dept: "" }, status: "" },
+                { level: 4, type: "hr", approver: { empno: "", name: "", dept: "" }, status: "" },
+                { level: 5, type: "ad", approver: { empno: "", name: "", dept: "" }, status: "" },
+                { level: 6, type: "gm", approver: { empno: "", name: "", dept: "" }, status: "" }
                 ];
                 if (!isAmendmentRequest) {
                     // Chỉ set approval cho đơn gốc
@@ -2416,7 +2415,6 @@ export default {
                 // Format approval record based on current level
                 const statusToLevel = {
                     // Original status levels
-                    waiting_unit: "unit",
                     waiting_dept: "dept", 
                     waiting_div: "div",
                     waiting_hr_rec_sf: "hr_rec_sf",
@@ -2618,7 +2616,7 @@ export default {
                 const response = await this.$axios.post(this.api + "returnRequest", {
                     id: this.editData.id,
                     reason: JSON.stringify(this.returnReason),
-                    returnToLevel: "waiting_unit",
+                    returnToLevel: "waiting_dept",
                     user_empno: this.activeUser.empno,
                     dataReq: {
                         dataFlow: this.dataFlow,
@@ -3163,13 +3161,12 @@ export default {
                 if (!this.dataFlow || !Array.isArray(this.dataFlow)) return false;
                 
                 const statusToLevel = {
-                    'waiting_unit': 0,
-                    'waiting_dept': 1,
-                    'waiting_div': 2,
-                    'waiting_hr_rec_sf': 3,
-                    'waiting_hr': 4,
-                    'waiting_ad': 5,
-                    'waiting_gm': 6
+                    'waiting_dept': 0,
+                    'waiting_div': 1,
+                    'waiting_hr_rec_sf': 2,
+                    'waiting_hr': 3,
+                    'waiting_ad': 4,
+                    'waiting_gm': 5
                 };
                 
                 let currentLevel;
@@ -3211,7 +3208,6 @@ export default {
             
             const currentStatus = this.editData.status;
             const levels = [
-            { value: "waiting_unit", text: this.$t("Unit Level") },
             { value: "waiting_dept", text: this.$t("Department Level") },
             { value: "waiting_div", text: this.$t("Division Level") },
             { value: "waiting_hr_rec_sf", text: this.$t("HR Rec SF Level") },
@@ -3221,13 +3217,12 @@ export default {
             ];
             
             const statusLevels = {
-                waiting_unit: 1,
-                waiting_dept: 2,
-                waiting_div: 3,
-                waiting_hr_rec_sf: 4,
-                waiting_hr: 5,
-                waiting_ad: 6,
-                waiting_gm: 7,
+                waiting_dept: 1,
+                waiting_div: 2,
+                waiting_hr_rec_sf: 3,
+                waiting_hr: 4,
+                waiting_ad: 5,
+                waiting_gm: 6,
             };
             const currentLevel = statusLevels[currentStatus] || 0;
             

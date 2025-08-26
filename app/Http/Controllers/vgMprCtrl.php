@@ -1994,39 +1994,29 @@ class vgMprCtrl extends Controller
                                                                 $groupedCandidates = $candidates->groupBy('emp_demandid');
                                                                 
                                                                 foreach ($groupedCandidates as $demandId => $candidateGroup) {
-                                                                    // Find corresponding MPR record
                                                                     $mpr = Mpr::find($demandId);
-                                                                    
                                                                     if (!$mpr) {
                                                                         continue;
                                                                     }
                                                                     
-                                                                    // Transform candidates data into required format
-                                                                    $formattedCandidates = $candidateGroup->map(function($candidate) {
+                                                                    $formattedCandidates = $candidateGroup->map(function($candidate) use ($mpr) {
                                                                         return [
                                                                             'empno' => $candidate->newEmpno,
                                                                             'date' => $candidate->act_en_date,
                                                                             'name' => $candidate->candidate_name,
                                                                             'key_in' => $candidate->key_in_date,
-                                                                            'position' => $candidate->position
+                                                                            'position' => $mpr->pos // Lấy từ pos của Mpr
                                                                         ];
                                                                     })->values()->toArray();
                                                                     
-                                                                    // Update MPR candidates field
                                                                     $mpr->candidates = json_encode($formattedCandidates);
-                                                                    
-                                                                    // Update recruited count
                                                                     $mpr->recruited = count($formattedCandidates);
                                                                     
-                                                                    // Calculate and update stocknumber
                                                                     $qtyReq = json_decode($mpr->qty_req, true);
                                                                     $totalQty = array_sum(array_filter($qtyReq));
                                                                     $mpr->stocknumber = $totalQty - $mpr->recruited;
-                                                                    
-                                                                    // Update fulfilled status
                                                                     $mpr->fulfilled = $mpr->stocknumber <= 0 ? 'yes' : 'no';
                                                                     
-                                                                    // Set fullfilldate if becoming fulfilled
                                                                     if ($mpr->stocknumber <= 0 && empty($mpr->fullfilldate)) {
                                                                         $mpr->fullfilldate = date('Y-m-d');
                                                                     }

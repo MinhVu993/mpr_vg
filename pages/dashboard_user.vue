@@ -1083,8 +1083,8 @@ export default {
                 result = result.filter(item => this.filterToDoData([item]).length > 0);
             } else if (this.statusFilter === 2) { 
                 result = result.filter(item => 
-                ['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
-                ['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)
+                ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
+                ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)
                 );
             } else if (this.statusFilter === 3) { 
                 result = result.filter(item => 
@@ -1248,8 +1248,8 @@ export default {
                 if (this.filterToDoData([item]).length > 0) {
                     todo++;
                 }
-                if (['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr', 'waiting_hr_rec_sf', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
-                ['waiting_unit', 'waiting_dept', 'waiting_div', 'waiting_hr', 'waiting_hr_rec_sf', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)) {
+                if (['waiting_dept', 'waiting_div', 'waiting_hr', 'waiting_hr_rec_sf', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
+                ['waiting_dept', 'waiting_div', 'waiting_hr', 'waiting_hr_rec_sf', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)) {
                     processing++;
                 }
                 if (item.status === 'completed' || item.status_amendent === 'completed') {
@@ -2329,7 +2329,6 @@ export default {
         },
         getApprovalLevelName(type) {
             const types = {
-                'unit': this.$t('Unit'),
                 'dept': this.$t('Dept'),
                 'div': this.$t('Div'),
                 'hr_rec_sf': this.$t('Hr Rec SF'),
@@ -2378,7 +2377,7 @@ export default {
                 if (!flowData) return false;
                 
                 const statusToLevelCode = {
-                    'waiting_unit': 'general_manager'
+                    'waiting_dept': 'general_manager'
                 };
                 
                 const currentLevelCode = statusToLevelCode[effectiveStatus];
@@ -2426,8 +2425,6 @@ export default {
             }
             const prefix = "🔄";
             switch (status) {
-                case "waiting_unit":
-                return prefix + this.$t("Pending Unit");
                 case "waiting_dept":
                 return prefix + this.$t("Pending Dept");
                 case "waiting_div":
@@ -2453,8 +2450,6 @@ export default {
         
         getAmendmentStatusColor(status) {
             switch (status) {
-                case "waiting_unit":
-                return "amber darken-1";
                 case "waiting_dept":
                 return "deep-orange darken-1";
                 case "waiting_div":
@@ -2481,8 +2476,6 @@ export default {
             switch (status) {
                 case "completed":
                 return this.$t("Approved");
-                case "waiting_unit":
-                return this.$t("Pending Unit");
                 case "waiting_dept":
                 return this.$t("Pending Dept");
                 case "waiting_div":
@@ -2506,8 +2499,7 @@ export default {
         getStatusColor(status,item = {}) {
             
             switch (status) {
-                case "waiting_unit":
-                return "amber darken-2";
+               
                 case "waiting_dept":
                 return "deep-orange";
                 case "waiting_div":
@@ -2541,14 +2533,13 @@ export default {
         },
         getCurrentLevel(status) {
             const statusLevels = {
-                'waiting_unit': 1,
-                'waiting_dept': 2,
-                'waiting_div': 3,
-                'waiting_hr_rec_sf': 4,
-                'waiting_hr': 5,
-                'waiting_ad': 6,
-                'waiting_gm': 7,
-                'completed': 8,
+                'waiting_dept': 1,
+                'waiting_div': 2,
+                'waiting_hr_rec_sf': 3,
+                'waiting_hr': 4,
+                'waiting_ad': 5,
+                'waiting_gm': 6,
+                'completed': 7,
                 'declined': 0
             };
             return statusLevels[status] || 0;
@@ -2577,7 +2568,7 @@ export default {
                 const response = await this.$axios.post(this.api + 'returnRequest', {
                     id: this.selectedItemForAction.id,
                     reason: this.returnReason,
-                    returnToLevel: 'waiting_unit', 
+                    returnToLevel: 'waiting_dept', 
                     user_empno: this.activeUser.empno,
                     dataReq: {
                         dataFlow: this.dataFlow,
@@ -2615,13 +2606,12 @@ export default {
                 }
                 
                 const statusLevels = {
-                    'waiting_unit': 0,
-                    'waiting_dept': 1,
-                    'waiting_div': 2,
-                    'waiting_hr_rec_sf': 3,
-                    'waiting_hr': 4,
-                    'waiting_ad': 5,
-                    'waiting_gm': 6
+                    'waiting_dept': 0,
+                    'waiting_div': 1,
+                    'waiting_hr_rec_sf': 2,
+                    'waiting_hr': 3,
+                    'waiting_ad': 4,
+                    'waiting_gm': 5
                 };
                 
                 // Determine which status to use for getting approver info
@@ -2691,13 +2681,12 @@ export default {
                 }
                 
                 const statusLevels = {
-                    'waiting_unit': 0,
-                    'waiting_dept': 1,
-                    'waiting_div': 2,
-                    'waiting_hr_rec_sf': 3,
-                    'waiting_hr': 4,
-                    'waiting_ad': 5,
-                    'waiting_gm': 6
+                    'waiting_dept': 0,
+                    'waiting_div': 1,
+                    'waiting_hr_rec_sf': 2,
+                    'waiting_hr': 3,
+                    'waiting_ad': 4,
+                    'waiting_gm': 5
                 };
                 
                 if (!statusLevels.hasOwnProperty(status)) return null;
@@ -2728,13 +2717,12 @@ export default {
                 }
                 
                 const statusLevels = {
-                    'waiting_unit': 0,
-                    'waiting_dept': 1,
-                    'waiting_div': 2,
-                    'waiting_hr_rec_sf': 3,
-                    'waiting_hr': 4,
-                    'waiting_ad': 5,
-                    'waiting_gm': 6
+                    'waiting_dept': 0,
+                    'waiting_div': 1,
+                    'waiting_hr_rec_sf': 2,
+                    'waiting_hr': 3,
+                    'waiting_ad': 4,
+                    'waiting_gm': 5
                 };
                 
                 if (!statusLevels.hasOwnProperty(status)) return null;
@@ -2765,13 +2753,12 @@ export default {
                 }
                 
                 const statusLevels = {
-                    'waiting_unit': 0,
-                    'waiting_dept': 1,
-                    'waiting_div': 2,
-                    'waiting_hr_rec_sf': 3,
-                    'waiting_hr': 4,
-                    'waiting_ad': 5,
-                    'waiting_gm': 6
+                    'waiting_dept': 0,
+                    'waiting_div': 1,
+                    'waiting_hr_rec_sf': 2,
+                    'waiting_hr': 3,
+                    'waiting_ad': 4,
+                    'waiting_gm': 5
                 };
                 
                 if (!statusLevels.hasOwnProperty(item.status)) return null;
@@ -2816,13 +2803,12 @@ export default {
                 }
                 
                 const statusLevels = {
-                    'waiting_unit': 0,
-                    'waiting_dept': 1,
-                    'waiting_div': 2,
-                    'waiting_hr_rec_sf': 3,
-                    'waiting_hr': 4,
-                    'waiting_ad': 5,
-                    'waiting_gm': 6
+                    'waiting_dept': 0,
+                    'waiting_div': 1,
+                    'waiting_hr_rec_sf': 2,
+                    'waiting_hr': 3,
+                    'waiting_ad': 4,
+                    'waiting_gm': 5
                 };
                 
                 if (!statusLevels.hasOwnProperty(item.status_amendent)) return null;
@@ -2926,7 +2912,6 @@ export default {
         
         getLevelName(status) {
             const levels = {
-                'waiting_unit': this.$t('Unit'),
                 'waiting_dept': this.$t('Department'),
                 'waiting_div': this.$t('Division'),
                 'waiting_hr_rec_sf': this.$t('HR Rec SF'),
@@ -3016,7 +3001,6 @@ export default {
         filterToDoData(data) {
             return data.filter(item => {
                 const waitingStates = [
-                'waiting_unit', 
                 'waiting_dept', 
                 'waiting_div',
                 'waiting_hr_rec_sf', 
@@ -3035,7 +3019,6 @@ export default {
                 if (!flowData || !this.activeUser) return false;
                 
                 const statusToLevelCode = {
-                    'waiting_unit': 'unit_manager',
                     'waiting_dept': 'dept_manager',
                     'waiting_div': 'division_manager',
                     'waiting_hr_rec_sf': 'hr_rec_sf',
