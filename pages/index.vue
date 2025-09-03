@@ -89,9 +89,9 @@
                 <DsFilter :name="$t('Submitted by')" :in-items="filterItems.submitter"
                 @changed="updateFilter('submitter', $event)" />
             </template>
-            <template #[`header.date_req`]>
-                <DsFilter :name="$t('Apply Date')" :in-items="filterItems.date_req"
-                @changed="updateFilter('date_req', $event)" />
+            <template #[`header.key_in_date`]>
+                <DsFilter :name="$t('Apply Date')" :in-items="filterItems.key_in_date"
+                @changed="updateFilter('key_in_date', $event)" />
             </template>
             <template #[`header.unit`]>
                 <DsFilter :name="$t('Unit code')" :in-items="filterItems.unit"
@@ -208,13 +208,8 @@
         {{ item.resign || 0 }}
     </div>
 </template>
-
-<!-- <template v-slot:[`item.resign`]="{ item }">
-    {{ item.resign || 0 }}
-</template> -->
 <template v-slot:[`item.status`]="{ item }">
     <div class="d-flex align-center flex-wrap">
-        <!-- Main Status Chip with Tooltip -->
         <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
             <template v-slot:activator="{ on, attrs }">
                 <v-chip 
@@ -462,7 +457,7 @@
                 <v-expansion-panel v-for="(cycle, cycleIndex) in groupedApprovalData" :key="cycleIndex" :value="cycleIndex === 0" >
                     <v-expansion-panel-header>
                         <div class="d-flex align-center">
-                            <v-chip label outlined :color="getCycleColor(cycleIndex + 1)" dark class="mr-4" >
+                            <v-chip label outlined :color="getCycleColor(cycleIndex + 1)" class="mr-4" >
                                 {{ $t('Cycle') }} {{ cycleIndex + 1 }}
                             </v-chip>
                         </div>
@@ -924,15 +919,15 @@ export default {
         groupedApprovalData() {
             try {
                 const grouped = {};
-                
                 this.selectedApprovalData.forEach(item => {
-                    if (item.cycleIndex && item.cycleIndex !== 'current') {
+                    if (item.cycleIndex && 
+                    item.cycleIndex !== 'current' && 
+                    typeof item.cycleIndex === 'number') { // Đảm bảo là số, không phải string
+                        
                         const cycleIndex = item.cycleIndex - 1;
                         if (!grouped[cycleIndex]) {
                             grouped[cycleIndex] = [];
                         }
-                        
-                        // Parse return_reason
                         let returnReasonText = '';
                         if (item.return_reason) {
                             try {
@@ -944,7 +939,6 @@ export default {
                             }
                         }
                         
-                        // Parse reason_denied
                         let reasonDeniedText = '';
                         if (item.reason_denied) {
                             try {
@@ -965,7 +959,7 @@ export default {
                     }
                 });
                 
-                // Sắp xếp các item trong mỗi cycle theo level
+                // Sắp xếp từng nhóm theo level
                 Object.keys(grouped).forEach(cycleIndex => {
                     grouped[cycleIndex].sort((a, b) => a.level - b.level);
                 });
@@ -980,9 +974,6 @@ export default {
             return this.hasTodoData ? 1 : 0;
         },
         hasTodoData() {
-            // return this.dataFilteredByYear.some(item => {
-            //     return this.canApproveItemForTodo(item);
-            // });
             if (!this.generalFlowData && Object.keys(this.approvalFlowCache).length === 0) {
                 return false;
             }
@@ -1111,7 +1102,7 @@ export default {
                     qtyInfo: {
                         total: this.getDisplayQuantity(item.qty_req),
                         details: typeof qtyReq === 'object' ?
-                        `Workers: ${qtyReq.workers || 0}, Staff: ${qtyReq.staff || 0}, Staff_lang: ${qtyReq.staff_lang || 0}, Engineers: ${qtyReq.engineers || 0}, Leader: ${qtyReq.leader || 0}, Tranlator: ${qtyReq.tranlator || 0}`:qtyReq.toString()
+                        `Workers: ${qtyReq.workers || 0}, Staff: ${qtyReq.staff || 0}, Engineers: ${qtyReq.engineers || 0}, Leader: ${qtyReq.leader || 0}, Tranlator: ${qtyReq.tranlator || 0}`:qtyReq.toString()
                     },
                     positions,
                     officerLevel
@@ -1246,13 +1237,14 @@ export default {
                     (item.unit || '').toLowerCase().includes(searchTerm) ||
                     (item.division || '').toLowerCase().includes(searchTerm) ||
                     this.getPositionName(item.pos).toLowerCase().includes(searchTerm) ||
+                    (item.language || '').toLowerCase().includes(searchTerm) ||
                     (item.reason || '').toLowerCase().includes(searchTerm) ||
                     this.getStatusText(item.status).toLowerCase().includes(searchTerm) ||
                     this.getStatusText(item.status_amendent).toLowerCase().includes(searchTerm) ||
-                    (item.recruited || '').toString().toLowerCase().includes(searchTerm) || 
-                    (item.resign || '').toString().toLowerCase().includes(searchTerm) ||
-                    (item.qtyInfo.total || '').toString().toLowerCase().includes(searchTerm) ||
-                    (item.qtyInfo.details || '').toLowerCase().includes(searchTerm) ||
+                    String(item.recruited || '').toLowerCase().includes(searchTerm) || 
+                    String(item.resign || '').toLowerCase().includes(searchTerm) ||
+                    String(item.qtyInfo?.total || '').toLowerCase().includes(searchTerm) ||
+                    String(item.qtyInfo?.details || '').toLowerCase().includes(searchTerm) ||
                     (item.sub_pos ? this.getSubPositionName(item.sub_pos, true).toLowerCase().includes(searchTerm) : false)
                     );
                 });
@@ -1455,6 +1447,14 @@ export default {
             }
             
             if (status === 'completed' && statusAmendent !== 'completed') {
+                return {
+                    text: this.$t('Recruiting'),
+                    show: true,
+                    color: '#43A047',
+                    dark: false,
+                };
+            }
+            if (status === 'completed' && statusAmendent === 'completed') {
                 return {
                     text: this.$t('Recruiting'),
                     show: true,
@@ -1699,7 +1699,7 @@ export default {
             return [
             { text: 'ID', value: 'req_id',align: 'center' },
             { text: 'Submitted by', value: 'submitter',},
-            { text: 'Apply Date', value: 'date_req',},
+            { text: 'Apply Date', value: 'key_in_date',},
             { text: 'Unit code', value: 'unit',  },
             { text: 'Unit Name', value: 'unit_name', },
             { text: 'Position', value: 'pos',  },
@@ -2062,9 +2062,9 @@ export default {
                         const denyTempData = JSON.parse(item.deny_temp);
                         // Nếu có deny_temp và status_amendent='completed', sử dụng recruited từ deny_temp hoặc recruited từ item
                         if (denyTempData.recruited !== undefined) {
-                            return parseInt(denyTempData.recruited) || 0;
+                            return parseInt(denyTempData.recruited);
                         } else if (item.recruited !== undefined) {
-                            return parseInt(item.recruited) || 0;
+                            return parseInt(item.recruited);
                         }
                     } catch (error) {
                         console.error('Error parsing deny_temp for quantity display:', error);
@@ -2072,26 +2072,24 @@ export default {
                 }
                 
                 // Logic cũ cho trường hợp bình thường
-                if (this.hasQuantityChange({qty_req: qtyReq, change_req: item?.change_req})) {
-                    return parseInt(this.getChangeQuantity({qty_req: qtyReq, change_req: item?.change_req})) || 0;
-                }
-                
+                // if (this.hasQuantityChange({qty_req: qtyReq, change_req: item?.change_req})) {
+                //     return parseInt(this.getChangeQuantity({qty_req: qtyReq, change_req: item?.change_req}));
+                // }
                 if (typeof qtyReq === 'string') {
                     if (qtyReq.startsWith('{')) {
                         const qtyData = JSON.parse(qtyReq);
                         return (
-                        parseInt(qtyData.workers || 0) +
-                        parseInt(qtyData.staff || 0) +
-                        parseInt(qtyData.staff_lang || 0) +
-                        parseInt(qtyData.engineers || 0) +
-                        parseInt(qtyData.leader || 0) +
-                        parseInt(qtyData.tranlator || 0)
+                        parseInt(qtyData.workers) +
+                        parseInt(qtyData.staff) +
+                        parseInt(qtyData.engineers) +
+                        parseInt(qtyData.leader) +
+                        parseInt(qtyData.tranlator)
                         );
                     } else {
-                        return parseInt(qtyReq) || 0;
+                        return parseInt(qtyReq);
                     }
                 }
-                return parseInt(qtyReq) || 0;
+                return parseInt(qtyReq);
             } catch (e) {
                 console.error("Error parsing quantity:", e);
                 return 0;
@@ -2990,14 +2988,17 @@ export default {
         
         async openApprovalDetails(item) {
             try {
-                this.selectedApprovalData = this.getApprovalLogsData(item);
                 this.selectedItem = item;
+                // Lấy dữ liệu lịch sử từ logs
+                this.selectedApprovalData = this.getApprovalLogsData(item);
+                // Sắp xếp dữ liệu lịch sử
                 this.selectedApprovalData.sort((a, b) => {
                     if (a.cycleIndex !== b.cycleIndex) {
                         return a.cycleIndex - b.cycleIndex;
                     }
                     return a.level - b.level;
                 });
+                
                 this.approvalDialog = true;
             } catch (error) {
                 console.error('Error opening approval details:', error);
@@ -3007,6 +3008,8 @@ export default {
         getApprovalLogsData(item) {
             try {
                 let logsData = [];
+                
+                // Chỉ xử lý dữ liệu từ logs (lịch sử)
                 if (item.logs) {
                     const parsedLogs = JSON.parse(item.logs);
                     const approvalRecords = item.approval_record ? JSON.parse(item.approval_record) : [];
@@ -3017,8 +3020,7 @@ export default {
                             const cycleData = cycle
                             .filter(log => log.approver && log.approver.empno)
                             .map((log, index) => {
-                                // Get the specific approval record for this level and cycle
-                                const recordKey = log.type; // e.g., 'unit', 'dept', etc.
+                                const recordKey = log.type;
                                 const approvalRecord = cycleApprovalRecord[recordKey] || '';
                                 
                                 return {
@@ -3033,13 +3035,13 @@ export default {
                                     return_reason: log.return_reason || '',
                                     approval_record: approvalRecord,
                                     processed_at: log.processed_at,
-                                    cycleIndex: cycleIndex + 1,
+                                    cycleIndex: cycleIndex + 1, // Quan trọng: đảm bảo đây là số
                                 };
                             });
                             logsData = [...logsData, ...cycleData];
                         });
-                    } 
-                } 
+                    }
+                }
                 
                 return logsData;
             } catch (error) {
@@ -3049,14 +3051,22 @@ export default {
         },
         getReturnInfo(item) {
             if (!item.approval) return { returned: false, reason: '' };
-            
             try {
                 const approvalData = JSON.parse(item.approval);
+                
                 const returnedLevel = approvalData.find(level => level.status === 'returned');
+                
                 if (returnedLevel && returnedLevel.return_reason) {
+                    let reason = returnedLevel.return_reason;
+                    try {
+                        const reasonObj = JSON.parse(reason);
+                        const currentLang = this.$i18n?.locale || 'vi'; // hoặc lấy từ localStorage, config
+                        reason = reasonObj[currentLang] || reasonObj['vi'] || '';
+                    } catch (e) {
+                    }
                     return {
                         returned: true,
-                        reason: returnedLevel.return_reason,
+                        reason,
                         level: returnedLevel.level
                     };
                 }
@@ -3252,6 +3262,10 @@ export default {
                             case 'pos':
                             row[header.title] = this.getPositionName(item.pos);
                             break;
+                            case 'sub_pos':
+                            // Thêm case mới cho sub_pos
+                            row[header.title] = this.getSubPositionName(item.sub_pos, true);
+                            break;
                             case 'qty_req':
                             row[header.title] = this.getDisplayQuantity(item.qty_req);
                             break;
@@ -3274,6 +3288,7 @@ export default {
                 const date = new Date().toISOString().split('T')[0];
                 const fileName = `Manpower_Requests_${date}.xlsx`;
                 XLSX.writeFile(wb, fileName);
+                
                 this.$notify({
                     title: this.$t('Success'),
                     text: this.$t('Export successful'),
@@ -3523,7 +3538,7 @@ export default {
             "In date":"In date",
             "Resign date":"Resign date",
             "Resign Listing Details":"Resign Listing Details",
-             "Cancelled":"Cancelled"    
+            "Cancelled":"Cancelled"    
         },
         "vi": {
             "ID": "ID",
@@ -3637,7 +3652,7 @@ export default {
             "Applicant": "申請人",
             "Search": "搜索",
             "Export": "導出",
-            "remaining": "天数",
+            "remaining": "剩餘天數",
             "Hold period expired": "暂停期已过",
             "days": "天",
             "Approval History":"审批历史",

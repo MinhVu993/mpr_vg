@@ -49,7 +49,7 @@
             <v-app-bar-nav-icon @click.stop="drawer = !drawer" />
             <v-toolbar-title v-text="$t('appName')" />
             <v-chip class="ma-2" color="white" label small outlined @click:close="chip4 = false">
-                V.1.0
+                V.1.1
             </v-chip>
             <v-spacer />
             <v-btn @click="locale('vi')" text>VI</v-btn>

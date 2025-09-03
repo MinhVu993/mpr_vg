@@ -90,9 +90,9 @@
                 <DsFilter :name="$t('Submitted by')" :in-items="filterItems.submitter"
                 @changed="updateFilter('submitter', $event)" />
             </template>
-            <template #[`header.date_req`]>
-                <DsFilter :name="$t('Apply Date')" :in-items="filterItems.date_req"
-                @changed="updateFilter('date_req', $event)" />
+            <template #[`header.key_in_date`]>
+                <DsFilter :name="$t('Apply Date')" :in-items="filterItems.key_in_date"
+                @changed="updateFilter('key_in_date', $event)" />
             </template>
             <template #[`header.unit`]>
                 <DsFilter :name="$t('Unit code')" :in-items="filterItems.unit"
@@ -201,14 +201,15 @@
 </template>
 <template v-slot:[`item.status`]="{ item }">
     <div class="d-flex align-center flex-wrap">
+        <!-- Main Status Chip with Tooltip -->
         <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
             <template v-slot:activator="{ on, attrs }">
                 <v-chip 
                 v-if="item.status" 
                 label 
+                outlined
                 :color="getStatusColor(item.status, item)" 
                 small 
-                outlined
                 dark
                 v-bind="attrs" 
                 v-on="on" 
@@ -250,9 +251,7 @@
         {{ getNextApproverInfoForAmendment(item) }}
     </span>
 </v-tooltip>
-<!-- <v-icon x-small color="warning" v-if="getReturnInfo(item).returned" class="ml-1">
-    mdi-undo
-</v-icon> -->
+
 </div>
 </template>
 
@@ -436,7 +435,7 @@
                 <v-expansion-panel v-for="(cycle, cycleIndex) in groupedApprovalData" :key="cycleIndex" :value="cycleIndex === 0" >
                     <v-expansion-panel-header>
                         <div class="d-flex align-center">
-                            <v-chip label outlined :color="getCycleColor(cycleIndex + 1)" dark class="mr-4" >
+                            <v-chip label outlined :color="getCycleColor(cycleIndex + 1)" class="mr-4" >
                                 {{ $t('Cycle') }} {{ cycleIndex + 1 }}
                             </v-chip>
                         </div>
@@ -817,6 +816,8 @@ export default {
             try {
                 if (!this.selectedItem?.approval) return [];
                 const approvalData = JSON.parse(this.selectedItem.approval);
+                // console.log(approvalData);
+                
                 let currentApprovalRecord = {};
                 
                 if (this.selectedItem.approval_record) {
@@ -1147,7 +1148,7 @@ export default {
             });
             
             // Áp dụng tìm kiếm text nếu có
-            if (this.search) {
+           if (this.search) {
                 const searchTerm = this.search.toLowerCase();
                 result = result.filter(item => {
                     return (
@@ -1162,12 +1163,13 @@ export default {
                     (item.reason || '').toLowerCase().includes(searchTerm) ||
                     this.getStatusText(item.status).toLowerCase().includes(searchTerm) ||
                     this.getStatusText(item.status_amendent).toLowerCase().includes(searchTerm) ||
-                    (item.recruited || '').toLowerCase().includes(searchTerm) || 
-                    (item.resign || '').toLowerCase().includes(searchTerm) ||
-                    (item.qtyInfo.total || '').toLowerCase().includes(searchTerm) ||
-                    (item.qtyInfo.details || '').toLowerCase().includes(searchTerm)
+                    String(item.recruited || '').toLowerCase().includes(searchTerm) || 
+                    String(item.resign || '').toLowerCase().includes(searchTerm) ||
+                    String(item.qtyInfo?.total || '').toLowerCase().includes(searchTerm) ||
+                    String(item.qtyInfo?.details || '').toLowerCase().includes(searchTerm)
                     );
                 });
+            
             }
             
             return result;
@@ -1274,6 +1276,21 @@ export default {
         },
     },
     methods: {
+        calculateDaysRemaining(holdDate) {
+            const hold = new Date(holdDate);
+            const holdDateOnly = new Date(hold.getFullYear(), hold.getMonth(), hold.getDate());
+            
+            const deadline = new Date(holdDateOnly);
+            deadline.setDate(deadline.getDate() + 90);
+            deadline.setHours(23, 59, 59, 999);
+            
+            const today = new Date();
+            const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            
+            // Calculate remaining days
+            const remaining = Math.ceil((deadline - todayDateOnly) / (1000 * 60 * 60 * 24));
+            return remaining;
+        },
         getLocalizedOtherReason(otherReason) {
             try {
                 // Nếu otherReason là string JSON
@@ -1339,6 +1356,14 @@ export default {
             }
             
             if (status === 'completed' && statusAmendent !== 'completed') {
+                return {
+                    text: this.$t('Recruiting'),
+                    show: true,
+                    color: '#43A047',
+                    dark: false,
+                };
+            }
+            if (status === 'completed' && statusAmendent == 'completed') {
                 return {
                     text: this.$t('Recruiting'),
                     show: true,
@@ -1551,7 +1576,7 @@ export default {
         getApproverHeaders() {
             return [
             { text: 'ID', value: 'req_id',align: 'center' },
-            { text: 'Apply Date', value: 'date_req' },
+            { text: 'Apply Date', value: 'key_in_date',},
             { text: 'Unit code', value: 'unit', },
             { text: 'Unit Name', value: 'unit_name', },
             { text: 'Position', value: 'pos', },
@@ -1837,7 +1862,6 @@ export default {
                 return searchFields.some(matchesSearchTerm) ||
                 (item.submiterInfo?.name || '').toLowerCase().includes(searchTerm) ||
                 this.getPositionName(item.pos).toLowerCase().includes(searchTerm) || // Kiểm tra vị trí chính
-                (item.sub_pos ? this.getSubPositionName(item.sub_pos, true).toLowerCase().includes(searchTerm) : false) || // Kiểm tra sub position
                 (item.computerSkillsInfo?.selected && Array.isArray(item.computerSkillsInfo.selected) && 
                 item.computerSkillsInfo.selected.join(', ').toLowerCase().includes(searchTerm)) ||
                 this.getStatusText(item.status).toLowerCase().includes(searchTerm) ||
@@ -1935,9 +1959,9 @@ export default {
                     }
                 }
                 
-                if (this.hasQuantityChange({qty_req: qtyReq, change_req: item?.change_req})) {
-                    return parseInt(this.getChangeQuantity({qty_req: qtyReq, change_req: item?.change_req})) || 0;
-                }
+                // if (this.hasQuantityChange({qty_req: qtyReq, change_req: item?.change_req})) {
+                //     return parseInt(this.getChangeQuantity({qty_req: qtyReq, change_req: item?.change_req})) || 0;
+                // }
                 
                 if (typeof qtyReq === 'string') {
                     if (qtyReq.startsWith('{')) {
@@ -2315,14 +2339,21 @@ export default {
         },
         getReturnInfo(item) {
             if (!item.approval) return { returned: false, reason: '' };
-            
             try {
                 const approvalData = JSON.parse(item.approval);
                 const returnedLevel = approvalData.find(level => level.status === 'returned');
+                
                 if (returnedLevel && returnedLevel.return_reason) {
+                    let reason = returnedLevel.return_reason;
+                    try {
+                        const reasonObj = JSON.parse(reason);
+                        const currentLang = this.$i18n?.locale || 'vi'; // hoặc lấy từ localStorage, config
+                        reason = reasonObj[currentLang] || reasonObj['vi'] || '';
+                    } catch (e) {
+                    }
                     return {
                         returned: true,
-                        reason: returnedLevel.return_reason,
+                        reason,
                         level: returnedLevel.level
                     };
                 }
@@ -2925,24 +2956,24 @@ export default {
             };
             return levels[status] || this.$t('Unknown');
         },
-        getReturnInfo(item) {
-            if (!item.approval) return { returned: false, reason: '' };
+        // getReturnInfo(item) {
+        //     if (!item.approval) return { returned: false, reason: '' };
             
-            try {
-                const approvalData = JSON.parse(item.approval);
-                const returnedLevel = approvalData.find(level => level.status === 'returned');
-                if (returnedLevel && returnedLevel.return_reason) {
-                    return {
-                        returned: true,
-                        reason: returnedLevel.return_reason,
-                        level: returnedLevel.level
-                    };
-                }
-            } catch (error) {
-                console.error('Error parsing approval data:', error);
-            }
-            return { returned: false, reason: '' };
-        },
+        //     try {
+        //         const approvalData = JSON.parse(item.approval);
+        //         const returnedLevel = approvalData.find(level => level.status === 'returned');
+        //         if (returnedLevel && returnedLevel.return_reason) {
+        //             return {
+        //                 returned: true,
+        //                 reason: returnedLevel.return_reason,
+        //                 level: returnedLevel.level
+        //             };
+        //         }
+        //     } catch (error) {
+        //         console.error('Error parsing approval data:', error);
+        //     }
+        //     return { returned: false, reason: '' };
+        // },
         getRejectionReason(item) {
             if (!item.approval) return '';
             try {
@@ -3095,69 +3126,69 @@ export default {
             
         },
         async exportExcel() {
-            try {
-                const headers = this.originalHeaders
-                .filter(header => header.value !== 'select' && header.value !== 'action')
-                .map(header => ({
-                    title: this.$t(header.text),
-                    key: header.value
-                }));
-                
-                const data = this.filteredData.map(item => {
-                    const row = {};
-                    headers.forEach(header => {
-                        switch (header.key) {
-                            case 'submitter':
-                            row[header.title] = item.submiterInfo ? 
-                            `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';
-                            break;
-                            case 'status':
-                            row[header.title] = this.$t(this.getStatusText(item.status, item));
-                            break;
-                            case 'pos':
-                            row[header.title] = this.getPositionName(item.pos);
-                            break;
-                            case 'qty_req':
-                            row[header.title] = this.getDisplayQuantity(item.qty_req);
-                            break;
-                            case 'date_req':
-                            case 'key_in_date':
-                            row[header.title] = this.formatDate(item[header.key]);
-                            break;
-                            default:
-                            row[header.title] = item[header.key];
-                        }
-                    });
-                    return row;
-                });
-                
-                const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.json_to_sheet(data);
-                
-                const colWidths = headers.map(() => ({ wch: 20 }));
-                ws['!cols'] = colWidths;
-                
-                XLSX.utils.book_append_sheet(wb, ws, 'Manpower Requests');
-                
-                const date = new Date().toISOString().split('T')[0];
-                const fileName = `Manpower_Requests_${date}.xlsx`;
-                
-                XLSX.writeFile(wb, fileName);
-                
-                this.$notify({
-                    title: this.$t('Success'),
-                    text: this.$t('Export successful'),
-                    type: 'success'
-                });
-            } catch (error) {
-                console.error('Export error:', error);
-                this.$notify({
-                    title: this.$t('Error'),
-                    text: this.$t('Export failed'),
-                    type: 'error'
-                });
-            }
-        },
+    try {
+        const headers = this.originalHeaders
+        .filter(header => header.value !== 'select' && header.value !== 'action')
+        .map(header => ({
+            title: this.$t(header.text),
+            key: header.value
+        }));
+        
+        const data = this.filteredData.map(item => {
+            const row = {};
+            headers.forEach(header => {
+                switch (header.key) {
+                    case 'submitter':
+                        row[header.title] = item.submiterInfo ? 
+                        `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';
+                        break;
+                    case 'status':
+                        row[header.title] = this.$t(this.getStatusText(item.status, item));
+                        break;
+                    case 'pos':
+                        row[header.title] = this.getPositionName(item.pos);
+                        break;
+                    case 'sub_pos':
+                        // Thêm case mới cho sub_pos
+                        row[header.title] = this.getSubPositionName(item.sub_pos, true);
+                        break;
+                    case 'qty_req':
+                        row[header.title] = this.getDisplayQuantity(item.qty_req);
+                        break;
+                    case 'date_req':
+                    case 'key_in_date':
+                        row[header.title] = this.formatDate(item[header.key]);
+                        break;
+                    default:
+                        row[header.title] = item[header.key];
+                }
+            });
+            return row;
+        });
+        
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(data);
+        const colWidths = headers.map(() => ({ wch: 20 }));
+        ws['!cols'] = colWidths;
+        XLSX.utils.book_append_sheet(wb, ws, 'Manpower Requests');
+        const date = new Date().toISOString().split('T')[0];
+        const fileName = `Manpower_Requests_${date}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+        
+        this.$notify({
+            title: this.$t('Success'),
+            text: this.$t('Export successful'),
+            type: 'success'
+        });
+    } catch (error) {
+        console.error('Export error:', error);
+        this.$notify({
+            title: this.$t('Error'),
+            text: this.$t('Export failed'),
+            type: 'error'
+        });
+    }
+},
         updateFilter(key, value) {
             if (value && value.length) {
                 this.$set(this.filterValues, key, value);
@@ -3311,7 +3342,9 @@ export default {
             "In date":"In date",
             "Resign date":"Resign date",
             "Resign Listing Details":"Resign Listing Details",
-            "Cancelled":"Cancelled" 
+            "Cancelled":"Cancelled",
+             "days": "days",
+            "remaining": "remaining"
             
         },
         "vi": {
@@ -3369,7 +3402,9 @@ export default {
             "In date":"Ngày tuyển dụng",     
             "Resign date":"Ngày thôi việc",
             "Resign Listing Details":"Chi tiết danh sách nghỉ việc",
-            "Cancelled":"Đã hủy"
+            "Cancelled":"Đã hủy",
+             "days": "ngày",
+             "remaining": "còn lại"
         },
         "cn": {
             "ID": "表單編號",
@@ -3426,7 +3461,9 @@ export default {
             "In date": "入职日期",
             "Resign date": "离职日期",
             "Resign Listing Details": "离职列表详情",
-            "Cancelled": "已取消"
+            "Cancelled": "已取消",
+            "days": "天",
+            "remaining": "剩餘天數"
         }
     }  
 </i18n>       

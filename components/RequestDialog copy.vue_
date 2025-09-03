@@ -1,4 +1,4 @@
-<template>
+ <template>
     <v-dialog v-model="dialog" fullscreen persistent hide-overlay>
         <v-card class="request-page">
             <v-toolbar dark color="#01a6be">
@@ -13,7 +13,9 @@
                     <v-btn @click="handleLanguageChange('en')" text class="mr-5" >EN</v-btn >
                     </v-toolbar-items>
                 </v-toolbar>
-                <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :key="flowKey" :appCode="form.suppType === 1 ? 'mpr_flow2' : 'mpr'" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow" class="mb-2" ></VfaAppFlow>
+                <!-- <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :key="flowKey" :appCode="form.suppType === 1 ? 'mpr_flow2' : 'mpr'" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow" class="mb-2" ></VfaAppFlow> -->
+                <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :key="flowKey" :appCode="getAppCode" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow" class="mb-2" ></VfaAppFlow>
+                
                 <v-app-bar v-if="showFlowSign" class="flow-sign-container mb-3" flat dense >
                     <v-icon color="info" class="mr-2">mdi-information-outline</v-icon>
                     <div class="flow-sign-text text-subtitle-2">
@@ -107,14 +109,14 @@
                             <v-text-field disabled :value="displayReqId" :label="$t('Req ID')" outlined dense hide-details ></v-text-field>
                         </v-col>
                         <v-col cols="1">
-                            <v-autocomplete :disabled="formDisabled" v-model="user.div" :items="itemsDiv" :label="$t('Division') + '*'" outlined :required="true" :rules="[rules.required]" dense hide-details ></v-autocomplete>
+                            <v-autocomplete :disabled="formDisabled" v-model="user.div" :items="itemsDiv" :label="$t('Division') " outlined :required="true" :rules="[rules.required]" dense hide-details ></v-autocomplete>
                         </v-col>
                         
                         <v-col cols="2">
-                            <v-autocomplete :disabled="formDisabled" v-model="user.dept" :items="itemsDept" :label="$t('Dept') + '*'" outlined dense :rules="[rules.required]" required hide-details clearable ></v-autocomplete>
+                            <v-autocomplete :disabled="formDisabled" v-model="user.dept" :items="itemsDept" :label="$t('Dept') " outlined dense :rules="[rules.required]" required hide-details clearable ></v-autocomplete>
                         </v-col>
                         <v-col cols="1" md="2">
-                            <v-autocomplete :disabled="formDisabled" v-model="user.unit" :items="itemUnits" :label="$t('Unit') + '*'" outlined dense :rules="[rules.required]" required hide-details clearable ></v-autocomplete>
+                            <v-autocomplete :disabled="formDisabled" v-model="user.unit" :items="itemUnits" :label="$t('Unit') " outlined dense :rules="[rules.required]" required hide-details clearable ></v-autocomplete>
                         </v-col>
                         <v-col cols="12" md="3">
                             <v-autocomplete :disabled="formDisabled" v-model="form.suppType" :items="suppTypeItems" :label="$t('Supp.Type')" :rules="[rules.required]" required item-text="name" item-value="id" outlined dense hide-details clearable ></v-autocomplete>
@@ -128,17 +130,28 @@
                     </v-row>
                     <v-row>
                         <v-col cols="1" md="1">
-                            <v-text-field :disabled="formDisabled" v-model="form.quantity" :label="$t('Quantity request') + '*'" type="number" min="1" :rules="[rules.required]" outlined dense hide-details="auto" required @input="(val) => (form.quantity = val > 0 ? val : '')" ></v-text-field>
+                            <v-text-field :disabled="formDisabled" v-model="form.quantity" :label="$t('Quantity request') " type="number" min="1" :rules="[rules.required]" outlined dense hide-details="auto" required @input="(val) => (form.quantity = val > 0 ? val : '')" ></v-text-field>
                         </v-col>
                         <v-col cols="2" md="2">
-                            <v-menu v-model="dateRequestMenu" :close-on-content-click="false" transition="scale-transition" offset-y >
+                            <v-menu v-model="dateRequestMenu" :close-on-content-click="false" transition="scale-transition" offset-y>
                                 <template v-slot:activator="{ on, attrs }">
-                                    <v-text-field :disabled="formDisabled" v-model="form.recruitment.requestDate" :label="$t('Req.date')" readonly outlined dense v-bind="attrs" v-on="on" hide-details prepend-inner-icon="mdi-calendar" ></v-text-field>
+                                    <v-text-field
+                                    :disabled="formDisabled"
+                                    v-model="form.recruitment.requestDate"
+                                    :label="$t('Req.date')"
+                                    readonly
+                                    outlined
+                                    dense
+                                    v-bind="attrs"
+                                    v-on="on"
+                                    hide-details
+                                    prepend-inner-icon="mdi-calendar"
+                                    ></v-text-field>
                                 </template>
                                 <v-date-picker
                                 v-model="form.recruitment.requestDate"
                                 @input="dateRequestMenu = false"
-                                :min="getCurrentDate()"
+                                :min="getEffectiveDate()"
                                 ></v-date-picker>
                             </v-menu>
                         </v-col>
@@ -162,7 +175,63 @@
                                     <v-text-field :disabled="formDisabled" v-model="form.recruitment.oldempno" :label="$t('Old empno')" outlined dense hide-details></v-text-field>
                                 </v-col>
                                 <v-col cols="12" v-if="form.recruitment.reason === 3"> <!-- For other -->
-                                    <v-textarea :disabled="formDisabled" v-model="form.recruitment.isOther_reason" :label="$t('Other reason')" outlined auto-grow rows="1" dense hide-details></v-textarea>
+                                    <v-card outlined class="pa-0">
+                                        <v-tabs v-model="otherReasonTab" background-color="#01a6be" dark show-arrows>
+                                            <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> Tiếng Việt </v-tab>
+                                            <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> English </v-tab>
+                                            <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> 中文 </v-tab>
+                                        </v-tabs>
+                                        
+                                        <v-tabs-items v-model="otherReasonTab" class="mt-2">
+                                            <v-tab-item>
+                                                <v-textarea
+                                                :disabled="formDisabled"
+                                                v-model="form.recruitment.isOther_reason.vi"
+                                                outlined
+                                                auto-grow
+                                                rows="2"
+                                                :rules="[rules.required]"
+                                                :error-messages="!form.recruitment.isOther_reason.vi ? $t('This field is required') : ''"
+                                                placeholder="Nhập lý do bằng tiếng Việt..."
+                                                background-color="grey lighten-5"
+                                                class="other-reason-textarea"
+                                                required
+                                                ></v-textarea>
+                                            </v-tab-item>
+                                            
+                                            <v-tab-item>
+                                                <v-textarea
+                                                :disabled="formDisabled"
+                                                v-model="form.recruitment.isOther_reason.en" 
+                                                outlined
+                                                auto-grow
+                                                rows="2"
+                                                :rules="[rules.required]"
+                                                :error-messages="!form.recruitment.isOther_reason.en ? $t('This field is required') : ''"
+                                                placeholder="Enter reason in English..."
+                                                background-color="grey lighten-5"
+                                                class="other-reason-textarea"
+                                                required
+                                                ></v-textarea>
+                                            </v-tab-item>
+                                            
+                                            <v-tab-item>
+                                                <v-textarea
+                                                :disabled="formDisabled"
+                                                v-model="form.recruitment.isOther_reason.cn"
+                                                outlined
+                                                auto-grow
+                                                rows="2"
+                                                :rules="[rules.required]"
+                                                :error-messages="!form.recruitment.isOther_reason.cn ? $t('This field is required') : ''"
+                                                placeholder="用中文输入原因..."
+                                                background-color="grey lighten-5" 
+                                                class="other-reason-textarea"
+                                                required
+                                                ></v-textarea>
+                                            </v-tab-item>
+                                        </v-tabs-items>
+                                    </v-card>
                                 </v-col>
                             </v-row>
                         </v-card>
@@ -197,7 +266,20 @@
                         </div>
                     </v-col>
                     <v-col cols="12" md="2" v-if="isHrManager">
-                        <v-autocomplete v-model="form.sub_position" :items="sub_positionItems" item-text="name" :disabled="!!editData?.sub_pos" item-value="id" :label="$t('Sub Position')" outlined dense hide-details clearable ></v-autocomplete>
+                        <v-autocomplete 
+                        background-color="#fff9c4" 
+                        color="#000000" 
+                        v-model="form.sub_position" 
+                        :items="sub_positionItems" 
+                        item-text="name" 
+                        :disabled="!!editData?.sub_pos" 
+                        item-value="id" 
+                        :label="$t('Sub Position')" 
+                        outlined 
+                        dense 
+                        hide-details 
+                        clearable
+                        ></v-autocomplete>
                     </v-col>
                 </v-row>
                 <v-row>
@@ -205,7 +287,7 @@
                         <v-autocomplete :disabled="formDisabled" v-model="form.educationLevel" :items="educationLevelItems" :rules="[rules.required]" required :label="$t('Education Level')" item-text="name" item-value="id" outlined dense hide-details clearable ></v-autocomplete>
                     </v-col>
                     <v-col cols="12" sm="6" md="8">
-                        <v-textarea :disabled="formDisabled" auto-grow v-model="localizedSpecialization"
+                        <v-textarea :disabled="formDisabled" auto-grow v-model="localizedSpecialization" :rules="[rules.required]" required
                         :placeholder="$t('Professional qualifications')" :label="$t('Professional qualifications')"
                         outlined dense rows="1" hide-details @input="handleSpecializationInput"></v-textarea>
                     </v-col>
@@ -265,19 +347,19 @@
                                 </div>
                                 <v-row class="ml-1">
                                     <v-col cols="12" md="4">
-                                        <v-radio-group :disabled="formDisabled" v-model="form.either" row dense hide-details >
+                                        <v-radio-group :disabled="formDisabled" v-model="form.either" row dense hide-details :rules="[rules.required]" required>
                                             <div class="subtitle-2">{{ $t("Either:") }}</div>
                                             <v-radio v-for="(level, index) in getLanguageLevels('either')" :key="'either-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4" ></v-radio>
                                         </v-radio-group>
                                     </v-col>
                                     
-                                    <v-col cols="12" md="4">
+                                    <v-col cols="12" md="4" :rules="[rules.required]" required>
                                         <v-radio-group :disabled="formDisabled" v-model="form.english" row hide-details dense >
                                             <div class="subtitle-2">{{ $t("English:") }}</div>
                                             <v-radio v-for="(level, index) in getLanguageLevels('en')" :key="'english-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4" ></v-radio>
                                         </v-radio-group>
                                     </v-col>
-                                    <v-col cols="12" md="4">
+                                    <v-col cols="12" md="4" :rules="[rules.required]" required>
                                         <v-radio-group :disabled="formDisabled" v-model="form.chinese" row hide-details dense >
                                             <div class="subtitle-2">{{ $t("Chinese:") }}</div>
                                             <v-radio v-for="(level, index) in getLanguageLevels('cn')" :key="'chinese-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4" ></v-radio>
@@ -429,7 +511,7 @@
     </v-card>
     <v-dialog v-model="confirmAcceptDialog" max-width="500px">
         <v-card>
-            <v-card-title class="#01a6be darken-2 white--text">
+            <v-card-title style="background-color: #01a6be; color: white;">
                 <v-icon left dark>mdi-check</v-icon>
                 {{ $t("Confirm Action") }}
                 <v-spacer></v-spacer>
@@ -451,7 +533,7 @@
                     {{ $t("Cancel") }}
                 </v-btn>
                 <v-spacer></v-spacer>
-                <v-btn color="success" @click="confirmAccept" >
+                <v-btn color="#01a6be" dark @click="confirmAccept" >
                     {{ $t("Confirm") }}
                 </v-btn>
             </v-card-actions>
@@ -464,17 +546,43 @@
                 <v-icon left dark>mdi-alert</v-icon>
                 {{ $t("Deny Request") }}
                 <v-spacer></v-spacer>
+                <v-btn-toggle v-model="selectedLanguage" group class="mr-4" dark>
+                    <v-btn x-small value="vi">VI</v-btn>
+                    <v-btn x-small value="cn">中文</v-btn>
+                </v-btn-toggle>
                 <v-btn icon dark @click="confirmDenyDialog = false">
                     <v-icon>mdi-close</v-icon>
                 </v-btn>
             </v-card-title>
             <v-card-text class="pt-4">
-                <v-textarea v-model="denyReason" :label="$t('Reason')" :placeholder=" $t('Please provide a reason for denying this request') " outlined rows="3" counter maxlength="500" ></v-textarea>
+                <v-textarea 
+                v-if="selectedLanguage === 'vi'"
+                v-model="denyReason.vi" 
+                :label="$t('Return reason VietNamese')" 
+                :placeholder="$t('Please provide a VietNamese reason')" 
+                outlined 
+                rows="1" 
+                hide-details
+                class="mb-2"
+                ></v-textarea>
+                <v-textarea
+                v-if="selectedLanguage === 'cn'" 
+                v-model="denyReason.cn"
+                :label="$t('Return reason Chinese')"
+                :placeholder="$t('Please provide a Chinese reason')"
+                outlined
+                hide-details
+                rows="1"
+                ></v-textarea>
             </v-card-text>
             <v-card-actions>
-                <v-btn color="grey darken-1" text @click="confirmDenyDialog = false"> {{ $t("Cancel") }} </v-btn>
+                <v-btn color="grey darken-1" text @click="confirmDenyDialog = false">
+                    {{ $t("Cancel") }}
+                </v-btn>
                 <v-spacer></v-spacer>
-                <v-btn color="error" @click="confirmDeny" :disabled="!denyReason.trim()" > {{ $t("Confirm Denial") }} </v-btn>
+                <v-btn color="error" @click="confirmDeny" :disabled="!isDenyReasonValid">
+                    {{ $t("Confirm Denial") }}
+                </v-btn>
             </v-card-actions>
         </v-card>
     </v-dialog>
@@ -485,22 +593,48 @@
                 <v-icon left dark>mdi-alert</v-icon>
                 {{ $t("Return Request") }}
                 <v-spacer></v-spacer>
+                <v-btn-toggle v-model="selectedLanguage" group class="mr-4" dark>
+                    <v-btn x-small value="vi">VI</v-btn>
+                    <v-btn x-small value="cn">中文</v-btn>
+                </v-btn-toggle>
                 <v-btn icon dark @click="confirmReturnDialog = false"> <v-icon>mdi-close</v-icon> </v-btn>
             </v-card-title>
             <v-card-text class="pt-4">
-                <v-textarea v-model="returnReason" :label="$t('Return reason')" :placeholder=" $t('Please provide a reason for returning this request') " outlined rows="5" counter maxlength="500" class="mb-4" > </v-textarea>
+                <v-textarea 
+                v-if="selectedLanguage === 'vi'"
+                v-model="returnReason.vi" 
+                :label="$t('Return reason VietNamese')" 
+                :placeholder="$t('Please provide a VietNamese reason')" 
+                outlined 
+                rows="1" 
+                hide-details 
+                maxlength="500" 
+                class="mb-2"
+                ></v-textarea>
+                
+                <v-textarea
+                v-if="selectedLanguage === 'cn'" 
+                v-model="returnReason.cn"
+                :label="$t('Return reason Chinese')"
+                :placeholder="$t('Please provide a Chinese reason')"
+                outlined
+                rows="1"
+                hide-details
+                maxlength="500"
+                class="mb-2"
+                ></v-textarea>
             </v-card-text>
             <v-card-actions>
                 <v-btn color="grey darken-1" text @click="confirmReturnDialog = false" > {{ $t("Cancel") }} </v-btn>
                 <v-spacer></v-spacer>
-                <v-btn color="warning" @click="confirmReturn" :disabled="!returnReason.trim()" > {{ $t("Confirm Return") }} </v-btn>
+                <v-btn color="warning" @click="confirmReturn" :disabled="!isReturnReasonValid" > {{ $t("Confirm Return") }} </v-btn>
             </v-card-actions>
         </v-card>
     </v-dialog>
     <!-- Submit Confirmation Dialog -->
     <v-dialog v-model="confirmSubmitDialog" max-width="500px">
         <v-card>
-            <v-card-title class="#01a6be darken-2 white--text">
+            <v-card-title  style="background-color: #01a6be; color: white;">
                 <v-icon left dark>mdi-send</v-icon>
                 {{ $t("Confirm Action") }}
                 <v-spacer></v-spacer>
@@ -523,7 +657,8 @@
 </v-dialog>
 </template>
 <script>
-import VfaAppFlow from "../../../@global-component/vfa-comp";
+// import VfaAppFlow from "../../../@global-component/vfa-comp";
+import VfaAppFlow from 'D:/source/@global-component/vfa-comp';
 export default {
     components: { VfaAppFlow },
     name: "RequestDialog",
@@ -544,6 +679,7 @@ export default {
     },
     data() {
         return {
+            otherReasonTab: 0,
             api: "http://gmo021.cansportsvg.com/api/vg-mpr/",
             storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
             dateKeyInMenu: false,
@@ -575,29 +711,29 @@ export default {
             iSuppType: [
             {
                 id: 1,
-                cn: "資深課長級(含)以下幹部/職員",
-                en: "Senior Section Chief level (inclusive) and below – Managers/Staff",
-                vi: "Cán bộ/nhân viên cấp trưởng ngành thâm niên trở xuống (bao gồm)",
+                cn: "適用於越籍課長級(含)以下幹部/職員/工人",
+                en: "Applicable to Vietnamese Section Chief level (inclusive) and below – supervisor/Staff/Workers",
+                vi: "Áp dụng đối với CNV, cán bộ Việt Nam cấp Trưởng ngành trở xuống",
             },
             {
                 id: 2,
-                cn: "工人以及主任級(含)以上幹部/職員",
-                en: "Workers and Director level (inclusive) and above – Managers/Staff",
-                vi: "Công nhân và cán bộ/nhân viên từ cấp chủ nhiệm trở lên",
+                cn: "適用於越籍資深課長級(含)以上幹部",
+                en: "Applicable to Vietnamese Senior Section Chief level (inclusive) and above – supervisor",
+                vi: "Áp dụng đối với cán bộ Việt Nam cấp Trưởng ngành thâm niên trở lên",
             },
             ],
-            flow_sign: [
+             flow_sign: [
             {
                 id: 1,
-                cn: "填表人➜ 單位主管➜ 部級主管 ➜ 處級主管 ➜ 人力資源部 (適用於越籍課長級(含)以下幹部/職員/工人)",
-                en: "Submitter ➜ Unit manager ➜ Department manager ➜ Division manager ➜ HR Department (Applicable to Vietnamese Section Chief level (inclusive) and below – Managers/Staff/Workers)",
+                cn: "填表人➜ 單位主管 部級主管 ➜ 處級主管 ➜ 人力資源部 (適用於越籍課長級(含)以下幹部/職員/工人)",
+                en: "Submitter ➜ Department manager ➜ Division manager ➜ HR Department (Applicable to Vietnamese Section Chief level (inclusive) and below – supervisor/Staff/Workers)",
                 vi: "Người Điền Biểu ➜ Chủ Quản Đơn Vị ➜ Chủ quản bộ phận ➜ Chủ Quản Cấp Sở ➜ Bộ phận ADHR  (Áp dụng đối với CNV, cán bộ Việt Nam cấp Trưởng ngành trở xuống)",
             },
             {
                 id: 2,
-                cn: "填表人 ➜ 單位主管 ➜ 部級主管 ➜ 處級主管 ➜人力資源部 ➜ 管理處 ➜ 總經理室 (適用於越籍資深課長級(含)以上幹部)",
-                en: "Submitter ➜ Unit manager ➜ Department manager ➜ Division manager ➜ HR Department ➜ Management Department ➜ General Manager's Office (Applicable to Vietnamese Senior Section Chief level (inclusive) and above – Managers/Staff)",
-                vi: "Người Điền Biểu ➜ Chủ Quản Đơn Vị ➜ Chủ quản bộ phận ➜ Chủ Quản Cấp Sở ➜ Bộ phận ADHR ➜ Khu quản lý  ➜ Văn Phòng TGĐ (Áp dụng đối với cán bộ Việt Nam cấp Trưởng ngành thâm niên trở lên)",
+                cn: "填表人 ➜ 部級主管 ➜ 處級主管 ➜人力資源部 ➜ 管理處 ➜ 總經理室 (適用於越籍資深課長級(含)以上幹部)",
+                en: "Submitter ➜ Department manager ➜ Division manager ➜ HR Department ➜ Management Department ➜ General Manager's Office (Applicable to Vietnamese Senior Section Chief level (inclusive) and above – supervisor)",
+                vi: "Người Điền Biểu ➜ Chủ quản bộ phận ➜ Chủ Quản Cấp Sở ➜ Bộ phận ADHR ➜ Khu quản lý  ➜ Văn Phòng TGĐ (Áp dụng đối với cán bộ Việt Nam cấp Trưởng ngành thâm niên trở lên)",
             },
             ],
             selectedFlowSign: null,
@@ -636,7 +772,11 @@ export default {
                     reason: "",
                     oldempno: "",
                     isOther_reason: "",
-                    requestDate: new Date().toISOString().substr(0, 10),
+                    requestDate: (() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + 7);             // cộng thêm 7 ngày
+                        return d.toISOString().substr(0, 10);   // lấy yyyy-mm-dd
+                    })(),
                 },
                 staffCount: {
                     workers: "",
@@ -703,8 +843,8 @@ export default {
             confirmDenyDialog: false,
             confirmReturnDialog: false,
             confirmSubmitDialog: false,
-            denyReason: "",
-            returnReason: "",
+            denyReason: { vi: "", cn: "" },
+            returnReason: { vi: "", cn: "" },
             returnToLevel: "",
             dataFlow: "",
             isLoadingFlow: false,
@@ -749,7 +889,8 @@ export default {
             isLoadingReqId: false,
             dataRecruitmentReason: [],
             changeQtyError: '',
-            
+            selectedLanguage:'vi',
+            unitNames:[]
         };
     },
     watch: {
@@ -757,11 +898,9 @@ export default {
             immediate: true,
             async handler(newVal) {
                 if (newVal) {
-                    // Nếu là change request, tạo mã mới
                     const newReqIdChange = await this.generateReqIdChange();
                     this.form.req_id_change = newReqIdChange;
                 } else {
-                    // Reset nếu không phải change request
                     this.form.req_id_change = '';
                 }
             }
@@ -962,6 +1101,13 @@ export default {
         },
     },
     methods: {
+        
+        getEffectiveDate() {
+            const today = new Date();
+            today.setDate(today.getDate() + 7); // Cộng thêm 7 ngày
+            return today.toISOString().substr(0, 10); // YYYY-MM-DD
+        },
+        
         onCloseDialog(){
             this.dialog = false;
             this.reqId = null;
@@ -1284,6 +1430,7 @@ export default {
                 this.subItems = response.data.dataSubPos;
                 this.eduReq = response.data.dataEduReq;
                 this.lang = response.data.dataLang;
+                this.unitNames = response.data.dataDeptHrm;
                 response.data.dataWps;
                 if (this.lang && this.lang.lang) {
                     try {
@@ -1383,17 +1530,17 @@ export default {
                 // Set status dựa trên loại request
                 if (isAmendmentRequest) {
                     // Amendment request - chỉ tạo status_amendent riêng
-                    formData.append("status_amendent", "waiting_unit");
+                    formData.append("status_amendent", "waiting_dept");
                     formData.append("is_amendment", "true");
                     // Giữ nguyên status gốc nếu đã tồn tại
                     if (this.editData && this.editData.status) {
                         formData.append("status", this.editData.status);
                     } else {
-                        formData.append("status", "waiting_unit");
+                        formData.append("status", "waiting_dept");
                     }
                 } else {
                     // Đơn thường
-                    formData.append("status", "waiting_unit");
+                    formData.append("status", "waiting_dept");
                     formData.append("is_amendment", "false");
                     formData.append("status_amendent", null);
                 }
@@ -1418,7 +1565,7 @@ export default {
                     empno: this.activeUser.empno,
                     name: this.activeUser.name,
                     dept_sumt: this.activeUser.dept_sumt,
-                    high_dept: this.activeUser.email,
+                    high_dept: this.activeUser.division,
                     email: this.activeUser.email,
                     dept: this.user.dept,
                     div: this.user.div,
@@ -1429,7 +1576,7 @@ export default {
                 formData.append("loc", this.activeUser.location);
                 formData.append("key_in_date", this.form.keyInDate);
                 formData.append("submitter", JSON.stringify(submitterData));
-                formData.append("status", "waiting_unit");
+                formData.append("status", "waiting_dept");
                 formData.append("supp_type", this.form.suppType);
                 
                 formData.append("edu", this.form.educationLevel);
@@ -1444,7 +1591,15 @@ export default {
                 formData.append("w_exp", this.form.workExperience);
                 formData.append("reason_exp", this.form.recruitment.reason);
                 formData.append("old_emp", this.form.recruitment.oldempno);
-                formData.append("isOther_reason", this.form.recruitment.isOther_reason);
+                if (this.form.recruitment.reason === 3) {
+                    formData.append("isOther_reason", JSON.stringify({
+                        vi: this.form.recruitment.isOther_reason.vi || '',
+                        en: this.form.recruitment.isOther_reason.en || '',
+                        cn: this.form.recruitment.isOther_reason.cn || ''
+                    }));
+                } else {
+                    formData.append("isOther_reason", "");
+                }
                 formData.append("date_req", this.form.recruitment.requestDate);
                 formData.append("qty_req", JSON.stringify(this.form.staffCount));
                 
@@ -1539,7 +1694,7 @@ export default {
                 formData.append("tranlator", this.form.staffCount.tranlator ? 1 : 0);
                 
                 let hold = 0, resumed = 0, hold_date = '', resumed_date = '';
-
+                
                 if (this.form.changeReason?.id === 4) {
                     hold = 1;
                     const tomorrow = new Date();
@@ -1557,13 +1712,12 @@ export default {
                 formData.append('resumed_date', resumed_date);
                 
                 const defaultApproval = [
-                { level: 1, type: "unit", approver: { empno: "", name: "", dept: "" }, status: "waiting" },
-                { level: 2, type: "dept", approver: { empno: "", name: "", dept: "" }, status: "" },
-                { level: 3, type: "div", approver: { empno: "", name: "", dept: "" }, status: "" },
-                { level: 4, type: "hr_rec_sf", approver: { empno: "", name: "", dept: "" }, status: "" },
-                { level: 5, type: "hr", approver: { empno: "", name: "", dept: "" }, status: "" },
-                { level: 6, type: "ad", approver: { empno: "", name: "", dept: "" }, status: "" },
-                { level: 7, type: "gm", approver: { empno: "", name: "", dept: "" }, status: "" }
+                { level: 1, type: "dept", approver: { empno: "", name: "", dept: "" }, status: "waiting" },
+                { level: 2, type: "div", approver: { empno: "", name: "", dept: "" }, status: "" },
+                { level: 3, type: "hr_rec_sf", approver: { empno: "", name: "", dept: "" }, status: "" },
+                { level: 4, type: "hr", approver: { empno: "", name: "", dept: "" }, status: "" },
+                { level: 5, type: "ad", approver: { empno: "", name: "", dept: "" }, status: "" },
+                { level: 6, type: "gm", approver: { empno: "", name: "", dept: "" }, status: "" }
                 ];
                 if (!isAmendmentRequest) {
                     // Chỉ set approval cho đơn gốc
@@ -1579,6 +1733,24 @@ export default {
                 // Flow and email data
                 formData.append("dataFlow", JSON.stringify(this.dataAppFlowChanged));
                 formData.append("emailList", JSON.stringify(this.listEmailDeptManager));
+                
+                
+                const isCancellationRequest = this.form.changeReason?.id === 2;
+                
+                // Handle cancellation request data
+                if (isCancellationRequest) {
+                    // Lấy số người đã tuyển từ editData
+                    const recruitedCount = parseInt(this.editData?.recruited || 0);
+                    
+                    const denyTempData = {
+                        fullfilldate: this.getCurrentDate(),
+                        fulfilled: "yes",
+                        recruited: recruitedCount, 
+                        stocknumber: 0, 
+                        status_amendent: "denied"
+                    };
+                    formData.append("deny_temp", JSON.stringify(denyTempData));
+                }
                 
                 // Submit form
                 const response = await this.$axios.post(
@@ -1649,8 +1821,16 @@ export default {
                 recruitment: {
                     reason: "",
                     oldempno: "",
-                    isOther_reason: "",
-                    requestDate: new Date().toISOString().substr(0, 10),
+                    isOther_reason:{
+                        vi: "",
+                        en: "",
+                        cn: ""
+                    },
+                    requestDate: (() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + 7);             // cộng thêm 7 ngày
+                        return d.toISOString().substr(0, 10);   // lấy yyyy-mm-dd
+                    })(),
                 },
                 staffCount: {
                     workers: 0,
@@ -1704,7 +1884,14 @@ export default {
                 jobDesc: false,
                 dimissionList: false,
             };
-            
+            this.denyReason = {
+                vi: '',
+                cn: ''
+            };
+            this.returnReason = {
+                vi: '',
+                cn: ''
+            };
             if (this.isChange) {
                 this.generateReqIdChange().then((newReqId) => {
                     this.form.req_id_change = newReqId;
@@ -2010,7 +2197,16 @@ export default {
                 isOther_reason: data.isOther_reason || "",
                 requestDate: data.date_req
             };
-            
+            this.form.recruitment = {
+                reason: typeof data.reason_exp === "string" ? parseInt(data.reason_exp) : data.reason_exp || "",
+                oldempno: data.old_emp || "",
+                isOther_reason: data.isOther_reason ? 
+                (typeof data.isOther_reason === 'string' ? 
+                JSON.parse(data.isOther_reason) : 
+                data.isOther_reason) : 
+                { vi: "", en: "", cn: "" },
+                requestDate: data.date_req
+            };
             // 11. Handle staff count
             try {
                 let qtyData = typeof data.qty_req === "string" ? JSON.parse(data.qty_req) : data.qty_req;
@@ -2139,14 +2335,19 @@ export default {
         async openDenyDialog() {
             if (!this.editData) return;
             
-            this.denyReason = "";
-            await this.fetchDataFlow();
+            this.denyReason = {
+                vi: '',
+                cn: ''
+            }; await this.fetchDataFlow();
             this.confirmDenyDialog = true;
         },
         async openReturnDialog() {
             if (!this.editData) return;
             
-            this.returnReason = "";
+            this.returnReason = {
+                vi: "",
+                cn: ""
+            };
             this.returnToLevel = null;
             await this.fetchDataFlow();
             this.confirmReturnDialog = true;
@@ -2216,7 +2417,6 @@ export default {
                 // Format approval record based on current level
                 const statusToLevel = {
                     // Original status levels
-                    waiting_unit: "unit",
                     waiting_dept: "dept", 
                     waiting_div: "div",
                     waiting_hr_rec_sf: "hr_rec_sf",
@@ -2246,7 +2446,6 @@ export default {
                 // If there are no existing records, create one
                 if (approvalRecords.length === 0) {
                     approvalRecords.push({
-                        unit: "",
                         dept: "",
                         div: "",
                         hr_rec_sf: "",
@@ -2308,49 +2507,46 @@ export default {
         },
         
         async confirmDeny() {
-            if (!this.denyReason.trim()) {
-                this.$store.dispatch("showWarning", this.$t("Please provide a reason"));
-                return;
-            }
-            let params = {
-                id: this.editData.id,
-                reason: this.denyReason,
-                user_empno: this.activeUser.empno,
-                dataReq: {
-                    dataFlow: this.dataFlow,
-                    id: this.editData.id,
-                    status: this.editData.status,
-                    status_amendent: this.editData.status_amendent,
-                    approval: this.editData.approval,
-                },
-            };
-            try {
-                const response = await this.$axios.post(this.api + "denyRequest", params);
-                if (response.data.success) {
-                    this.$store.dispatch(
-                    "showSuccess",
-                    this.$t("Request denied successfully")
-                    );
-                    this.confirmDenyDialog = false;
-                    this.$emit("requestUpdated");
-                    this.dialog = false;
-                }
-            } catch (error) {
-                console.error("Error denying request:", error);
-                this.$store.dispatch("showError", this.$t("Failed to deny request"));
-            }
-        },
-        async confirmReturn() {
-            if (!this.returnReason.trim()) {
+            if (!this.denyReason.vi && !this.denyReason.cn) {
                 this.$store.dispatch("showWarning", this.$t("Please provide a reason"));
                 return;
             }
             
             try {
-                const response = await this.$axios.post(this.api + "returnRequest", {
+                // Nếu người dùng nhập tiếng Trung, tự động dịch sang tiếng Việt
+                if (this.denyReason.cn && !this.denyReason.vi) {
+                    const formData = new FormData();
+                    formData.append("type", "secret-v"); // Dịch sang tiếng Việt
+                    formData.append("string", this.denyReason.cn);
+                    
+                    const response = await this.$axios.post(
+                    "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
+                    formData
+                    );
+                    
+                    if (response.status === 200) {
+                        this.denyReason.vi = response.data;
+                    }
+                }
+                // Nếu người dùng nhập tiếng Việt, tự động dịch sang tiếng Trung
+                else if (this.denyReason.vi && !this.denyReason.cn) {
+                    const formData = new FormData();
+                    formData.append("type", "secret-c"); // Dịch sang tiếng Trung
+                    formData.append("string", this.denyReason.vi);
+                    
+                    const response = await this.$axios.post(
+                    "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
+                    formData
+                    );
+                    
+                    if (response.status === 200) {
+                        this.denyReason.cn = response.data;
+                    }
+                }
+                
+                const response = await this.$axios.post(this.api + "denyRequest", {
                     id: this.editData.id,
-                    reason: this.returnReason,
-                    returnToLevel: "waiting_unit",
+                    reason: JSON.stringify(this.denyReason),
                     user_empno: this.activeUser.empno,
                     dataReq: {
                         dataFlow: this.dataFlow,
@@ -2362,13 +2558,93 @@ export default {
                 });
                 
                 if (response.data.success) {
+                    this.$notify({
+                        title: "Success",
+                        text: this.$t("Request denied successfully"),
+                        type: "success"
+                    });
+                    this.confirmDenyDialog = false;
+                    this.$emit("requestUpdated");
+                    this.dialog = false;
+                }
+            } catch (error) {
+                console.error("Error denying request:", error);
+                this.$notify({
+                    title: "Error",
+                    text: this.$t("Failed to deny request"),
+                    type: "error"
+                });
+            }
+        },
+        async confirmReturn() {
+            if (!this.returnReason.vi && !this.returnReason.cn) {
+                this.$store.dispatch("showWarning", this.$t("Please provide a reason"));
+                return;
+            }
+            
+            try {
+                if (this.returnReason.cn && !this.returnReason.vi) {
+                    const formData = new FormData();
+                    formData.append("type", "secret-v"); 
+                    formData.append("string", this.returnReason.cn);
+                    
+                    const response = await this.$axios.post(
+                    "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
+                    formData
+                    );
+                    
+                    if (response.status === 200) {
+                        this.returnReason.vi = response.data;
+                    }
+                }
+                // Nếu người dùng nhập tiếng Việt, tự động dịch sang tiếng Trung
+                else if (this.returnReason.vi && !this.returnReason.cn) {
+                    const formData = new FormData();
+                    formData.append("type", "secret-c"); // Dịch sang tiếng Trung
+                    formData.append("string", this.returnReason.vi);
+                    
+                    const response = await this.$axios.post(
+                    "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
+                    formData
+                    );
+                    
+                    if (response.status === 200) {
+                        this.returnReason.cn = response.data;
+                    }
+                }
+                
+                // Gửi request với cả 2 ngôn ngữ
+                const response = await this.$axios.post(this.api + "returnRequest", {
+                    id: this.editData.id,
+                    reason: JSON.stringify(this.returnReason),
+                    returnToLevel: "waiting_dept",
+                    user_empno: this.activeUser.empno,
+                    dataReq: {
+                        dataFlow: this.dataFlow,
+                        id: this.editData.id,
+                        status: this.editData.status,
+                        status_amendent: this.editData.status_amendent,
+                        approval: this.editData.approval,
+                    },
+                });
+                
+                if (response.data.success) {
+                    this.$notify({
+                        title: "Success",
+                        text: this.$t("Request returned successfully"),
+                        type: "success"
+                    });
                     this.confirmReturnDialog = false;
-                    this.$emit("requestUpdated"); 
+                    this.$emit("requestUpdated");
                     this.dialog = false;
                 }
             } catch (error) {
                 console.error("Error returning request:", error);
-                this.$store.dispatch("showError", this.$t("Failed to return request"));
+                this.$notify({
+                    title: "Error",
+                    text: this.$t("Failed to return request"),
+                    type: "error"
+                });
             }
         },
         confirmSubmit() {
@@ -2451,7 +2727,11 @@ export default {
         handleReasonChange(reasonId) {
             // Reset fields
             this.form.recruitment.oldempno = "";
-            this.form.recruitment.isOther_reason = "";
+            this.form.recruitment.isOther_reason = {
+                vi: "",
+                en: "",
+                cn: ""
+            };
             
             // Handle based on ID
             if (reasonId === 2) { // Replacement ID
@@ -2503,7 +2783,7 @@ export default {
                     empno: this.activeUser.empno,
                     name: this.activeUser.name,
                     dept: this.activeUser.dept_sumt,
-                    high_dept: this.activeUser.hight_dept,
+                    high_dept: this.activeUser.division,
                     app_code: "mpr",
                     location: this.activeUser.location,
                 };
@@ -2519,6 +2799,40 @@ export default {
         },
     },
     computed: {
+        isDenyReasonValid() {
+            if (!this.denyReason) return false;
+            return Boolean(
+            (this.denyReason.vi && this.denyReason.vi.trim()) || 
+            (this.denyReason.cn && this.denyReason.cn.trim())
+            );
+        },
+        
+        isReturnReasonValid() {
+            if (!this.returnReason) return false;
+            return Boolean(
+            (this.returnReason.vi && this.returnReason.vi.trim()) || 
+            (this.returnReason.cn && this.returnReason.cn.trim())
+            );
+        },
+        getAppCode() {
+            // Khi changeReason.id = 2 (hủy đơn), mặc định dùng mpr_flow2
+            if (this.form.changeReason && this.form.changeReason.id === 2) {
+                return 'mpr_flow2';
+            }
+            
+            // Logic ban đầu: dựa trên suppType
+            return this.form.suppType === 1 ? 'mpr_flow2' : 'mpr';
+        },
+        
+        // Update flowKey to include changeReason for proper reactivity
+        flowKey() {
+            const changeReasonId = this.form.changeReason?.id || '';
+            const suppType = this.form.suppType || '';
+            const empno = this.flowEmpno || '';
+            
+            // Include all relevant factors that should trigger re-render
+            return `${this.getAppCode}-${empno}-${suppType}-${changeReasonId}-${Date.now()}`;
+        },
         getChangeQuantityHint() {
             const minRecruitedQty = this.editData?.recruited || 0;
             const maxRequestQty = this.form.quantity || 0;
@@ -2573,7 +2887,7 @@ export default {
             return this.form.req_id_change || '';
         },
         showAmendmentSection() {
-            return this.isEdit || this.isChange ;
+            return this.isChange || (this.isEdit && this.editData?.req_id_change && this.editData.req_id_change.trim() !== '');
         },
         item_req_id() {
             return this.itemsReqId.map((item) => {
@@ -2628,22 +2942,29 @@ export default {
             return !!this.editData && !this.isCreating;
         },
         formDisabled() {
-            // if(this.isEdit)
-            // {
-            //     return true;
-            // }
-            // if (this.isChange) return true;
-            // return !!this.editData && !this.isCreating;
-            
-            if (this.editData && !this.editData.req_id_change && JSON.parse(this.editData.submitter).empno === this.activeUser.empno) {
-                return false; // Enable form
+            if(this.editData && this.editData.approval && 
+            JSON.parse(this.editData.approval).some(level => level.status === 'returned')) {
+                return false;
+            }
+            if (this.editData && !this.editData.req_id_change && 
+            JSON.parse(this.editData.submitter).empno === this.activeUser.empno) {
+                return true; 
             }
             
+            
             if(this.isEdit) return true;
-            if (this.isChange) return true;
+            if (this.isChange) return false;
             return !!this.editData && !this.isCreating;
         },
         disableSaveButton() {
+            if(this.editData && this.editData.approval && 
+            JSON.parse(this.editData.approval).some(level => level.status === 'returned')) {
+                return false;
+            }
+            if (this.editData && !this.editData.req_id_change && 
+            JSON.parse(this.editData.submitter).empno === this.activeUser.empno) {
+                return true; 
+            }
             const baseValidation =
             !this.form.pos || !this.form.suppType || !this.form.quantity || !this.user.dept || !this.user.div || !this.user.unit || !this.form.educationLevel || !this.form.workExperience || !this.form.recruitment.reason || !this.form.specialization || !this.form.jobDesc ||
             !this.form.safetyLevels;
@@ -2651,7 +2972,6 @@ export default {
             if (this.form.pos === 1) {
                 return baseValidation;
             }
-            
             return ( baseValidation  || !(this.form.computerSkills && this.form.computerSkills.length > 0) || !(this.form.either || this.form.english || this.form.chinese) );
             
             
@@ -2849,13 +3169,12 @@ export default {
                 if (!this.dataFlow || !Array.isArray(this.dataFlow)) return false;
                 
                 const statusToLevel = {
-                    'waiting_unit': 0,
-                    'waiting_dept': 1,
-                    'waiting_div': 2,
-                    'waiting_hr_rec_sf': 3,
-                    'waiting_hr': 4,
-                    'waiting_ad': 5,
-                    'waiting_gm': 6
+                    'waiting_dept': 0,
+                    'waiting_div': 1,
+                    'waiting_hr_rec_sf': 2,
+                    'waiting_hr': 3,
+                    'waiting_ad': 4,
+                    'waiting_gm': 5
                 };
                 
                 let currentLevel;
@@ -2897,7 +3216,6 @@ export default {
             
             const currentStatus = this.editData.status;
             const levels = [
-            { value: "waiting_unit", text: this.$t("Unit Level") },
             { value: "waiting_dept", text: this.$t("Department Level") },
             { value: "waiting_div", text: this.$t("Division Level") },
             { value: "waiting_hr_rec_sf", text: this.$t("HR Rec SF Level") },
@@ -2907,13 +3225,12 @@ export default {
             ];
             
             const statusLevels = {
-                waiting_unit: 1,
-                waiting_dept: 2,
-                waiting_div: 3,
-                waiting_hr_rec_sf: 4,
-                waiting_hr: 5,
-                waiting_ad: 6,
-                waiting_gm: 7,
+                waiting_dept: 1,
+                waiting_div: 2,
+                waiting_hr_rec_sf: 3,
+                waiting_hr: 4,
+                waiting_ad: 5,
+                waiting_gm: 6,
             };
             const currentLevel = statusLevels[currentStatus] || 0;
             
@@ -3037,13 +3354,12 @@ export default {
                 const currentApprovalRecord = approvalRecords.length > 0 ? approvalRecords[approvalRecords.length - 1] : {};
                 
                 const levelNames = {
-                    1: this.$t("Unit Manager"),
-                    2: this.$t("Department Manager"),
-                    3: this.$t("Division Manager"),
-                    4: this.$t("HR Recruitment Staff"),
-                    5: this.$t("HR Manager"),
-                    6: this.$t("AD Manager"),
-                    7: this.$t("GM Manager"),
+                    1: this.$t("Department Manager"),
+                    2: this.$t("Division Manager"),
+                    3: this.$t("HR Recruitment Staff"),
+                    4: this.$t("HR Manager"),
+                    5: this.$t("AD Manager"),
+                    6: this.$t("GM Manager"),
                 };
                 
                 return approvalArr .filter( (lv) => lv.status && ["waiting", "approved", "rejected"].includes(lv.status) )
@@ -3085,25 +3401,20 @@ export default {
             return this.form.pos !== 1;
         },
         isHrManager() {
-            if (!this.editData || !this.activeUser) return false;
-            try {
-                const approvalData = this.editData.approval
-                ? JSON.parse(this.editData.approval)
-                : [];
-                if (!this.dataFlow || !Array.isArray(this.dataFlow)) return false;
-                const hrFlow = this.dataFlow[4];
-                if (!hrFlow?.managers) return false;
-                return hrFlow.managers.some((manager) => {
-                    if (manager.empno === this.activeUser.empno) return true;
-                    return manager.deputies?.some(
-                    (deputy) =>
-                    deputy.empno === this.activeUser.empno && deputy.status === true
-                    );
-                });
-            } catch (error) {
-                console.error("Error in isHrManager:", error);
-                return false;
-            }
+            if (!this.dataFlow) return false;
+            // Kiểm tra dataFlow[3] (hr_rec_sf)
+            const hrRecSf = this.dataFlow[2] && this.dataFlow[2].lvl_code === 'hr_rec_sf' &&
+            this.dataFlow[2].managers.some(manager =>
+            manager.empno === this.activeUser.empno ||
+            (manager.deputies && manager.deputies.some(deputy => deputy.empno === this.activeUser.empno && deputy.status))
+            );
+            // Kiểm tra dataFlow[4] (hr_manager)
+            const hrManager = this.dataFlow[3] && this.dataFlow[3].lvl_code === 'hr_manager' &&
+            this.dataFlow[3].managers.some(manager =>
+            manager.empno === this.activeUser.empno ||
+            (manager.deputies && manager.deputies.some(deputy => deputy.empno === this.activeUser.empno && deputy.status))
+            );
+            return hrRecSf || hrManager;
         },
         showLanguageAndComputerSkills() {
             if (!this.form.changeReason) return true; 
@@ -3261,7 +3572,8 @@ export default {
             "Change quantity cannot be greater than request quantity": "Change quantity cannot be greater than request quantity",
             "Change quantity cannot be greater than or equal to request quantity": "Change quantity cannot be greater than or equal to request quantity",
             "Min": "Min",
-            "Max": "Max"
+            "Max": "Max",
+            "This field is required": "This field is required"
         },
         "vi": {
             "Create new request": "Tạo yêu cầu mới",
@@ -3383,7 +3695,8 @@ export default {
             "Change quantity cannot be greater than request quantity": "Số lượng thay đổi không được lớn hơn số lượng yêu cầu",
             "Change quantity cannot be greater than or equal to request quantity": "Số lượng thay đổi không được lớn hơn hoặc bằng số lượng yêu cầu",
             "Min": "Tối thiểu",
-            "Max": "Tối đa"
+            "Max": "Tối đa",
+            "This field is required": "Trường này là bắt buộc"
         },
         "cn": {
             "Create new request": "创建新请求",
@@ -3503,7 +3816,8 @@ export default {
             "Change quantity cannot be greater than request quantity": "更改数量不能大于请求数量",
             "Change quantity cannot be greater than or equal to request quantity": "更改数量不能大于或等于请求数量",
             "Min": "最少",
-            "Max": "最多"
+            "Max": "最多",
+            "This field is required": "此字段为必填项"
         }
     }
 </i18n>
@@ -3591,5 +3905,21 @@ export default {
 
 .v-expansion-panel-header {
     background-color: #fff9c4 !important;
+}
+.other-reason-textarea ::v-deep .v-input__slot {
+    min-height: 80px !important;
+}
+
+.other-reason-textarea ::v-deep textarea {
+    line-height: 1.5;
+}
+
+.v-tabs-items {
+    background-color: transparent !important;
+}
+
+.v-tab {
+    text-transform: none !important;
+    font-weight: 500;
 }
 </style>

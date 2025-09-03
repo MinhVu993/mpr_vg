@@ -39,7 +39,7 @@ class vgMprCtrl extends Controller
         $status = $req->input('status');
         
         $data = Mpr::select('req_id')->where('status', $status)
-        ->whereRaw('JSON_EXTRACT(submitter, "$.div") = ?', [$div])
+        ->whereRaw('JSON_EXTRACT(submitter, "$.high_dept") = ?', [$div])
         ->orderBy('id', 'desc')
         ->get();
         return $data;
@@ -261,6 +261,7 @@ class vgMprCtrl extends Controller
             'dataMpr' => $dataMpr,
         ]);
     }
+    
     public function getDataModel(Request $req)
     {
         $loc = $req->input('loc');
@@ -449,16 +450,18 @@ class vgMprCtrl extends Controller
             // Xử lý status dựa trên loại request
             if ($isAmendment) {
                 // Amendment request - chỉ set status_amendent
-                $data['status_amendent'] = $request->status_amendent ?: 'waiting_unit';
+                $data['status_amendent'] = $request->status_amendent ?: 'waiting_dept';
+                // Giữ nguyên status gốc
+                $data['status'] = $existingMpr->status;
                 
-                // Giữ nguyên status và approval gốc nếu đã tồn tại
-                if ($existingMpr) {
-                    $data['status'] = $existingMpr->status;
-                    $data['approval'] = $existingMpr->approval;
-                } else {
-                    $data['status'] = $request->status ?: 'waiting_unit';
-                    $data['approval'] = $request->approval;
-                }
+                // Tạo approval mới cho amendment request thay vì giữ nguyên
+                $amendmentApproval = [
+                    ['level' => 1, 'type' => 'dept', 'approver' => ['empno' => '', 'name' => '', 'dept' => ''], 'status' => 'waiting'],
+                    ['level' => 2, 'type' => 'div', 'approver' => ['empno' => '', 'name' => '', 'dept' => ''], 'status' => ''],
+                    ['level' => 3, 'type' => 'hr_rec_sf', 'approver' => ['empno' => '', 'name' => '', 'dept' => ''], 'status' => ''],
+                    ['level' => 4, 'type' => 'hr', 'approver' => ['empno' => '', 'name' => '', 'dept' => ''], 'status' => '']
+                ];
+                $data['approval'] = json_encode($amendmentApproval);
             } else {
                 // Đơn thường
                 $data['status'] = $request->status;
@@ -783,32 +786,30 @@ class vgMprCtrl extends Controller
                             if ($isAmendmentRequest) {
                                 // Amendment status flow - shorter flow
                                 $statusFlow = [
-                                    'waiting_unit' => ['next' => 'waiting_dept', 'level' => 1],
-                                    'waiting_dept' => ['next' => 'waiting_div', 'level' => 2], 
-                                    'waiting_div' => ['next' => 'waiting_hr_rec_sf', 'level' => 3],
-                                    'waiting_hr_rec_sf' => ['next' => 'waiting_hr', 'level' => 4],
-                                    'waiting_hr' => ['next' => 'completed', 'level' => 5], // End at HR for amendments
+                                    
+                                    'waiting_dept' => ['next' => 'waiting_div', 'level' => 1], 
+                                    'waiting_div' => ['next' => 'waiting_hr_rec_sf', 'level' => 2],
+                                    'waiting_hr_rec_sf' => ['next' => 'waiting_hr', 'level' => 3],
+                                    'waiting_hr' => ['next' => 'completed', 'level' => 4], 
                                 ];
                                 $currentStatus = $amendmentStatus;
                             } else {
                                 // Regular request status flow
                                 if ($mpr->supp_type == 1) {
                                     $statusFlow = [
-                                        'waiting_unit' => ['next' => 'waiting_dept', 'level' => 1],
-                                        'waiting_dept' => ['next' => 'waiting_div', 'level' => 2], 
-                                        'waiting_div' => ['next' => 'waiting_hr_rec_sf', 'level' => 3],
-                                        'waiting_hr_rec_sf' => ['next' => 'waiting_hr', 'level' => 4],
-                                        'waiting_hr' => ['next' => 'completed', 'level' => 5], 
+                                        'waiting_dept' => ['next' => 'waiting_div', 'level' => 1], 
+                                        'waiting_div' => ['next' => 'waiting_hr_rec_sf', 'level' => 2],
+                                        'waiting_hr_rec_sf' => ['next' => 'waiting_hr', 'level' => 3],
+                                        'waiting_hr' => ['next' => 'completed', 'level' => 4], 
                                     ];
                                 } else {
                                     $statusFlow = [
-                                        'waiting_unit' => ['next' => 'waiting_dept', 'level' => 1],
-                                        'waiting_dept' => ['next' => 'waiting_div', 'level' => 2], 
-                                        'waiting_div' => ['next' => 'waiting_hr_rec_sf', 'level' => 3],
-                                        'waiting_hr_rec_sf' => ['next' => 'waiting_hr', 'level' => 4],
-                                        'waiting_hr' => ['next' => 'waiting_ad', 'level' => 5],
-                                        'waiting_ad' => ['next' => 'waiting_gm', 'level' => 6],
-                                        'waiting_gm' => ['next' => 'completed', 'level' => 7],
+                                        'waiting_dept' => ['next' => 'waiting_div', 'level' => 1], 
+                                        'waiting_div' => ['next' => 'waiting_hr_rec_sf', 'level' => 2],
+                                        'waiting_hr_rec_sf' => ['next' => 'waiting_hr', 'level' => 3],
+                                        'waiting_hr' => ['next' => 'waiting_ad', 'level' => 4],
+                                        'waiting_ad' => ['next' => 'waiting_gm', 'level' => 5],
+                                        'waiting_gm' => ['next' => 'completed', 'level' => 6],
                                     ];
                                 }
                                 $currentStatus = $status;
@@ -897,16 +898,16 @@ class vgMprCtrl extends Controller
                         {
                             try {
                                 $client = new \GuzzleHttp\Client();
-                                
+                            
                                 $formData = http_build_query($params);
-                                
+                            
                                 $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
                                     'headers' => [
                                         'Content-Type' => 'application/x-www-form-urlencoded'
                                     ],
                                     'body' => $formData 
                                 ]);
-                                
+                            
                                 return json_decode($response->getBody()->getContents(), true);
                             } catch (\Exception $e) {
                                 throw $e;
@@ -994,13 +995,12 @@ class vgMprCtrl extends Controller
                                     
                                     // Original manual deny logic
                                     $statusFlow = [
-                                        'waiting_unit' => ['level' => 1],
-                                        'waiting_dept' => ['level' => 2],
-                                        'waiting_div' => ['level' => 3],
-                                        'waiting_hr_rec_sf' => ['level' => 4],
-                                        'waiting_hr' => ['level' => 5],
-                                        'waiting_ad' => ['level' => 6],
-                                        'waiting_gm' => ['level' => 7],
+                                        'waiting_dept' => ['level' => 1],
+                                        'waiting_div' => ['level' => 2],
+                                        'waiting_hr_rec_sf' => ['level' => 3],
+                                        'waiting_hr' => ['level' => 4],
+                                        'waiting_ad' => ['level' => 5],
+                                        'waiting_gm' => ['level' => 6],
                                     ];
                                     
                                     $currentStatus = $isAmendmentRequest ? $amendmentStatus : $status;
@@ -1115,13 +1115,12 @@ class vgMprCtrl extends Controller
                                         }
                                         
                                         $statusFlow = [
-                                            'waiting_unit' => ['level' => 1],
-                                            'waiting_dept' => ['level' => 2],
-                                            'waiting_div' => ['level' => 3],
-                                            'waiting_hr_rec_sf' => ['level' => 4],
-                                            'waiting_hr' => ['level' => 5],
-                                            'waiting_ad' => ['level' => 6],
-                                            'waiting_gm' => ['level' => 7],
+                                            'waiting_dept' => ['level' => 1],
+                                            'waiting_div' => ['level' => 2],
+                                            'waiting_hr_rec_sf' => ['level' => 3],
+                                            'waiting_hr' => ['level' => 4],
+                                            'waiting_ad' => ['level' => 5],
+                                            'waiting_gm' => ['level' => 6],
                                         ];
                                         
                                         // Update approval array for return
@@ -1443,7 +1442,6 @@ class vgMprCtrl extends Controller
                                                 }
                                                 private function getLevelName($level) {
                                                     $levels = [
-                                                        'waiting_unit' => 'Unit',
                                                         'waiting_dept' => 'Department',
                                                         'waiting_div' => 'Division', 
                                                         'waiting_hr_rec_sf' => 'HR Staff',
@@ -1721,7 +1719,7 @@ class vgMprCtrl extends Controller
                                                         
                                                         $params = new Request([
                                                             'empno' => $userData['empno'],
-                                                            'app_code' => 'MPR',
+                                                            'app_code' => 'mpr',
                                                             'location' => 'VG',
                                                             'custom_data' => json_encode([
                                                                 'custom_dept' => $userData['dept'],
@@ -1744,46 +1742,72 @@ class vgMprCtrl extends Controller
                                                         $requests = Mpr::whereNotIn('status', ['completed', 'declined'])
                                                         ->orderBy('id', 'desc')
                                                         ->get();
-                                                        // Build a map of departments the user has access to
-                                                        $userAccessibleDepts = [];
-                                                        foreach ($flowData as $level) {
-                                                            if (!empty($level['managers'])) {
-                                                                foreach ($level['managers'] as $manager) {
-                                                                    // Direct manager access
-                                                                    if ($manager['empno'] === $userData['empno'] && !empty($manager['dept_code'])) {
-                                                                        $userAccessibleDepts = array_merge($userAccessibleDepts, $manager['dept_code']);
-                                                                    }
-                                                                    
-                                                                    // Deputy access
-                                                                    if ($includeDeputy && !empty($manager['deputies'])) {
-                                                                        foreach ($manager['deputies'] as $deputy) {
-                                                                            if ($deputy['empno'] === $userData['empno'] && 
-                                                                            !empty($deputy['status']) && 
-                                                                            $deputy['status'] === true) {
-                                                                                $userAccessibleDepts = array_merge($userAccessibleDepts, $manager['dept_code']);
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                        $userAccessibleDepts = array_unique($userAccessibleDepts);
                                                         
-                                                        $filteredRequests = $requests->filter(function($request) use ($userData, $userAccessibleDepts) {
+                                                        $statusToLevel = [
+                                                            'waiting_dept' => 0,
+                                                            'waiting_div' => 1,
+                                                            'waiting_hr_rec_sf' => 2,
+                                                            'waiting_hr' => 3,
+                                                            'waiting_ad' => 4,
+                                                            'waiting_gm' => 5
+                                                        ];
+                                                        
+                                                        $filteredRequests = $requests->filter(function($request) use ($userData, $flowData, $statusToLevel, $includeDeputy) {
                                                             if (!$request->approval || !$request->submitter) {
                                                                 return false;
                                                             }
                                                             
                                                             $submitter = json_decode($request->submitter, true);
-                                                            $itemDept = isset($submitter['dept_sumt']) ? trim($submitter['dept_sumt']) : '';
                                                             
-                                                            // Case 1: User created the request
+                                                            // Case 1: User là người tạo request
                                                             if ($submitter['empno'] === $userData['empno']) {
                                                                 return true;
                                                             }
                                                             
-                                                            // Case 2: User has access to the department (either as manager or deputy)
-                                                            return in_array($itemDept, $userAccessibleDepts);
+                                                            // Case 2: Kiểm tra quyền duyệt tại level hiện tại
+                                                            $currentStatus = $request->status;
+                                                            if (!isset($statusToLevel[$currentStatus])) {
+                                                                return false;
+                                                            }
+                                                            
+                                                            $currentLevelIndex = $statusToLevel[$currentStatus];
+                                                            $currentFlow = $flowData[$currentLevelIndex] ?? null;
+                                                            
+                                                            if ($currentFlow && !empty($currentFlow['managers'])) {
+                                                                foreach ($currentFlow['managers'] as $manager) {
+                                                                    // Kiểm tra department/division matching trước khi cho phép xem
+                                                                    $hasPermission = false;
+                                                                    
+                                                                    // Kiểm tra xem manager có quyền với department của submitter không
+                                                                    if (!empty($manager['dept_code']) && !empty($submitter['high_dept'])) {
+                                                                        // Kiểm tra exact match với high_dept của submitter
+                                                                        if (in_array($submitter['high_dept'], $manager['dept_code']) || 
+                                                                        $manager['division_code'] === $submitter['high_dept']) {
+                                                                            $hasPermission = true;
+                                                                        }
+                                                                    }
+                                                                    
+                                                                    if ($hasPermission) {
+                                                                        // Direct manager role
+                                                                        if ($manager['empno'] === $userData['empno']) {
+                                                                            return true;
+                                                                        }
+                                                                        
+                                                                        // Deputy role
+                                                                        if ($includeDeputy && !empty($manager['deputies'])) {
+                                                                            foreach ($manager['deputies'] as $deputy) {
+                                                                                if ($deputy['empno'] === $userData['empno'] && 
+                                                                                !empty($deputy['status']) && 
+                                                                                $deputy['status'] === true) {
+                                                                                    return true;
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                            
+                                                            return false;
                                                         });
                                                         
                                                         return [
@@ -1792,251 +1816,422 @@ class vgMprCtrl extends Controller
                                                             'data' => $filteredRequests->values()
                                                         ];
                                                     }
-                                                    
-                                                    public function countResignedCandidates()
+                                                    public function getProcessedRequestsByEmpno(Request $req)
                                                     {
                                                         try {
-                                                            $results = [];
+                                                            $validator = Validator::make($req->all(), [
+                                                                'empno' => 'required|string'
+                                                            ]);
                                                             
-                                                            // Get all MPRs with candidates data
-                                                            $mprs = Mpr::whereNotNull('candidates')
-                                                            ->where('candidates', '!=', '')
-                                                            ->get();
+                                                            if ($validator->fails()) {
+                                                                return response()->json([
+                                                                    'success' => false,
+                                                                    'errors' => $validator->errors()
+                                                                ], 400);
+                                                            }
                                                             
-                                                            foreach ($mprs as $mpr) {
-                                                                $candidates = json_decode($mpr->candidates, true);
+                                                            $empno = $req->input('empno');
+                                                            
+                                                            // Lấy tất cả các request đã hoàn thành hoặc bị từ chối
+                                                            $allRequests = Mpr::whereIn('status', ['completed', 'declined'])
+                                                            ->orderBy('updated_at', 'DESC')
+                                                            ->get([
+                                                                'id',
+                                                                'req_id',
+                                                                'req_id_change',
+                                                                'key_in_date',
+                                                                'approval',
+                                                                'status',
+                                                                'status_amendent',
+                                                                'submitter',
+                                                                'pos',
+                                                                'reason_exp',
+                                                                'qty_req',
+                                                                'recruited',
+                                                                'stocknumber',
+                                                                'fulfilled',
+                                                                'fullfilldate',
+                                                                'loc',
+                                                                'supp_type',
+                                                                'created_at',
+                                                                'updated_at'
+                                                            ]);
+                                                            
+                                                            $processedRequests = [];
+                                                            $declinedRequests = [];
+                                                            
+                                                            foreach ($allRequests as $request) {
+                                                                $approval = json_decode($request->approval, true);
+                                                                $submitter = json_decode($request->submitter, true);
+                                                                $qtyReq = json_decode($request->qty_req, true);
                                                                 
-                                                                if (!$candidates || empty($candidates)) {
-                                                                    $mpr->resign = 0;
-                                                                    $mpr->resignList = null;
-                                                                    $mpr->save();
-                                                                    $results[] = [
-                                                                        'mpr_id' => $mpr->id,
-                                                                        'req_id' => $mpr->req_id,
-                                                                        'status' => 'success',
-                                                                        'message' => 'No candidates found',
-                                                                        'resigned_count' => 0
-                                                                    ];
+                                                                if (!$approval || !is_array($approval)) {
                                                                     continue;
                                                                 }
                                                                 
-                                                                $candidateEmpnos = array_column($candidates, 'empno');
-                                                                $resignedEmployees = ResignData::whereIn('er_empid', $candidateEmpnos)->get();
-                                                                $resignedCount = $resignedEmployees->count();
+                                                                // Lấy thông tin position và reason
+                                                                $typeApply = TypeApply::where('id', $request->pos)
+                                                                ->where('loc', $request->loc)
+                                                                ->first();
+                                                                $positionName = $typeApply ? $typeApply->type_name : $request->pos;
                                                                 
-                                                                // Only create resignList if there are resigned employees
-                                                                if ($resignedCount > 0) {
-                                                                    $resignList = [];
-                                                                    foreach ($candidates as $candidate) {
-                                                                        $resignData = $resignedEmployees->firstWhere('er_empid', $candidate['empno']);
-                                                                        if ($resignData) {
-                                                                            $resignList[] = [
-                                                                                'empno' => $candidate['empno'],
-                                                                                'date' => $resignData->er_resigndate,
-                                                                                'name' => $candidate['name'],
-                                                                                'key_in' => $candidate['key_in'],
-                                                                                'position' => $mpr->pos // Lấy trực tiếp pos từ Mpr
-                                                                            ];
-                                                                        }
-                                                                    }
-                                                                    $mpr->resignList = json_encode($resignList);
-                                                                } else {
-                                                                    $mpr->resignList = null;
+                                                                $reasonName = RecReason::where('id', $request->reason_exp)
+                                                                ->where('loc', $request->loc)
+                                                                ->first();
+                                                                $typereasonName = $reasonName ? $reasonName->name : $request->reason_exp;
+                                                                
+                                                                // Tính tổng số lượng yêu cầu
+                                                                $totalQty = 0;
+                                                                if ($qtyReq) {
+                                                                    $totalQty = array_sum(array_filter([
+                                                                        $qtyReq['workers'] ?? 0,
+                                                                        $qtyReq['staff'] ?? 0,
+                                                                        $qtyReq['engineers'] ?? 0,
+                                                                        $qtyReq['leader'] ?? 0,
+                                                                        $qtyReq['tranlator'] ?? 0
+                                                                    ]));
                                                                 }
                                                                 
-                                                                $mpr->resign = $resignedCount;
-                                                                $mpr->save();
-                                                                
-                                                                $results[] = [
-                                                                    'mpr_id' => $mpr->id,
-                                                                    'req_id' => $mpr->req_id,
-                                                                    'status' => 'success',
-                                                                    'resigned_count' => $resignedCount,
-                                                                    'resigned_employees' => $resignedEmployees->pluck('er_empid')->toArray()
+                                                                // Tạo object data để return
+                                                                $requestData = [
+                                                                    'id' => $request->id,
+                                                                    'req_id' => $request->req_id,
+                                                                    'req_id_change' => $request->req_id_change,
+                                                                    'status' => $request->status,
+                                                                    'status_amendent' => $request->status_amendent,
+                                                                    'supp_type' => $request->supp_type,
+                                                                    'key_in_date' => $request->key_in_date,
+                                                                    'submitter' => [
+                                                                        'empno' => $submitter['empno'] ?? '',
+                                                                        'name' => $submitter['name'] ?? '',
+                                                                        'dept_sumt' => $submitter['dept_sumt'] ?? '',
+                                                                        'high_dept' => $submitter['high_dept'] ?? '',
+                                                                        'email' => $submitter['email'] ?? ''
+                                                                    ],
+                                                                    'position' => [
+                                                                        'id' => $request->pos,
+                                                                        'name' => $positionName
+                                                                    ],
+                                                                    'reason' => [
+                                                                        'id' => $request->reason_exp,
+                                                                        'name' => $typereasonName
+                                                                    ],
+                                                                    'quantity' => [
+                                                                        'requested' => $totalQty,
+                                                                        'recruited' => $request->recruited ?? 0,
+                                                                        'stocknumber' => $request->stocknumber ?? $totalQty,
+                                                                        'details' => $qtyReq
+                                                                    ],
+                                                                    'fulfilled' => $request->fulfilled,
+                                                                    'fullfilldate' => $request->fullfilldate,
+                                                                    'created_at' => $request->created_at,
+                                                                    'updated_at' => $request->updated_at
                                                                 ];
-                                                            }
-                                                            
-                                                            return response()->json([
-                                                                'status' => 'success',
-                                                                'message' => 'Processed ' . count($results) . ' MPR records',
-                                                                'data' => $results
-                                                            ], 200);
-                                                            
-                                                        } catch (\Exception $e) {
-                                                            return response()->json([
-                                                                'status' => 'error', 
-                                                                'message' => $e->getMessage()
-                                                            ], 500);
-                                                        }
-                                                    }
-                                                    private function processAutoCloseEmail($mpr)
-                                                    {
-                                                        try {
-                                                            $submitter = json_decode($mpr->submitter, true);
-                                                            
-                                                            // Get position details from TypeApply
-                                                            $typeApply = TypeApply::where('id', $mpr->pos)
-                                                            ->where('loc', $mpr->loc)
-                                                            ->first();
-                                                            $position = $typeApply ? $typeApply->type_name : '';
-                                                            
-                                                            // Parse position name for different languages
-                                                            $positionNames = [
-                                                                'cn' => '',
-                                                                'vi' => '',
-                                                                'en' => ''
-                                                            ];
-                                                            
-                                                            if ($position) {
-                                                                try {
-                                                                    $positionObj = json_decode($position, true);
-                                                                    $positionNames['cn'] = $positionObj['cn'] ?? $positionObj['en'] ?? $position;
-                                                                    $positionNames['vi'] = $positionObj['vi'] ?? $positionObj['en'] ?? $position;
-                                                                    $positionNames['en'] = $positionObj['en'] ?? $position;
-                                                                } catch (\Exception $e) {
-                                                                    // Fallback to original value for all languages
-                                                                    $positionNames['cn'] = $position;
-                                                                    $positionNames['vi'] = $position;
-                                                                    $positionNames['en'] = $position;
+                                                                
+                                                                $isDenied = false;
+                                                                
+                                                                // Kiểm tra xem user có từ chối đơn này không
+                                                                foreach ($approval as $level) {
+                                                                    if (isset($level['approver']['empno']) && 
+                                                                    $level['approver']['empno'] === $empno && 
+                                                                    isset($level['status']) && 
+                                                                    strtolower($level['status']) === 'rejected') {
+                                                                        
+                                                                        $requestData['deny_reason'] = $level['reason_denied'] ?? '';
+                                                                        $requestData['processed_at'] = $level['processed_at'] ?? '';
+                                                                        $declinedRequests[] = $requestData;
+                                                                        $isDenied = true;
+                                                                        break;
+                                                                    }
+                                                                }
+                                                                
+                                                                if ($isDenied) continue;
+                                                                
+                                                                // Kiểm tra xem user có approve đơn này không
+                                                                foreach ($approval as $level) {
+                                                                    if (isset($level['approver']['empno']) && 
+                                                                    $level['approver']['empno'] === $empno && 
+                                                                    isset($level['status']) && 
+                                                                    strtolower($level['status']) === 'approved') {
+                                                                        
+                                                                        $requestData['processed_at'] = $level['processed_at'] ?? '';
+                                                                        $processedRequests[] = $requestData;
+                                                                        break;
+                                                                    }
                                                                 }
                                                             }
                                                             
-                                                            // Calculate quantity details
-                                                            $qtyReq = json_decode($mpr->qty_req, true);
-                                                            $totalQty = 0;
-                                                            if ($qtyReq) {
-                                                                $totalQty = array_sum(array_filter([
-                                                                    $qtyReq['workers'] ?? 0,
-                                                                    $qtyReq['staff'] ?? 0,
-                                                                    $qtyReq['staff_lang'] ?? 0,
-                                                                    $qtyReq['engineers'] ?? 0,
-                                                                    $qtyReq['leader'] ?? 0,
-                                                                    $qtyReq['tranlator'] ?? 0
-                                                                ]));
-                                                            }
-                                                            
-                                                            $templateData = [
-                                                                'requester' => [
-                                                                    'name' => $submitter['name'] ?? '',
-                                                                    'empno' => $submitter['empno'] ?? '',
-                                                                    'email' => $submitter['email'] ?? ''
+                                                            return response()->json([
+                                                                'success' => true,
+                                                                'message' => 'Processed requests retrieved successfully',
+                                                                'data' => [
+                                                                    'approved' => $processedRequests,
+                                                                    'declined' => $declinedRequests
                                                                 ],
-                                                                'request' => [
-                                                                    'id' => $mpr->req_id,
-                                                                    'unit' => $submitter['unit'] ?? '',
-                                                                    'position' => $positionNames, // Truyền object chứa tất cả ngôn ngữ
-                                                                    'stocknumber' => $mpr->stocknumber ?? $totalQty,
-                                                                    'recruited' => $mpr->recruited ?? 0,
-                                                                    'hold_date' => $mpr->hold_date
+                                                                'summary' => [
+                                                                    'total_approved' => count($processedRequests),
+                                                                    'total_declined' => count($declinedRequests),
+                                                                    'total_processed' => count($processedRequests) + count($declinedRequests)
                                                                     ]
-                                                                ];
-                                                                
-                                                                $emailContent = view('vgMpr-autoClose', ['templateData' => $templateData])->render();
-                                                                
-                                                                $emailSubject = "[MPR] 人員增補申請自動結案通知 / MPR Auto Close Notification / Thông báo tự động đóng yêu cầu nhân sự";
-                                                                
-                                                                $mailData = [
-                                                                    'to' => [$submitter['email']],
-                                                                    'subject' => $emailSubject,
-                                                                    'msgBody' => $emailContent,
-                                                                ];
-                                                                
-                                                                $params = [
-                                                                    'target' => 'VG-MPR',
-                                                                    'body' => $emailContent,
-                                                                    'msg_type' => "m",
-                                                                    'msg_method' => "both",
-                                                                    'msg_subject' => $emailSubject,
-                                                                    'mail_template' => "msgCenterMailTemplate",
-                                                                    'mail_data' => json_encode($mailData),
-                                                                ];
-                                                                
-                                                                $this->sendMsg($params);
-                                                                
-                                                                return true;
-                                                            } catch (\Exception $e) {
-                                                                \Log::error('Error sending auto close email: ' . $e->getMessage());
-                                                                return false;
-                                                            }
-                                                        }
-                                                        public function sendAutoCloseEmail(Request $request)
-                                                        {
-                                                            try {
-                                                                $mpr = Mpr::find($request->id);
-                                                                if (!$mpr) {
-                                                                    return response()->json([
-                                                                        'success' => false,
-                                                                        'message' => 'MPR record not found'
-                                                                    ], 404);
-                                                                }
-                                                                $emailSent = $this->processAutoCloseEmail($mpr);
-                                                                return response()->json([
-                                                                    'success' => $emailSent,
-                                                                    'message' => $emailSent ? 'Auto close notification sent successfully' : 'Failed to send notification'
                                                                 ]);
                                                                 
                                                             } catch (\Exception $e) {
-                                                                return response()->json([
-                                                                    'success' => false,
-                                                                    'message' => 'Error sending auto close notification: ' . $e->getMessage()
-                                                                ], 500);
-                                                            }
-                                                        }
-                                                        public function updateMprCandidates()
-                                                        {
-                                                            try {
-                                                                // Get all registered candidates
-                                                                $candidates = EmpnoInfo::where('reg', 'yes')
-                                                                ->whereNotNull('emp_demandid')
-                                                                ->get();
-                                                                
-                                                                // Group candidates by emp_demandid
-                                                                $groupedCandidates = $candidates->groupBy('emp_demandid');
-                                                                
-                                                                foreach ($groupedCandidates as $demandId => $candidateGroup) {
-                                                                    $mpr = Mpr::find($demandId);
-                                                                    if (!$mpr) {
-                                                                        continue;
-                                                                    }
-                                                                    
-                                                                    $formattedCandidates = $candidateGroup->map(function($candidate) use ($mpr) {
-                                                                        return [
-                                                                            'empno' => $candidate->newEmpno,
-                                                                            'date' => $candidate->act_en_date,
-                                                                            'name' => $candidate->candidate_name,
-                                                                            'key_in' => $candidate->key_in_date,
-                                                                            'position' => $mpr->pos // Lấy từ pos của Mpr
-                                                                        ];
-                                                                    })->values()->toArray();
-                                                                    
-                                                                    $mpr->candidates = json_encode($formattedCandidates);
-                                                                    $mpr->recruited = count($formattedCandidates);
-                                                                    
-                                                                    $qtyReq = json_decode($mpr->qty_req, true);
-                                                                    $totalQty = array_sum(array_filter($qtyReq));
-                                                                    $mpr->stocknumber = $totalQty - $mpr->recruited;
-                                                                    $mpr->fulfilled = $mpr->stocknumber <= 0 ? 'yes' : 'no';
-                                                                    
-                                                                    if ($mpr->stocknumber <= 0 && empty($mpr->fullfilldate)) {
-                                                                        $mpr->fullfilldate = date('Y-m-d');
-                                                                    }
-                                                                    
-                                                                    $mpr->save();
-                                                                }
-                                                                
-                                                                return response()->json([
-                                                                    'success' => true,
-                                                                    'message' => 'MPR candidates updated successfully',
-                                                                    'updated_count' => $groupedCandidates->count()
+                                                                \Log::error('Error in getProcessedRequestsByEmpno:', [
+                                                                    'error' => $e->getMessage(),
+                                                                    'trace' => $e->getTraceAsString()
                                                                 ]);
                                                                 
-                                                            } catch (\Exception $e) {
                                                                 return response()->json([
                                                                     'success' => false,
-                                                                    'message' => 'Error updating MPR candidates: ' . $e->getMessage()
+                                                                    'message' => 'Error retrieving processed requests: ' . $e->getMessage()
                                                                 ], 500);
                                                             }
                                                         }
                                                         
-                                                    }
-                                                    
+                                                        public function countResignedCandidates()
+                                                        {
+                                                            try {
+                                                                $results = [];
+                                                                
+                                                                // Get all MPRs with candidates data
+                                                                $mprs = Mpr::whereNotNull('candidates')
+                                                                ->where('candidates', '!=', '')
+                                                                ->get();
+                                                                
+                                                                foreach ($mprs as $mpr) {
+                                                                    $candidates = json_decode($mpr->candidates, true);
+                                                                    
+                                                                    if (!$candidates || empty($candidates)) {
+                                                                        $mpr->resign = 0;
+                                                                        $mpr->resignList = null;
+                                                                        $mpr->save();
+                                                                        $results[] = [
+                                                                            'mpr_id' => $mpr->id,
+                                                                            'req_id' => $mpr->req_id,
+                                                                            'status' => 'success',
+                                                                            'message' => 'No candidates found',
+                                                                            'resigned_count' => 0
+                                                                        ];
+                                                                        continue;
+                                                                    }
+                                                                    
+                                                                    $candidateEmpnos = array_column($candidates, 'empno');
+                                                                    $resignedEmployees = ResignData::whereIn('er_empid', $candidateEmpnos)->get();
+                                                                    $resignedCount = $resignedEmployees->count();
+                                                                    
+                                                                    // Only create resignList if there are resigned employees
+                                                                    if ($resignedCount > 0) {
+                                                                        $resignList = [];
+                                                                        foreach ($candidates as $candidate) {
+                                                                            $resignData = $resignedEmployees->firstWhere('er_empid', $candidate['empno']);
+                                                                            if ($resignData) {
+                                                                                $resignList[] = [
+                                                                                    'empno' => $candidate['empno'],
+                                                                                    'date' => $resignData->er_resigndate,
+                                                                                    'name' => $candidate['name'],
+                                                                                    'key_in' => $candidate['key_in'],
+                                                                                    'position' => $mpr->pos // Lấy trực tiếp pos từ Mpr
+                                                                                ];
+                                                                            }
+                                                                        }
+                                                                        $mpr->resignList = json_encode($resignList);
+                                                                    } else {
+                                                                        $mpr->resignList = null;
+                                                                    }
+                                                                    
+                                                                    $mpr->resign = $resignedCount;
+                                                                    $mpr->save();
+                                                                    
+                                                                    $results[] = [
+                                                                        'mpr_id' => $mpr->id,
+                                                                        'req_id' => $mpr->req_id,
+                                                                        'status' => 'success',
+                                                                        'resigned_count' => $resignedCount,
+                                                                        'resigned_employees' => $resignedEmployees->pluck('er_empid')->toArray()
+                                                                    ];
+                                                                }
+                                                                
+                                                                return response()->json([
+                                                                    'status' => 'success',
+                                                                    'message' => 'Processed ' . count($results) . ' MPR records',
+                                                                    'data' => $results
+                                                                ], 200);
+                                                                
+                                                            } catch (\Exception $e) {
+                                                                return response()->json([
+                                                                    'status' => 'error', 
+                                                                    'message' => $e->getMessage()
+                                                                ], 500);
+                                                            }
+                                                        }
+                                                        private function processAutoCloseEmail($mpr)
+                                                        {
+                                                            try {
+                                                                $submitter = json_decode($mpr->submitter, true);
+                                                                
+                                                                // Get position details from TypeApply
+                                                                $typeApply = TypeApply::where('id', $mpr->pos)
+                                                                ->where('loc', $mpr->loc)
+                                                                ->first();
+                                                                $position = $typeApply ? $typeApply->type_name : '';
+                                                                
+                                                                // Parse position name for different languages
+                                                                $positionNames = [
+                                                                    'cn' => '',
+                                                                    'vi' => '',
+                                                                    'en' => ''
+                                                                ];
+                                                                
+                                                                if ($position) {
+                                                                    try {
+                                                                        $positionObj = json_decode($position, true);
+                                                                        $positionNames['cn'] = $positionObj['cn'] ?? $positionObj['en'] ?? $position;
+                                                                        $positionNames['vi'] = $positionObj['vi'] ?? $positionObj['en'] ?? $position;
+                                                                        $positionNames['en'] = $positionObj['en'] ?? $position;
+                                                                    } catch (\Exception $e) {
+                                                                        // Fallback to original value for all languages
+                                                                        $positionNames['cn'] = $position;
+                                                                        $positionNames['vi'] = $position;
+                                                                        $positionNames['en'] = $position;
+                                                                    }
+                                                                }
+                                                                
+                                                                // Calculate quantity details
+                                                                $qtyReq = json_decode($mpr->qty_req, true);
+                                                                $totalQty = 0;
+                                                                if ($qtyReq) {
+                                                                    $totalQty = array_sum(array_filter([
+                                                                        $qtyReq['workers'] ?? 0,
+                                                                        $qtyReq['staff'] ?? 0,
+                                                                        $qtyReq['engineers'] ?? 0,
+                                                                        $qtyReq['leader'] ?? 0,
+                                                                        $qtyReq['tranlator'] ?? 0
+                                                                    ]));
+                                                                }
+                                                                
+                                                                $templateData = [
+                                                                    'requester' => [
+                                                                        'name' => $submitter['name'] ?? '',
+                                                                        'empno' => $submitter['empno'] ?? '',
+                                                                        'email' => $submitter['email'] ?? ''
+                                                                    ],
+                                                                    'request' => [
+                                                                        'id' => $mpr->req_id,
+                                                                        'unit' => $submitter['unit'] ?? '',
+                                                                        'position' => $positionNames, // Truyền object chứa tất cả ngôn ngữ
+                                                                        'stocknumber' => $mpr->stocknumber ?? $totalQty,
+                                                                        'recruited' => $mpr->recruited ?? 0,
+                                                                        'hold_date' => $mpr->hold_date
+                                                                        ]
+                                                                    ];
+                                                                    
+                                                                    $emailContent = view('vgMpr-autoClose', ['templateData' => $templateData])->render();
+                                                                    
+                                                                    $emailSubject = "[MPR] 人員增補申請自動結案通知 / MPR Auto Close Notification / Thông báo tự động đóng yêu cầu nhân sự";
+                                                                    
+                                                                    $mailData = [
+                                                                        'to' => [$submitter['email']],
+                                                                        'subject' => $emailSubject,
+                                                                        'msgBody' => $emailContent,
+                                                                    ];
+                                                                    
+                                                                    $params = [
+                                                                        'target' => 'VG-MPR',
+                                                                        'body' => $emailContent,
+                                                                        'msg_type' => "m",
+                                                                        'msg_method' => "both",
+                                                                        'msg_subject' => $emailSubject,
+                                                                        'mail_template' => "msgCenterMailTemplate",
+                                                                        'mail_data' => json_encode($mailData),
+                                                                    ];
+                                                                    
+                                                                    $this->sendMsg($params);
+                                                                    
+                                                                    return true;
+                                                                } catch (\Exception $e) {
+                                                                    \Log::error('Error sending auto close email: ' . $e->getMessage());
+                                                                    return false;
+                                                                }
+                                                            }
+                                                            public function sendAutoCloseEmail(Request $request)
+                                                            {
+                                                                try {
+                                                                    $mpr = Mpr::find($request->id);
+                                                                    if (!$mpr) {
+                                                                        return response()->json([
+                                                                            'success' => false,
+                                                                            'message' => 'MPR record not found'
+                                                                        ], 404);
+                                                                    }
+                                                                    $emailSent = $this->processAutoCloseEmail($mpr);
+                                                                    return response()->json([
+                                                                        'success' => $emailSent,
+                                                                        'message' => $emailSent ? 'Auto close notification sent successfully' : 'Failed to send notification'
+                                                                    ]);
+                                                                    
+                                                                } catch (\Exception $e) {
+                                                                    return response()->json([
+                                                                        'success' => false,
+                                                                        'message' => 'Error sending auto close notification: ' . $e->getMessage()
+                                                                    ], 500);
+                                                                }
+                                                            }
+                                                            public function updateMprCandidates()
+                                                            {
+                                                                try {
+                                                                    // Get all registered candidates
+                                                                    $candidates = EmpnoInfo::where('reg', 'yes')
+                                                                    ->whereNotNull('emp_demandid')
+                                                                    ->get();
+                                                                    
+                                                                    // Group candidates by emp_demandid
+                                                                    $groupedCandidates = $candidates->groupBy('emp_demandid');
+                                                                    
+                                                                    foreach ($groupedCandidates as $demandId => $candidateGroup) {
+                                                                        $mpr = Mpr::find($demandId);
+                                                                        if (!$mpr) {
+                                                                            continue;
+                                                                        }
+                                                                        
+                                                                        $formattedCandidates = $candidateGroup->map(function($candidate) use ($mpr) {
+                                                                            return [
+                                                                                'empno' => $candidate->newEmpno,
+                                                                                'date' => $candidate->act_en_date,
+                                                                                'name' => $candidate->candidate_name,
+                                                                                'key_in' => $candidate->key_in_date,
+                                                                                'position' => $mpr->pos // Lấy từ pos của Mpr
+                                                                            ];
+                                                                        })->values()->toArray();
+                                                                        
+                                                                        $mpr->candidates = json_encode($formattedCandidates);
+                                                                        $mpr->recruited = count($formattedCandidates);
+                                                                        
+                                                                        $qtyReq = json_decode($mpr->qty_req, true);
+                                                                        $totalQty = array_sum(array_filter($qtyReq));
+                                                                        $mpr->stocknumber = $totalQty - $mpr->recruited;
+                                                                        $mpr->fulfilled = $mpr->stocknumber <= 0 ? 'yes' : 'no';
+                                                                        
+                                                                        if ($mpr->stocknumber <= 0 && empty($mpr->fullfilldate)) {
+                                                                            $mpr->fullfilldate = date('Y-m-d');
+                                                                        }
+                                                                        
+                                                                        $mpr->save();
+                                                                    }
+                                                                    
+                                                                    return response()->json([
+                                                                        'success' => true,
+                                                                        'message' => 'MPR candidates updated successfully',
+                                                                        'updated_count' => $groupedCandidates->count()
+                                                                    ]);
+                                                                    
+                                                                } catch (\Exception $e) {
+                                                                    return response()->json([
+                                                                        'success' => false,
+                                                                        'message' => 'Error updating MPR candidates: ' . $e->getMessage()
+                                                                    ], 500);
+                                                                }
+                                                            }
+                                                            
+                                                            
+                                                        }
+                                                        
