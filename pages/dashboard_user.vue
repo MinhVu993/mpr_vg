@@ -266,8 +266,19 @@
     </div>
 </template>
 <template v-slot:[`item.reason`]="{ item }">
-    <template v-if="item.reason_exp === 3">
+    <!-- <template v-if="item.reason_exp === 3">
         {{ getLocalizedOtherReason(item.isOther_reason) }}
+    </template>
+    <template v-else>
+        {{ item.reasonInfo?.type }}
+    </template> -->
+        <template v-if="item.reason_exp === 3">
+        <div class="d-flex align-center">
+            <span class="text-truncate" style="max-width:150px; display:inline-block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                {{ getLocalizedOtherReason(item.isOther_reason) }}
+            </span>
+            <v-btn x-small text color="primary" @click="openOtherReasonDialog(item)"><v-icon x-small>mdi-eye</v-icon></v-btn>
+        </div>
     </template>
     <template v-else>
         {{ item.reasonInfo?.type }}
@@ -332,6 +343,22 @@
 </v-data-table>
 </v-card>
 </v-col>
+<v-dialog v-model="otherReasonDialog" max-width="720px">
+    <v-card>
+        <v-card-title class="d-flex align-center">
+            <span>{{ $t('Reason') }}</span>
+            <v-spacer></v-spacer>
+            <v-btn icon @click="otherReasonDialog = false"><v-icon>mdi-close</v-icon></v-btn>
+        </v-card-title>
+        <v-card-text>
+            <div class="tooltip-content" style="white-space:pre-line;">{{ otherReasonText }}</div>
+        </v-card-text>
+        <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn text color="error" @click="otherReasonDialog = false"> <v-icon x-small left>mdi-close</v-icon>{{ $t('Close') }} </v-btn>
+        </v-card-actions>
+    </v-card>
+</v-dialog>
 <RequestDialog v-model="appDialog" 
 :edit-data="selectedItem" 
 :is-edit="isEdit" 
@@ -809,6 +836,8 @@ export default {
             { text: 'Position', value: 'position' },
             { text: 'Resign date', value: 'date' }
             ],
+             otherReasonDialog: false,
+            otherReasonText: '',
         }
     },
     computed: {
@@ -1276,6 +1305,15 @@ export default {
         },
     },
     methods: {
+         openOtherReasonDialog(item) {
+            try {
+                this.otherReasonText = this.getLocalizedOtherReason(item.isOther_reason) || '';
+            } catch (e) {
+                console.error('openOtherReasonDialog error', e);
+                this.otherReasonText = item.isOther_reason || '';
+            }
+            this.otherReasonDialog = true;
+        },
         calculateDaysRemaining(holdDate) {
             const hold = new Date(holdDate);
             const holdDateOnly = new Date(hold.getFullYear(), hold.getMonth(), hold.getDate());
@@ -3348,7 +3386,7 @@ export default {
             
         },
         "vi": {
-            "ID": "ID",
+            "ID": "Mã đơn",
             "Submitted by": "Người nộp",
             "Apply Date": "Ngày nộp",
             "Unit code": "Mã đơn vị",
