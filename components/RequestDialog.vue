@@ -8,14 +8,17 @@
                 <v-toolbar-title>{{ dialogTitle }}</v-toolbar-title>
                 <v-spacer></v-spacer>
                 <v-toolbar-items>
-                    <v-btn @click="handleLanguageChange('vi')" text>VI</v-btn>
+                    <!-- <v-btn @click="handleLanguageChange('vi')" text>VI</v-btn>
                     <v-btn @click="handleLanguageChange('cn')" text>中文</v-btn>
-                    <v-btn @click="handleLanguageChange('en')" text class="mr-5" >EN</v-btn >
+                    <v-btn @click="handleLanguageChange('en')" text class="mr-5" >EN</v-btn > -->
+                        <v-btn @click="setLocale('vi')" text>VI</v-btn>
+                    <v-btn @click="setLocale('en')" text>EN</v-btn>
+                  <v-btn @click="setLocale('cn')" text class="mr-5">中文</v-btn>
                     </v-toolbar-items>
                 </v-toolbar>
                 <!-- <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :key="flowKey" :appCode="form.suppType === 1 ? 'mpr_flow2' : 'mpr'" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow" class="mb-2" ></VfaAppFlow> -->
-                <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :key="flowKey" :appCode="getAppCode" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow" class="mb-2" ></VfaAppFlow>
-                
+                <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :locale="$i18n.locale" :key="flowKey" :appCode="getAppCode" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow" class="mb-2" ></VfaAppFlow>
+               
                 <v-app-bar v-if="showFlowSign" class="flow-sign-container mb-3" flat dense >
                     <v-icon color="info" class="mr-2">mdi-information-outline</v-icon>
                     <div class="flow-sign-text text-subtitle-2">
@@ -151,7 +154,7 @@
                         <v-col cols="12" md="1">
                             <v-autocomplete :disabled="formDisabled" v-model="form.pos" :items="posItems" :label="$t('Type Apply')" item-text="name" :rules="[rules.required]" required item-value="id" outlined dense hide-details clearable @change="handleTypeApplyChange" ></v-autocomplete>
                         </v-col>
-                        <v-col cols="12" md="1" v-if="isHrManager">
+                        <v-col cols="12" md="1" v-if="isHrManager && form.pos !== 1">
                             <v-autocomplete 
                             background-color="#fff9c4" 
                             color="#000000" 
@@ -214,8 +217,8 @@
                                         </v-radio>
                                     </v-radio-group>
                                 </v-col>
-                                <v-col cols="12" v-if="form.recruitment.reason === 2"> <!-- For replacement -->
-                                    <v-text-field :disabled="formDisabled" v-model="form.recruitment.oldempno" :label="$t('Old empno')" outlined dense hide-details></v-text-field>
+                                <v-col cols="12" v-if="form.recruitment.reason === 2"> <!-- For2-->
+                                    <v-text-field :rules="[rules.required]" required :disabled="formDisabled" v-model="form.recruitment.oldempno" :label="$t('Old empno')" outlined dense hide-details></v-text-field>
                                 </v-col>
                                 <v-col cols="12" v-if="form.recruitment.reason === 3"> <!-- For other -->
                                     <v-card outlined class="pa-0">
@@ -286,16 +289,16 @@
                         :label="$t('Dimission list file')"
                         outlined
                         dense
-                        :error="form.recruitment.reason === 'replacement'"
-                        :required="form.recruitment.reason === 'replacement'"
+                        :error="form.recruitment.reason === 2"
+                        :required="form.recruitment.reason === 2"
                         hide-details="auto"
                         @change="previewFile('dimissionList', $event)"
                         prepend-inner-icon="mdi-file-account"
                         :clearable="true"
-                        :enablad="form.recruitment.reason === 'replacement'"
+                        :enablad="form.recruitment.reason === 2"
                         accept=".doc,.docx,.pdf,.xls,.xlsx"
                         ></v-file-input>
-                        <div v-show=" filePreview.dimissionList && form.recruitment.reason === 'replacement' " class="file-preview mt-2" >
+                        <div v-show=" filePreview.dimissionList && form.recruitment.reason === 2 " class="file-preview mt-2" >
                             <v-chip small close @click:close="clearFile('dimissionList')" class="mb-1" >
                                 <v-icon left small>{{ getFileIcon( form.attachments.dimissionList?.type || getFileTypeFromName(form.attachments.dimissionList) ) }}</v-icon>
                                 {{ getFileName("dimissionList") }}
@@ -1273,35 +1276,22 @@ export default {
                 async handleLanguageChange(targetLang) {
                     try {
                         localStorage.setItem("preferred-locale", targetLang);
-                        
-                        // set vue-i18n locale (Vue2/v8 or Vue3/v9)
                         if (this.$i18n && typeof this.$i18n.locale !== "undefined") {
                             this.$i18n.locale = targetLang;
                         } else if (this.$i18n && this.$i18n.global && this.$i18n.global.locale) {
                             this.$i18n.global.locale.value = targetLang;
                         }
-                        
                         await this.$nextTick();
-                        
-                        // update computed/localized structures that depend on locale
                         this.updateLocalizedData();
-                        
-                        // Ensure formattedChangeReasons is recalculated and the selected changeReason object
-                        // is replaced by the matching item from formattedChangeReasons so the combobox shows localized text.
                         const currentId =
                         this.form.changeReason && (this.form.changeReason.id ?? (typeof this.form.changeReason === "number" ? this.form.changeReason : null));
                         if (currentId != null) {
                             const matched = this.formattedChangeReasons.find((i) => i.id === currentId);
                             if (matched) {
-                                // assign a fresh object so v-combobox re-renders the display text
                                 this.form.changeReason = { ...matched };
                             }
                         }
-                        
-                        // optional: translate free-text fields if needed (original behavior)
                         await this.helpTrans(targetLang).catch(() => {});
-                        
-                        // force recompute watchers and rerender
                         if (this._computedWatchers) {
                             Object.keys(this._computedWatchers).forEach((key) => {
                                 if (this._computedWatchers[key]) this._computedWatchers[key].update();
@@ -2778,7 +2768,7 @@ export default {
                         ...this.formErrors,
                         jobDesc: this.form.pos === 1 && !this.form.attachments.jobDesc,
                         dimissionList:
-                        this.form.recruitment.reason === "replacement" &&
+                        this.form.recruitment.reason === 2 &&
                         !this.form.attachments.dimissionList,
                     };
                 },
@@ -2798,7 +2788,6 @@ export default {
                     }
                 },
                 handleReasonChange(reasonId) {
-                    // Reset fields
                     this.form.recruitment.oldempno = "";
                     this.form.recruitment.isOther_reason = {
                         vi: "",
@@ -2937,12 +2926,12 @@ export default {
                 
                 // Update flowKey to include changeReason for proper reactivity
                 flowKey() {
-                    const changeReasonId = this.form.changeReason?.id || '';
+                   const changeReasonId = this.form.changeReason?.id || '';
                     const suppType = this.form.suppType || '';
                     const empno = this.flowEmpno || '';
-                    
-                    // Include all relevant factors that should trigger re-render
-                    return `${this.getAppCode}-${empno}-${suppType}-${changeReasonId}-${Date.now()}`;
+                    const locale = this.$i18n ? this.$i18n.locale : '';
+                    // include locale so component remounts when language changes
+                    return `${this.getAppCode}-${empno}-${suppType}-${changeReasonId}-${locale}`;
                 },
                 getChangeQuantityHint() {
                     const minRecruitedQty = this.editData?.recruited || 0;
@@ -3388,12 +3377,12 @@ export default {
                     
                     if (
                     this.form.pos === 1 &&
-                    this.form.recruitment.reason !== "replacement"
+                    this.form.recruitment.reason !== 2
                     ) {
                         width = 12;
                     } else if (
                     this.form.pos === 1 ||
-                    this.form.recruitment.reason !== "replacement"
+                    this.form.recruitment.reason !== 2
                     ) {
                         width = 10;
                     }
@@ -3766,9 +3755,8 @@ export default {
                 "Education Level": "Trình độ học vấn",
                 "Work Experience": "Kinh nghiệm làm việc",
                 "Enter specialization requirements...": "Nhập yêu cầu chuyên môn...",
-                "Job Description": "Mô tả công việc",
                 "Basic Job Description": "Mô tả công việc cơ bản",
-                "Job description file": "Mô tả công việc",
+                "Job description file": "Liệt kê công việc",
                 "Dimission list file": "Mô tả danh sách thôi việc",
                 "Dimission list file is required": "Yêu cầu file danh sách thôi việc",
                 "View": "Xem",
@@ -3849,7 +3837,7 @@ export default {
                 "HR Manager": "Chủ quản nhân sự",
                 "AD Manager": "Chủ quản AD",
                 "GM Manager": "Tổng giám đốc",
-                "Translator": "Đây có phải là nhu cầu tuyển dụng biên dịch viên không?",
+                "Translator": "Đây có phải là nhu cầu tuyển dụng phiên dịch  không?",
                 "Confirm": "Xác nhận",
                 "Previous Approval History": "Lịch sử phê duyệt",
                 "Current Approval History": "Lịch sử phê duyệt hiện tại",

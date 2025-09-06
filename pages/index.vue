@@ -456,7 +456,7 @@
             </v-btn>
         </v-card-title>
         <v-card-text class="pa-1">
-            <v-expansion-panels>
+            <v-expansion-panels v-model="approvalPanelsActive">
                 <v-expansion-panel>
                     <v-expansion-panel-header class="current-cycle-header">
                         <div class="d-flex align-center justify-space-between w-100">
@@ -481,14 +481,14 @@
                         </v-data-table>
                     </v-expansion-panel-content>
                 </v-expansion-panel>
-                <v-expansion-panel v-for="(cycle, cycleIndex) in groupedApprovalData" :key="cycleIndex" :value="cycleIndex === 0" >
-                    <v-expansion-panel-header>
-                        <div class="d-flex align-center">
-                            <v-chip label outlined :color="getCycleColor(cycleIndex + 1)" class="mr-4" >
-                                {{ $t('Cycle') }} {{ cycleIndex + 1 }}
-                            </v-chip>
-                        </div>
-                    </v-expansion-panel-header>
+                <v-expansion-panel v-for="(cycle, cycleIndex) in groupedApprovalData" :key="cycleIndex">
+                     <v-expansion-panel-header>
+                         <div class="d-flex align-center">
+                             <v-chip label outlined :color="getCycleColor(cycleIndex + 1)" class="mr-4" >
+                                 {{ $t('Cycle') }} {{ cycleIndex + 1 }}
+                             </v-chip>
+                         </div>
+                     </v-expansion-panel-header>
                     <v-expansion-panel-content>
                         <v-data-table :headers="approvalHeaders" :items="cycle" hide-default-footer class="elevation-1" >
                             <template v-slot:[`item.type`]="{ item }">
@@ -875,6 +875,7 @@ export default {
             ],
             otherReasonDialog: false,
             otherReasonText: '',
+            approvalPanelsActive:null
             
         }
     },
@@ -3036,7 +3037,7 @@ export default {
                     }
                     return a.level - b.level;
                 });
-                
+                 this.approvalPanelsActive = 0;
                 this.approvalDialog = true;
             } catch (error) {
                 console.error('Error opening approval details:', error);
