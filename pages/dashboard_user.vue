@@ -272,7 +272,7 @@
     <template v-else>
         {{ item.reasonInfo?.type }}
     </template> -->
-        <template v-if="item.reason_exp === 3">
+    <template v-if="item.reason_exp === 3">
         <div class="d-flex align-center">
             <span class="text-truncate" style="max-width:150px; display:inline-block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                 {{ getLocalizedOtherReason(item.isOther_reason) }}
@@ -459,14 +459,14 @@
                         </v-data-table>
                     </v-expansion-panel-content>
                 </v-expansion-panel>
-               <v-expansion-panel v-for="(cycle, cycleIndex) in groupedApprovalData" :key="cycleIndex">
-                     <v-expansion-panel-header>
-                         <div class="d-flex align-center">
-                             <v-chip label outlined :color="getCycleColor(cycleIndex + 1)" class="mr-4" >
-                                 {{ $t('Cycle') }} {{ cycleIndex + 1 }}
-                             </v-chip>
-                         </div>
-                     </v-expansion-panel-header>
+                <v-expansion-panel v-for="(cycle, cycleIndex) in groupedApprovalData" :key="cycleIndex">
+                    <v-expansion-panel-header>
+                        <div class="d-flex align-center">
+                            <v-chip label outlined :color="getCycleColor(cycleIndex + 1)" class="mr-4" >
+                                {{ $t('Cycle') }} {{ cycleIndex + 1 }}
+                            </v-chip>
+                        </div>
+                    </v-expansion-panel-header>
                     <v-expansion-panel-content>
                         <v-data-table :headers="approvalHeaders" :items="cycle" hide-default-footer class="elevation-1" >
                             <template v-slot:[`item.type`]="{ item }">
@@ -821,7 +821,7 @@ export default {
             { text: this.$t('Date'), value: 'processed_at', width: '120px' },
             { text: this.$t('Reason Deny'), value: 'reason_denied' },
             ],
-            statusFilter: 1, 
+            statusFilter: 0, 
             filterValues: {}, 
             dataRecruitmentReason:[],
             unitNames: [],
@@ -836,7 +836,7 @@ export default {
             { text: 'Position', value: 'position' },
             { text: 'Resign date', value: 'date' }
             ],
-             otherReasonDialog: false,
+            otherReasonDialog: false,
             otherReasonText: '',
             approvalPanelsActive:null
         }
@@ -964,9 +964,15 @@ export default {
                 return [];
             }
         },
+        defaultTab() {
+            return this.hasTodoData ? 1 : 0;
+        },
         hasTodoData() {
+            if (!this.generalFlowData && Object.keys(this.approvalFlowCache).length === 0) {
+                return false;
+            }
             return this.dataFilteredByYear.some(item => {
-                return this.filterToDoData([item]).length > 0;
+                return this.canApproveItemForTodo(item);
             });
         },
         userDepartment() {
@@ -1111,7 +1117,7 @@ export default {
         filteredData() {
             let result = this.dataFilteredByYear;
             if (this.statusFilter === 1) { 
-                result = result.filter(item => this.filterToDoData([item]).length > 0);
+                result = result.filter(item => this.canApproveItemForTodo(item));
             } else if (this.statusFilter === 2) { 
                 result = result.filter(item => 
                 ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
@@ -1178,7 +1184,7 @@ export default {
             });
             
             // Áp dụng tìm kiếm text nếu có
-           if (this.search) {
+            if (this.search) {
                 const searchTerm = this.search.toLowerCase();
                 result = result.filter(item => {
                     return (
@@ -1199,7 +1205,7 @@ export default {
                     String(item.qtyInfo?.details || '').toLowerCase().includes(searchTerm)
                     );
                 });
-            
+                
             }
             
             return result;
@@ -1272,16 +1278,25 @@ export default {
                 ],
             }
         },
+        approvalFlowDependency() {
+        return {
+            cache: Object.keys(this.approvalFlowCache).length,
+            generalFlow: !!this.generalFlowData,
+            timestamp: Date.now() 
+        };
+    },
         statusCounts() {
-            const all = this.dataFilteredByYear.length;
-            let todo = 0, completed = 0, processing = 0, returned = 0, declined = 0;
-            
-            this.dataFilteredByYear.forEach(item => {
-                if (this.filterToDoData([item]).length > 0) {
-                    todo++;
-                }
-                if (['waiting_dept', 'waiting_div', 'waiting_hr', 'waiting_hr_rec_sf', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
-                ['waiting_dept', 'waiting_div', 'waiting_hr', 'waiting_hr_rec_sf', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)) {
+        this.approvalFlowDependency;
+        
+        const all = this.dataFilteredByYear.length;
+        let todo = 0, completed = 0, processing = 0, returned = 0, declined = 0;
+        
+        this.dataFilteredByYear.forEach(item => {
+            if (this.canApproveItemForTodo(item)) {
+                todo++;
+            }
+                if ([ 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
+                ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)) {
                     processing++;
                 }
                 if (item.status === 'completed' || item.status_amendent === 'completed') {
@@ -1306,7 +1321,7 @@ export default {
         },
     },
     methods: {
-         openOtherReasonDialog(item) {
+        openOtherReasonDialog(item) {
             try {
                 this.otherReasonText = this.getLocalizedOtherReason(item.isOther_reason) || '';
             } catch (e) {
@@ -1314,6 +1329,9 @@ export default {
                 this.otherReasonText = item.isOther_reason || '';
             }
             this.otherReasonDialog = true;
+        },
+        setDefaultTab() {
+            this.statusFilter = this.defaultTab;
         },
         calculateDaysRemaining(holdDate) {
             const hold = new Date(holdDate);
@@ -1755,6 +1773,8 @@ export default {
                 const res = await this.$axios.post(this.api + 'getAllDataMpr', params);
                 if (res.status === 200) {
                     this.dataMpr = res.data.dataMpr;
+                     await this.$nextTick();
+                    this.setDefaultTab();
                 } else {
                     throw new Error('Failed to fetch data');
                 }
@@ -2215,7 +2235,7 @@ export default {
                 
                 // Combine và format dữ liệu
                 this.selectedApprovalData = this.formatApprovalData(currentApproval, historyApproval);
-                 this.approvalPanelsActive = 0;
+                this.approvalPanelsActive = 0;
                 this.approvalDialog = true;
             } catch (error) {
                 console.error('Error opening approval details:', error);
@@ -2958,7 +2978,8 @@ export default {
             try {
                 const res = await this.$axios.post(this.api + "getDataFlowForItem", params);
                 if (res.data && res.data.flow_data) {
-                    this.approvalFlowCache[itemId] = res.data.flow_data;
+                    // <-- use Vue.set so the new key is reactive
+                    this.$set(this.approvalFlowCache, itemId, res.data.flow_data);
                     
                     if (this.flowRequestQueue[itemId]) {
                         this.flowRequestQueue[itemId].forEach(request => {
@@ -2997,7 +3018,7 @@ export default {
         },
         // getReturnInfo(item) {
         //     if (!item.approval) return { returned: false, reason: '' };
-            
+        
         //     try {
         //         const approvalData = JSON.parse(item.approval);
         //         const returnedLevel = approvalData.find(level => level.status === 'returned');
@@ -3072,25 +3093,73 @@ export default {
             
             await Promise.all(preloadPromises);
         },
-        filterToDoData(data) {
-            return data.filter(item => {
-                const waitingStates = [
-                'waiting_dept', 
-                'waiting_div',
-                'waiting_hr_rec_sf', 
-                'waiting_hr', 
-                'waiting_ad', 
-                'waiting_gm'
-                ];
+        canApproveItemForTodo(item)
+        {
+            if ((item.status === 'completed' || item.status === 'declined') && 
+            (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined')) {
+                return false;
+            }
+            const validStatuses = [
+            'waiting_dept', 
+            'waiting_div', 
+            'waiting_hr_rec_sf', 
+            'waiting_hr', 
+            'waiting_ad', 
+            'waiting_gm'
+            ];
+            
+            // Kiểm tra xem có ít nhất một trong hai trạng thái thuộc danh sách hợp lệ
+            // if (!validStatuses.includes(item.status) && 
+            // (!item.status_amendent || !validStatuses.includes(item.status_amendent))) {
+            //     return false;
+            // }
+            
+            try {
+                const approval = JSON.parse(item.approval);
                 
-                const isWaitingStatus = waitingStates.includes(item.status);
-                const isWaitingAmendment = waitingStates.includes(item.status_amendent);
-                if (!isWaitingStatus && !isWaitingAmendment) {
-                    return false;
+                // Nếu có status_amendent, sử dụng logic khác
+                if (item.status_amendent) {
+                    const statusToLevelCode = {
+                        'waiting_dept': 'dept_manager',
+                        'waiting_div': 'division_manager',
+                        'waiting_hr_rec_sf': 'hr_rec_sf',
+                        'waiting_hr': 'hr_manager',
+                        'waiting_ad': 'smp_manager',
+                        'waiting_gm': 'general_manager'
+                    };
+                    
+                    const currentLevelCode = statusToLevelCode[item.status_amendent];
+                    if (!currentLevelCode) return false;
+                    
+                    const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
+                    if (!flowData || !Array.isArray(flowData)) return false;
+                    
+                    const currentFlowLevel = flowData.find(level => level.lvl_code === currentLevelCode);
+                    if (!currentFlowLevel?.managers) return false;
+                    
+                    return currentFlowLevel.managers.some(manager => {
+                        if (manager.empno === this.activeUser.empno) return true;
+                        
+                        if (manager.deputies && Array.isArray(manager.deputies)) {
+                            return manager.deputies.some(deputy => 
+                            deputy.empno === this.activeUser.empno && 
+                            deputy.status === true
+                            );
+                        }
+                        return false;
+                    });
                 }
-                const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
                 
-                if (!flowData || !this.activeUser) return false;
+                // Logic cũ cho status thông thường
+                const currentLevel = approval.find(level => level.status === 'waiting');
+                if (!currentLevel) return false;
+                
+                if (currentLevel.approver && currentLevel.approver.empno === this.activeUser.empno) {
+                    return true;
+                }
+                
+                const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
+                if (!flowData || !Array.isArray(flowData)) return false;
                 
                 const statusToLevelCode = {
                     'waiting_dept': 'dept_manager',
@@ -3100,25 +3169,28 @@ export default {
                     'waiting_ad': 'smp_manager',
                     'waiting_gm': 'general_manager'
                 };
+                const currentLevelCode = statusToLevelCode[item.status];
+                if (!currentLevelCode) return false;
                 
-                const statusToCheck = isWaitingStatus ? item.status : item.status_amendent;
-                const levelCode = statusToLevelCode[statusToCheck];
-                if (!levelCode) return false;
+                const currentFlowLevel = flowData.find(level => level.lvl_code === currentLevelCode);
+                if (!currentFlowLevel?.managers) return false;
                 
-                const currentLevel = flowData.find(level => level.lvl_code === levelCode);
-                if (!currentLevel?.managers) return false;
+                return currentFlowLevel.managers.some(manager => {
+                    if (manager.empno === this.activeUser.empno) return true;
+                    
+                    if (manager.deputies && Array.isArray(manager.deputies)) {
+                        return manager.deputies.some(deputy => 
+                        deputy.empno === this.activeUser.empno && 
+                        deputy.status === true
+                        );
+                    }
+                    return false;
+                });
                 
-                return currentLevel.managers.some(manager =>
-                manager.empno === this.activeUser.empno ||
-                (manager.deputies && Array.isArray(manager.deputies) &&
-                manager.deputies.some(deputy =>
-                deputy.empno === this.activeUser.empno && deputy.status === true
-                )
-                )
-                );
-            });
-            
-            
+            } catch (error) {
+                console.error('Error in canApproveItemForTodo:', error);
+                return false;
+            }
         },
         showRejectionDetails(item) {
             try {
@@ -3165,69 +3237,69 @@ export default {
             
         },
         async exportExcel() {
-    try {
-        const headers = this.originalHeaders
-        .filter(header => header.value !== 'select' && header.value !== 'action')
-        .map(header => ({
-            title: this.$t(header.text),
-            key: header.value
-        }));
-        
-        const data = this.filteredData.map(item => {
-            const row = {};
-            headers.forEach(header => {
-                switch (header.key) {
-                    case 'submitter':
-                        row[header.title] = item.submiterInfo ? 
-                        `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';
-                        break;
-                    case 'status':
-                        row[header.title] = this.$t(this.getStatusText(item.status, item));
-                        break;
-                    case 'pos':
-                        row[header.title] = this.getPositionName(item.pos);
-                        break;
-                    case 'sub_pos':
-                        // Thêm case mới cho sub_pos
-                        row[header.title] = this.getSubPositionName(item.sub_pos, true);
-                        break;
-                    case 'qty_req':
-                        row[header.title] = this.getDisplayQuantity(item.qty_req);
-                        break;
-                    case 'date_req':
-                    case 'key_in_date':
-                        row[header.title] = this.formatDate(item[header.key]);
-                        break;
-                    default:
-                        row[header.title] = item[header.key];
-                }
-            });
-            return row;
-        });
-        
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.json_to_sheet(data);
-        const colWidths = headers.map(() => ({ wch: 20 }));
-        ws['!cols'] = colWidths;
-        XLSX.utils.book_append_sheet(wb, ws, 'Manpower Requests');
-        const date = new Date().toISOString().split('T')[0];
-        const fileName = `Manpower_Requests_${date}.xlsx`;
-        XLSX.writeFile(wb, fileName);
-        
-        this.$notify({
-            title: this.$t('Success'),
-            text: this.$t('Export successful'),
-            type: 'success'
-        });
-    } catch (error) {
-        console.error('Export error:', error);
-        this.$notify({
-            title: this.$t('Error'),
-            text: this.$t('Export failed'),
-            type: 'error'
-        });
-    }
-},
+            try {
+                const headers = this.originalHeaders
+                .filter(header => header.value !== 'select' && header.value !== 'action')
+                .map(header => ({
+                    title: this.$t(header.text),
+                    key: header.value
+                }));
+                
+                const data = this.filteredData.map(item => {
+                    const row = {};
+                    headers.forEach(header => {
+                        switch (header.key) {
+                            case 'submitter':
+                            row[header.title] = item.submiterInfo ? 
+                            `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';
+                            break;
+                            case 'status':
+                            row[header.title] = this.$t(this.getStatusText(item.status, item));
+                            break;
+                            case 'pos':
+                            row[header.title] = this.getPositionName(item.pos);
+                            break;
+                            case 'sub_pos':
+                            // Thêm case mới cho sub_pos
+                            row[header.title] = this.getSubPositionName(item.sub_pos, true);
+                            break;
+                            case 'qty_req':
+                            row[header.title] = this.getDisplayQuantity(item.qty_req);
+                            break;
+                            case 'date_req':
+                            case 'key_in_date':
+                            row[header.title] = this.formatDate(item[header.key]);
+                            break;
+                            default:
+                            row[header.title] = item[header.key];
+                        }
+                    });
+                    return row;
+                });
+                
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.json_to_sheet(data);
+                const colWidths = headers.map(() => ({ wch: 20 }));
+                ws['!cols'] = colWidths;
+                XLSX.utils.book_append_sheet(wb, ws, 'Manpower Requests');
+                const date = new Date().toISOString().split('T')[0];
+                const fileName = `Manpower_Requests_${date}.xlsx`;
+                XLSX.writeFile(wb, fileName);
+                
+                this.$notify({
+                    title: this.$t('Success'),
+                    text: this.$t('Export successful'),
+                    type: 'success'
+                });
+            } catch (error) {
+                console.error('Export error:', error);
+                this.$notify({
+                    title: this.$t('Error'),
+                    text: this.$t('Export failed'),
+                    type: 'error'
+                });
+            }
+        },
         updateFilter(key, value) {
             if (value && value.length) {
                 this.$set(this.filterValues, key, value);
@@ -3247,34 +3319,34 @@ export default {
         await this.fetchFlowData();
         await this.fetchData();
         await this.getAllData();
+        
+        // Thiết lập tab mặc định sau khi dữ liệu đã được tải
         this.$nextTick(() => {
-            if (!this.hasTodoData && this.statusFilter === 1) {
-                this.statusFilter = 0;
-            }
+            this.statusFilter = this.hasTodoData ? 1 : 0; // Trực tiếp thiết lập
         });
-        
-        
-        
         
     },
     watch: {
-        hasTodoData(val) {
-            if (!val && this.statusFilter === 1) {
-                this.$nextTick(() => {
-                    this.$nextTick(() => {
-                        this.statusFilter = 0;
-                    });
-                });
-            }
+        
+        hasTodoData: {
+            handler(newVal, oldVal) {
+                if (oldVal !== undefined && newVal !== oldVal) {
+                    if (!newVal && this.statusFilter === 1) {
+                        this.statusFilter = 0; 
+                    }
+                }
+            },
+            immediate: false
         },
-        statusFilter(val) {
-            if (val === 1 && !this.hasTodoData) {
-                this.$nextTick(() => {
+        generalFlowData: {
+            handler(newVal) {
+                if (newVal) {
                     this.$nextTick(() => {
-                        this.statusFilter = 0;
+                        this.setDefaultTab();
                     });
-                });
-            }
+                }
+            },
+            immediate: false
         },
         selectedYears: {
             handler() {
@@ -3307,15 +3379,23 @@ export default {
         //     immediate: true,
         //     deep: true
         // },
+        
+        statusFilter: {
+            handler() {
+                this.filteredItems = [];
+                this.search = '';
+            },
+            immediate: true
+        },
         selectedCandidates(newVal) {
             this.selectAll = newVal.length === this.parsedCandidates.length;
         },
         selectedItem(newVal) {
-            this.selectAll = false; // Always keep selectAll false for single selection
+            this.selectAll = false; 
         },
         appDialog(newVal) {
-            if (!newVal) {  // When dialog is closed
-                this.selectedItem = null;  // Reset selectedItem
+            if (!newVal) { 
+                this.selectedItem = null;  
                 this.isEdit = false;
             }
         },
@@ -3382,7 +3462,7 @@ export default {
             "Resign date":"Resign date",
             "Resign Listing Details":"Resign Listing Details",
             "Cancelled":"Cancelled",
-             "days": "days",
+            "days": "days",
             "remaining": "remaining"
             
         },
@@ -3442,8 +3522,8 @@ export default {
             "Resign date":"Ngày thôi việc",
             "Resign Listing Details":"Chi tiết danh sách nghỉ việc",
             "Cancelled":"Đã hủy",
-             "days": "ngày",
-             "remaining": "còn lại"
+            "days": "ngày",
+            "remaining": "còn lại"
         },
         "cn": {
             "ID": "表單編號",

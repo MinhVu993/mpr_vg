@@ -550,6 +550,10 @@
                 <v-icon left dark>mdi-check</v-icon>
                 {{ $t("Confirm Action") }}
                 <v-spacer></v-spacer>
+                <v-btn-toggle v-model="selectedLanguage" group class="mr-4" dark>
+                    <v-btn x-small value="vi">VI</v-btn>
+                    <v-btn x-small value="cn">中文</v-btn>
+                </v-btn-toggle>
                 <v-btn icon dark @click="confirmAcceptDialog = false"> <v-icon>mdi-close</v-icon> </v-btn>
             </v-card-title>
             <v-card-text class="pt-4">
@@ -922,7 +926,7 @@ export default {
             isLoadingReqId: false,
             dataRecruitmentReason: [],
             changeQtyError: '',
-            selectedLanguage:'vi',
+            selectedLanguage:'cn',
             unitNames:[]
         };
     },
