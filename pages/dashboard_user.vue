@@ -1473,11 +1473,11 @@ export default {
                     dark: false,
                 };
             }
-            if (status === 'completed' && statusAmendent == 'completed') {
+            if (status === 'completed' && statusAmendent == 'completed' && hold === 0 && resumed === 0) {
                 return {
                     text: this.$t('Recruiting'),
                     show: true,
-                    color: '#43A047',
+                    color: '#E65100',
                     dark: false,
                 };
             }
@@ -1512,7 +1512,7 @@ export default {
                         text: statusText,
                         detail: detailText,
                         show: true,
-                        color: '#FFC107', // Màu vàng chuẩn cho hold còn hiệu lực
+                        color: '#E65100', // Màu vàng chuẩn cho hold còn hiệu lực
                         dark: false,
                     };
                 } else {

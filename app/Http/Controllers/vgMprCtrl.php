@@ -110,7 +110,6 @@ class vgMprCtrl extends Controller
         
         $dataMprQuery = Mpr::where('loc', $loc)->orderBy('id', 'desc');
         $dataMpr = $dataMprQuery->get();
-     
         
         $dataResign = $this->getResignData($loc);
         $resignEmpIds = collect($dataResign)->pluck('er_deptid')->toArray();
@@ -133,6 +132,7 @@ class vgMprCtrl extends Controller
             ]);
             $flowResponse = $this->getDataFlowForItem($params)->getData();
             $flowData = json_decode(json_encode($flowResponse->flow_data ?? []), true);
+            
             
             if ($empno && $flowData) {
                 $userAccessibleDepts = [];
@@ -202,13 +202,12 @@ class vgMprCtrl extends Controller
                     }
                     
                     $statusToLevel = [
-                        'waiting_unit' => 0,
-                        'waiting_dept' => 1, 
-                        'waiting_div' => 2,
-                        'waiting_hr_rec_sf' => 3,
-                        'waiting_hr' => 4,
-                        'waiting_ad' => 5,
-                        'waiting_gm' => 6
+                        'waiting_dept' => 0, 
+                        'waiting_div' => 1,
+                        'waiting_hr_rec_sf' => 2,
+                        'waiting_hr' => 3,
+                        'waiting_ad' => 4,
+                        'waiting_gm' => 5
                     ];
                     
                     foreach ($statusesToCheck as $status) {
@@ -853,170 +852,280 @@ class vgMprCtrl extends Controller
                             // Update MPR record based on request type
                             if ($isAmendmentRequest) {
                                 $mpr->status_amendent = $nextStatus;
-                                // Keep original status unchanged for amendments
                             } else {
                                 $mpr->status = $nextStatus;
                             }
                             $mpr->approval = json_encode($approval);
                             $mpr->save();
-                            // --- NEW: migrate to Demand when request becomes completed ---
                             $effectiveStatus = $isAmendmentRequest ? $mpr->status_amendent : $mpr->status;
-                            if ($effectiveStatus === 'completed') {
-                                // synchronous:
-                                // $this->migrateCompletedMprToDemand($mpr);
+                           
+                            $this->sendAcceptEmailNotification($mpr, $nextStatus, $dataFlow, $statusFlow, $currentStatus, $isAmendmentRequest);
+                            
+                            return response()->json([
+                                'success' => true,
+                                'message' => $isAmendmentRequest ? 'Amendment request accepted successfully' : 'Request accepted successfully',
+                                'data' => [
+                                    'id' => $id,
+                                    'status' => $mpr->status,
+                                    'status_amendent' => $mpr->status_amendent,
+                                    'approval' => $approval,
+                                    ]
+                                ]);
                                 
-                                // or async (recommended for heavy processing):
-                                    // dispatch(new \App\Jobs\MigrateMprToDemandJob($mpr->id));
-                                }
-                                // --- END NEW ---
-                                // Send email notification
-                                $this->sendAcceptEmailNotification($mpr, $nextStatus, $dataFlow, $statusFlow, $currentStatus, $isAmendmentRequest);
-                                
+                            } catch (\Exception $e) {
                                 return response()->json([
-                                    'success' => true,
-                                    'message' => $isAmendmentRequest ? 'Amendment request accepted successfully' : 'Request accepted successfully',
-                                    'data' => [
-                                        'id' => $id,
-                                        'status' => $mpr->status,
-                                        'status_amendent' => $mpr->status_amendent,
-                                        'approval' => $approval,
-                                        ]
-                                    ]);
-                                    
-                                } catch (\Exception $e) {
-                                    return response()->json([
-                                        'success' => false,
-                                        'message' => 'Error accepting request: ' . $e->getMessage()
-                                    ], 500);
-                                }
+                                    'success' => false,
+                                    'message' => 'Error accepting request: ' . $e->getMessage()
+                                ], 500);
                             }
-                            private function findApprover($managers, $user_empno)
-                            {
-                                foreach ($managers as $manager) {
-                                    if ($manager['empno'] === $user_empno) {
-                                        return [
-                                            'empno' => $manager['empno'],
-                                            'name' => $manager['name'],
-                                            'dept' => $manager['dept_code'][0] ?? '',
-                                            'email' => $manager['email']
-                                        ];
-                                    }
-                                    
-                                    if (!empty($manager['deputies'])) {
-                                        foreach ($manager['deputies'] as $deputy) {
-                                            if ($deputy['empno'] === $user_empno && !empty($deputy['status'])) {
-                                                return [
-                                                    'empno' => $deputy['empno'],
-                                                    'name' => $deputy['name'],
-                                                    'dept' => $manager['dept_code'][0] ?? '',
-                                                    'email' => $deputy['email']
-                                                ];
-                                            }
+                        }
+                        private function findApprover($managers, $user_empno)
+                        {
+                            foreach ($managers as $manager) {
+                                if ($manager['empno'] === $user_empno) {
+                                    return [
+                                        'empno' => $manager['empno'],
+                                        'name' => $manager['name'],
+                                        'dept' => $manager['dept_code'][0] ?? '',
+                                        'email' => $manager['email']
+                                    ];
+                                }
+                                
+                                if (!empty($manager['deputies'])) {
+                                    foreach ($manager['deputies'] as $deputy) {
+                                        if ($deputy['empno'] === $user_empno && !empty($deputy['status'])) {
+                                            return [
+                                                'empno' => $deputy['empno'],
+                                                'name' => $deputy['name'],
+                                                'dept' => $manager['dept_code'][0] ?? '',
+                                                'email' => $deputy['email']
+                                            ];
                                         }
                                     }
                                 }
-                                return null;
                             }
-                            private function sendMsg($params) 
-                            {
-                                try {
-                                    $client = new \GuzzleHttp\Client();
-                                    
-                                    $formData = http_build_query($params);
-                                    
-                                    $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
-                                        'headers' => [
-                                            'Content-Type' => 'application/x-www-form-urlencoded'
-                                        ],
-                                        'body' => $formData 
-                                    ]);
-                                    
-                                    return json_decode($response->getBody()->getContents(), true);
-                                } catch (\Exception $e) {
-                                    throw $e;
+                            return null;
+                        }
+                        private function sendMsg($params) 
+                        {
+                            try {
+                                $client = new \GuzzleHttp\Client();
+                                
+                                $formData = http_build_query($params);
+                                
+                                $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
+                                    'headers' => [
+                                        'Content-Type' => 'application/x-www-form-urlencoded'
+                                    ],
+                                    'body' => $formData 
+                                ]);
+                                
+                                return json_decode($response->getBody()->getContents(), true);
+                            } catch (\Exception $e) {
+                                throw $e;
+                            }
+                        }
+                        public function denyRequest(Request $req)
+                        {
+                            try {
+                                $validator = Validator::make($req->all(), [
+                                    'id' => 'required',
+                                    'reason' => 'required|string|max:500',
+                                    'user_empno' => 'required|string', 
+                                    'dataReq' => 'required',
+                                ]);
+                                
+                                if ($validator->fails()) {
+                                    return response()->json([
+                                        'success' => false,
+                                        'errors' => $validator->errors()
+                                    ], 400);
                                 }
-                            }
-                            public function denyRequest(Request $req)
-                            {
-                                try {
-                                    $validator = Validator::make($req->all(), [
-                                        'id' => 'required',
-                                        'reason' => 'required|string|max:500',
-                                        'user_empno' => 'required|string', 
-                                        'dataReq' => 'required',
-                                    ]);
+                                
+                                $dataReq = $req['dataReq'];
+                                $dataFlow = $dataReq['dataFlow'];
+                                $status = $dataReq['status'];
+                                $approval = json_decode($dataReq['approval'], true);
+                                $id = $dataReq['id'];
+                                $user_empno = $req->user_empno;
+                                
+                                // Check if this is an auto decline
+                                $autoDecline = isset($dataReq['auto_decline']) && $dataReq['auto_decline'] === true;
+                                
+                                // Check if this is an amendment request
+                                $isAmendmentRequest = !empty($dataReq['status_amendent']);
+                                $amendmentStatus = $dataReq['status_amendent'] ?? null;
+                                
+                                $mpr = Mpr::find($id);
+                                if (!$mpr) {
+                                    return response()->json([
+                                        'success' => false,
+                                        'message' => 'MPR record not found'
+                                    ], 404);
+                                }
+                                
+                                if ($autoDecline) {
+                                    // Handle auto decline - simpler logic
+                                    if ($isAmendmentRequest) {
+                                        $mpr->status_amendent = 'declined';
+                                    } else {
+                                        $mpr->status = 'declined';
+                                    }
                                     
-                                    if ($validator->fails()) {
+                                    // Update approval with auto decline reason
+                                    if ($approval && is_array($approval)) {
+                                        foreach ($approval as &$level) {
+                                            if (empty($level['status']) || $level['status'] === 'waiting') {
+                                                $level['status'] = 'rejected';
+                                                $level['reason_denied'] = $req->reason;
+                                                $level['processed_at'] = now()->toDateTimeString();
+                                                $level['approver'] = [
+                                                    'empno' => 'SYSTEM',
+                                                    'name' => 'Auto System',
+                                                    'dept' => 'SYSTEM',
+                                                    'email' => 'system@company.com'
+                                                ];
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    
+                                    $mpr->approval = json_encode($approval);
+                                    $mpr->save();
+                                    
+                                    return response()->json([
+                                        'success' => true,
+                                        'message' => 'Request auto declined successfully',
+                                        'data' => [
+                                            'id' => $mpr->id,
+                                            'status' => $mpr->status,
+                                            'status_amendent' => $mpr->status_amendent,
+                                            'approval' => $approval
+                                            ]
+                                        ]);
+                                    }
+                                    
+                                    // Original manual deny logic
+                                    $statusFlow = [
+                                        'waiting_dept' => ['level' => 1],
+                                        'waiting_div' => ['level' => 2],
+                                        'waiting_hr_rec_sf' => ['level' => 3],
+                                        'waiting_hr' => ['level' => 4],
+                                        'waiting_ad' => ['level' => 5],
+                                        'waiting_gm' => ['level' => 6],
+                                    ];
+                                    
+                                    $currentStatus = $isAmendmentRequest ? $amendmentStatus : $status;
+                                    
+                                    if (!isset($statusFlow[$currentStatus])) {
                                         return response()->json([
                                             'success' => false,
-                                            'errors' => $validator->errors()
+                                            'message' => 'Invalid current status for denial'
                                         ], 400);
                                     }
                                     
-                                    $dataReq = $req['dataReq'];
-                                    $dataFlow = $dataReq['dataFlow'];
-                                    $status = $dataReq['status'];
-                                    $approval = json_decode($dataReq['approval'], true);
-                                    $id = $dataReq['id'];
-                                    $user_empno = $req->user_empno;
+                                    $currentLevelIndex = $statusFlow[$currentStatus]['level'] - 1;
                                     
-                                    // Check if this is an auto decline
-                                    $autoDecline = isset($dataReq['auto_decline']) && $dataReq['auto_decline'] === true;
-                                    
-                                    // Check if this is an amendment request
-                                    $isAmendmentRequest = !empty($dataReq['status_amendent']);
-                                    $amendmentStatus = $dataReq['status_amendent'] ?? null;
-                                    
-                                    $mpr = Mpr::find($id);
-                                    if (!$mpr) {
-                                        return response()->json([
-                                            'success' => false,
-                                            'message' => 'MPR record not found'
-                                        ], 404);
-                                    }
-                                    
-                                    if ($autoDecline) {
-                                        // Handle auto decline - simpler logic
-                                        if ($isAmendmentRequest) {
-                                            $mpr->status_amendent = 'declined';
-                                        } else {
-                                            $mpr->status = 'declined';
-                                        }
+                                    if (isset($approval[$currentLevelIndex])) {
+                                        $approval[$currentLevelIndex]['status'] = 'rejected';
+                                        $approval[$currentLevelIndex]['reason_denied'] = $req->reason;
+                                        $approval[$currentLevelIndex]['processed_at'] = now()->toDateTimeString();
                                         
-                                        // Update approval with auto decline reason
-                                        if ($approval && is_array($approval)) {
-                                            foreach ($approval as &$level) {
-                                                if (empty($level['status']) || $level['status'] === 'waiting') {
-                                                    $level['status'] = 'rejected';
-                                                    $level['reason_denied'] = $req->reason;
-                                                    $level['processed_at'] = now()->toDateTimeString();
-                                                    $level['approver'] = [
-                                                        'empno' => 'SYSTEM',
-                                                        'name' => 'Auto System',
-                                                        'dept' => 'SYSTEM',
-                                                        'email' => 'system@company.com'
-                                                    ];
-                                                    break;
-                                                }
+                                        if (!empty($dataFlow[$currentLevelIndex]['managers'])) {
+                                            $currentApprover = $this->findApprover($dataFlow[$currentLevelIndex]['managers'], $user_empno);
+                                            if ($currentApprover) {
+                                                $approval[$currentLevelIndex]['approver'] = $currentApprover;
                                             }
                                         }
+                                    }
+                                    
+                                    // Update status based on request type
+                                    if ($isAmendmentRequest) {
+                                        $mpr->status_amendent = 'declined';
+                                    } else {
+                                        $mpr->status = 'declined';
+                                    }
+                                    $mpr->approval = json_encode($approval);
+                                    $mpr->save();
+                                    
+                                    // Send denial notification
+                                    $this->sendDenialEmailNotification($mpr, $req->reason, $isAmendmentRequest);
+                                    
+                                    return response()->json([
+                                        'success' => true,
+                                        'message' => $isAmendmentRequest ? 'Amendment request denied successfully' : 'Request denied successfully',
+                                        'data' => [
+                                            'id' => $mpr->id,
+                                            'status' => $mpr->status,
+                                            'status_amendent' => $mpr->status_amendent,
+                                            'approval' => $approval
+                                            ]
+                                        ]);
                                         
-                                        $mpr->approval = json_encode($approval);
-                                        $mpr->save();
-                                        
+                                    } catch (\Exception $e) {
                                         return response()->json([
-                                            'success' => true,
-                                            'message' => 'Request auto declined successfully',
-                                            'data' => [
-                                                'id' => $mpr->id,
-                                                'status' => $mpr->status,
-                                                'status_amendent' => $mpr->status_amendent,
-                                                'approval' => $approval
-                                                ]
-                                            ]);
+                                            'success' => false,
+                                            'message' => 'Error denying request: ' . $e->getMessage()
+                                        ], 500);
+                                    }
+                                }
+                                public function returnRequest(Request $req)
+                                {
+                                    try {
+                                        $validator = Validator::make($req->all(), [
+                                            'id' => 'required',
+                                            'reason' => 'required|string',
+                                            'returnToLevel' => 'required|string',  
+                                            'user_empno' => 'required|string', 
+                                            'dataReq' => 'required',
+                                            'dataReq.dataFlow' => 'required'
+                                        ]);
+                                        
+                                        if ($validator->fails()) {
+                                            return response()->json([
+                                                'success' => false,
+                                                'errors' => $validator->errors()
+                                            ], 400);
                                         }
                                         
-                                        // Original manual deny logic
+                                        $dataReq = $req['dataReq'];
+                                        $dataFlow = $dataReq['dataFlow'];
+                                        $status = $dataReq['status'];
+                                        $approval = json_decode($dataReq['approval'], true);
+                                        $id = $dataReq['id'];
+                                        $returnStatus = $req->returnToLevel;
+                                        $user_empno = $req->user_empno;
+                                        
+                                        // Check if this is an amendment request
+                                        $isAmendmentRequest = !empty($dataReq['status_amendent']);
+                                        $amendmentStatus = $dataReq['status_amendent'] ?? null;
+                                        
+                                        // Get mpr record
+                                        $mpr = Mpr::find($id);
+                                        if (!$mpr) {
+                                            return response()->json([
+                                                'success' => false,
+                                                'message' => 'MPR record not found'
+                                            ], 404);
+                                        }
+                                        
+                                        // Save current approval to logs before updating
+                                        $currentApproval = $mpr->approval;
+                                        $logsArray = [];
+                                        
+                                        if (!empty($currentApproval)) {
+                                            if (!empty($mpr->logs)) {
+                                                $existingLogs = json_decode($mpr->logs, true);
+                                                if (isset($existingLogs[0]) && is_array($existingLogs[0]) && isset($existingLogs[0][0])) {
+                                                    $logsArray = $existingLogs;
+                                                } else {
+                                                    $logsArray = [$existingLogs];
+                                                }
+                                            }
+                                            $logsArray[] = json_decode($currentApproval, true);
+                                            $mpr->logs = json_encode($logsArray);
+                                        }
+                                        
                                         $statusFlow = [
                                             'waiting_dept' => ['level' => 1],
                                             'waiting_div' => ['level' => 2],
@@ -1026,22 +1135,22 @@ class vgMprCtrl extends Controller
                                             'waiting_gm' => ['level' => 6],
                                         ];
                                         
-                                        $currentStatus = $isAmendmentRequest ? $amendmentStatus : $status;
-                                        
-                                        if (!isset($statusFlow[$currentStatus])) {
-                                            return response()->json([
-                                                'success' => false,
-                                                'message' => 'Invalid current status for denial'
-                                            ], 400);
+                                        // Update approval array for return
+                                        foreach ($approval as $index => $level) {
+                                            if ($index >= $statusFlow[$returnStatus]['level'] - 1) {
+                                                $approval[$index]['status'] = 'waiting';
+                                                $approval[$index]['approver'] = null;
+                                                $approval[$index]['reason_denied'] = null;
+                                            }
                                         }
                                         
+                                        $currentStatus = $isAmendmentRequest ? $amendmentStatus : $status;
                                         $currentLevelIndex = $statusFlow[$currentStatus]['level'] - 1;
                                         
                                         if (isset($approval[$currentLevelIndex])) {
-                                            $approval[$currentLevelIndex]['status'] = 'rejected';
-                                            $approval[$currentLevelIndex]['reason_denied'] = $req->reason;
-                                            $approval[$currentLevelIndex]['processed_at'] = now()->toDateTimeString();
-                                            
+                                            $approval[$currentLevelIndex]['status'] = 'returned';
+                                            $approval[$currentLevelIndex]['return_reason'] = $req->reason;
+                                            $approval[$currentLevelIndex]['processed_at'] = now()->toDateTimeString(); 
                                             if (!empty($dataFlow[$currentLevelIndex]['managers'])) {
                                                 $currentApprover = $this->findApprover($dataFlow[$currentLevelIndex]['managers'], $user_empno);
                                                 if ($currentApprover) {
@@ -1050,199 +1159,182 @@ class vgMprCtrl extends Controller
                                             }
                                         }
                                         
-                                        // Update status based on request type
+                                        // Get recipients list
+                                        $returnLevelIndex = $statusFlow[$returnStatus]['level'] - 1;
+                                        $recipientsList = [];
+                                        
+                                        if (isset($dataFlow[$returnLevelIndex])) {
+                                            foreach ($dataFlow[$returnLevelIndex]['managers'] as $manager) {
+                                                $recipientsList[] = [
+                                                    'email' => $manager['email'],
+                                                    'name' => $manager['name'],
+                                                    'empno' => $manager['empno'],
+                                                    'dept' => $manager['dept_code'][0] ?? '',
+                                                    'type' => 'manager'
+                                                ];
+                                                
+                                                if (!empty($manager['deputies'])) {
+                                                    foreach ($manager['deputies'] as $deputy) {
+                                                        if (!empty($deputy['status'])) {
+                                                            $recipientsList[] = [
+                                                                'email' => $deputy['email'],
+                                                                'name' => $deputy['name'],
+                                                                'empno' => $deputy['empno'],
+                                                                'dept' => $manager['dept_code'][0] ?? '',
+                                                                'type' => 'deputy'
+                                                            ];
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Update MPR record based on request type
                                         if ($isAmendmentRequest) {
-                                            $mpr->status_amendent = 'declined';
+                                            $mpr->status_amendent = $returnStatus;
                                         } else {
-                                            $mpr->status = 'declined';
+                                            $mpr->status = $returnStatus;
                                         }
                                         $mpr->approval = json_encode($approval);
                                         $mpr->save();
                                         
-                                        // Send denial notification
-                                        $this->sendDenialEmailNotification($mpr, $req->reason, $isAmendmentRequest);
+                                        // Send email notification
+                                        $this->sendReturnEmailNotification($mpr, $req->reason, $returnStatus, $recipientsList, $isAmendmentRequest);
                                         
                                         return response()->json([
                                             'success' => true,
-                                            'message' => $isAmendmentRequest ? 'Amendment request denied successfully' : 'Request denied successfully',
+                                            'message' => $isAmendmentRequest ? 'Amendment request returned successfully' : 'Request returned successfully',
                                             'data' => [
                                                 'id' => $mpr->id,
                                                 'status' => $mpr->status,
                                                 'status_amendent' => $mpr->status_amendent,
-                                                'approval' => $approval
+                                                'approval' => $approval,
+                                                'recipients' => $recipientsList
                                                 ]
                                             ]);
                                             
                                         } catch (\Exception $e) {
                                             return response()->json([
                                                 'success' => false,
-                                                'message' => 'Error denying request: ' . $e->getMessage()
+                                                'message' => 'Error returning request: ' . $e->getMessage()
                                             ], 500);
                                         }
                                     }
-                                    public function returnRequest(Request $req)
+                                    private function sendAcceptEmailNotification($mpr, $nextStatus, $dataFlow, $statusFlow, $currentStatus, $isAmendmentRequest)
                                     {
-                                        try {
-                                            $validator = Validator::make($req->all(), [
-                                                'id' => 'required',
-                                                'reason' => 'required|string',
-                                                'returnToLevel' => 'required|string',  
-                                                'user_empno' => 'required|string', 
-                                                'dataReq' => 'required',
-                                                'dataReq.dataFlow' => 'required'
-                                            ]);
-                                            
-                                            if ($validator->fails()) {
-                                                return response()->json([
-                                                    'success' => false,
-                                                    'errors' => $validator->errors()
-                                                ], 400);
-                                            }
-                                            
-                                            $dataReq = $req['dataReq'];
-                                            $dataFlow = $dataReq['dataFlow'];
-                                            $status = $dataReq['status'];
-                                            $approval = json_decode($dataReq['approval'], true);
-                                            $id = $dataReq['id'];
-                                            $returnStatus = $req->returnToLevel;
-                                            $user_empno = $req->user_empno;
-                                            
-                                            // Check if this is an amendment request
-                                            $isAmendmentRequest = !empty($dataReq['status_amendent']);
-                                            $amendmentStatus = $dataReq['status_amendent'] ?? null;
-                                            
-                                            // Get mpr record
-                                            $mpr = Mpr::find($id);
-                                            if (!$mpr) {
-                                                return response()->json([
-                                                    'success' => false,
-                                                    'message' => 'MPR record not found'
-                                                ], 404);
-                                            }
-                                            
-                                            // Save current approval to logs before updating
-                                            $currentApproval = $mpr->approval;
-                                            $logsArray = [];
-                                            
-                                            if (!empty($currentApproval)) {
-                                                if (!empty($mpr->logs)) {
-                                                    $existingLogs = json_decode($mpr->logs, true);
-                                                    if (isset($existingLogs[0]) && is_array($existingLogs[0]) && isset($existingLogs[0][0])) {
-                                                        $logsArray = $existingLogs;
-                                                    } else {
-                                                        $logsArray = [$existingLogs];
-                                                    }
-                                                }
-                                                $logsArray[] = json_decode($currentApproval, true);
-                                                $mpr->logs = json_encode($logsArray);
-                                            }
-                                            
-                                            $statusFlow = [
-                                                'waiting_dept' => ['level' => 1],
-                                                'waiting_div' => ['level' => 2],
-                                                'waiting_hr_rec_sf' => ['level' => 3],
-                                                'waiting_hr' => ['level' => 4],
-                                                'waiting_ad' => ['level' => 5],
-                                                'waiting_gm' => ['level' => 6],
+                                        $submitter = json_decode($mpr->submitter, true);
+                                        
+                                        // Get position and reason names
+                                        $typeApply = TypeApply::where('id', $mpr->pos)->where('loc', $mpr->loc)->first();
+                                        $positionName = $typeApply ? $typeApply->type_name : $mpr->pos;
+                                        
+                                        $ReasonName = RecReason::where('id', $mpr->reason_exp)->where('loc', $mpr->loc)->first();
+                                        $typereasonName = $ReasonName ? $ReasonName->name : $mpr->reason_exp;
+                                        
+                                        // Get change reason data for amendments
+                                        $changeReasonData = null;
+                                        if ($isAmendmentRequest && !empty($mpr->change_req)) {
+                                            $changeReasonData = $this->getAmendmentChangeReason($mpr);
+                                        }
+                                        
+                                        $templateData = [
+                                            'department' => $submitter['dept_sumt'] ?? '',
+                                            'requester' => [
+                                                'name' => $submitter['name'] ?? '',
+                                                'empno' => $submitter['empno'] ?? '',
+                                                'position' => $positionName
+                                            ],
+                                            'request' => [
+                                                'id' => $mpr->req_id,
+                                                're_id' => $mpr->req_id_change,
+                                                'dept' => $submitter['dept'] ?? '',
+                                                'div' => $submitter['div'] ?? '',
+                                                'unit' => $submitter['unit'] ?? '',
+                                                'date' => $mpr->key_in_date,
+                                                'qty' => json_decode($mpr->qty_req, true),
+                                                'reason' => $typereasonName,
+                                                'status' => $nextStatus,
+                                                'reason_change' => $changeReasonData,
+                                                'remark_change' => $mpr->remark_change
+                                                ]
                                             ];
                                             
-                                            // Update approval array for return
-                                            foreach ($approval as $index => $level) {
-                                                if ($index >= $statusFlow[$returnStatus]['level'] - 1) {
-                                                    $approval[$index]['status'] = 'waiting';
-                                                    $approval[$index]['approver'] = null;
-                                                    $approval[$index]['reason_denied'] = null;
-                                                }
-                                            }
-                                            
-                                            $currentStatus = $isAmendmentRequest ? $amendmentStatus : $status;
-                                            $currentLevelIndex = $statusFlow[$currentStatus]['level'] - 1;
-                                            
-                                            if (isset($approval[$currentLevelIndex])) {
-                                                $approval[$currentLevelIndex]['status'] = 'returned';
-                                                $approval[$currentLevelIndex]['return_reason'] = $req->reason;
-                                                $approval[$currentLevelIndex]['processed_at'] = now()->toDateTimeString(); 
-                                                if (!empty($dataFlow[$currentLevelIndex]['managers'])) {
-                                                    $currentApprover = $this->findApprover($dataFlow[$currentLevelIndex]['managers'], $user_empno);
-                                                    if ($currentApprover) {
-                                                        $approval[$currentLevelIndex]['approver'] = $currentApprover;
-                                                    }
-                                                }
-                                            }
-                                            
-                                            // Get recipients list
-                                            $returnLevelIndex = $statusFlow[$returnStatus]['level'] - 1;
-                                            $recipientsList = [];
-                                            
-                                            if (isset($dataFlow[$returnLevelIndex])) {
-                                                foreach ($dataFlow[$returnLevelIndex]['managers'] as $manager) {
-                                                    $recipientsList[] = [
-                                                        'email' => $manager['email'],
-                                                        'name' => $manager['name'],
-                                                        'empno' => $manager['empno'],
-                                                        'dept' => $manager['dept_code'][0] ?? '',
-                                                        'type' => 'manager'
-                                                    ];
-                                                    
-                                                    if (!empty($manager['deputies'])) {
-                                                        foreach ($manager['deputies'] as $deputy) {
-                                                            if (!empty($deputy['status'])) {
-                                                                $recipientsList[] = [
-                                                                    'email' => $deputy['email'],
-                                                                    'name' => $deputy['name'],
-                                                                    'empno' => $deputy['empno'],
-                                                                    'dept' => $manager['dept_code'][0] ?? '',
-                                                                    'type' => 'deputy'
-                                                                ];
+                                            if (!in_array($nextStatus, ['completed', 'completed'])) {
+                                                // Send to next level approvers
+                                                $recipientsList = [];
+                                                $nextLevelIndex = $statusFlow[$currentStatus]['level'];
+                                                
+                                                if (isset($dataFlow[$nextLevelIndex])) {
+                                                    foreach ($dataFlow[$nextLevelIndex]['managers'] as $manager) {
+                                                        $recipientsList[] = [
+                                                            'email' => $manager['email'],
+                                                            'name' => $manager['name'],
+                                                            'empno' => $manager['empno'],
+                                                            'dept' => $manager['dept_code'][0] ?? '',
+                                                            'type' => 'manager'
+                                                        ];
+                                                        
+                                                        if (!empty($manager['deputies'])) {
+                                                            foreach ($manager['deputies'] as $deputy) {
+                                                                if (!empty($deputy['status'])) {
+                                                                    $recipientsList[] = [
+                                                                        'email' => $deputy['email'],
+                                                                        'name' => $deputy['name'],
+                                                                        'empno' => $deputy['empno'],
+                                                                        'dept' => $manager['dept_code'][0] ?? '',
+                                                                        'type' => 'deputy'
+                                                                    ];
+                                                                }
                                                             }
                                                         }
                                                     }
                                                 }
-                                            }
-                                            
-                                            // Update MPR record based on request type
-                                            if ($isAmendmentRequest) {
-                                                $mpr->status_amendent = $returnStatus;
-                                            } else {
-                                                $mpr->status = $returnStatus;
-                                            }
-                                            $mpr->approval = json_encode($approval);
-                                            $mpr->save();
-                                            
-                                            // Send email notification
-                                            $this->sendReturnEmailNotification($mpr, $req->reason, $returnStatus, $recipientsList, $isAmendmentRequest);
-                                            
-                                            return response()->json([
-                                                'success' => true,
-                                                'message' => $isAmendmentRequest ? 'Amendment request returned successfully' : 'Request returned successfully',
-                                                'data' => [
-                                                    'id' => $mpr->id,
-                                                    'status' => $mpr->status,
-                                                    'status_amendent' => $mpr->status_amendent,
-                                                    'approval' => $approval,
-                                                    'recipients' => $recipientsList
-                                                    ]
-                                                ]);
                                                 
-                                            } catch (\Exception $e) {
-                                                return response()->json([
-                                                    'success' => false,
-                                                    'message' => 'Error returning request: ' . $e->getMessage()
-                                                ], 500);
+                                                $emailList = array_column($recipientsList, 'email');
+                                                $templateView = $isAmendmentRequest ? 'VgMpr-approval_amd' : 'VgMpr-approval';
+                                                $emailSubject = $isAmendmentRequest 
+                                                ? "[MPR] 人員增補需求變更申請通知 / MPR Amendment Request Notification / Thông báo điều chỉnh Phiếu yêu cầu nhân sự"
+                                                : "[MPR] 人員增補單簽核通知 / Manpower Request Form Pending Your Approval / Thông báo phê duyệt đơn bổ sung nhân sự";
+                                            } else {
+                                                // Send completion notification to submitter
+                                                $emailList = [$submitter['email']];
+                                                $templateView = $isAmendmentRequest ? 'VgMpr-completed_amd' : 'VgMpr-completed';
+                                                $emailSubject = $isAmendmentRequest 
+                                                ? "[MPR] 人員增補需求變更核准通知 / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã được phê duyệt"
+                                                : "[MPR] 人員增補單核准通知 / Đơn xin bổ sung nhân sự đã được phê duyệt";
                                             }
+                                            
+                                            $emailContent = view($templateView, $templateData)->render();
+                                            
+                                            $mailData = [
+                                                'to' => $emailList,
+                                                'subject' => $emailSubject,
+                                                'msgBody' => $emailContent,
+                                            ];
+                                            
+                                            $params = [
+                                                'target' => $isAmendmentRequest ? 'VG-MPR' : 'VG-MPR',
+                                                'body' => $emailContent,
+                                                'msg_type' => "m",
+                                                'msg_method' => "both",
+                                                'msg_subject' => $emailSubject,
+                                                'mail_template' => "msgCenterMailTemplate",
+                                                'mail_data' => json_encode($mailData),
+                                            ];
+                                            
+                                            $this->sendMsg($params);
                                         }
-                                        private function sendAcceptEmailNotification($mpr, $nextStatus, $dataFlow, $statusFlow, $currentStatus, $isAmendmentRequest)
+                                        
+                                        private function sendDenialEmailNotification($mpr, $reason, $isAmendmentRequest)
                                         {
                                             $submitter = json_decode($mpr->submitter, true);
                                             
-                                            // Get position and reason names
                                             $typeApply = TypeApply::where('id', $mpr->pos)->where('loc', $mpr->loc)->first();
                                             $positionName = $typeApply ? $typeApply->type_name : $mpr->pos;
                                             
                                             $ReasonName = RecReason::where('id', $mpr->reason_exp)->where('loc', $mpr->loc)->first();
                                             $typereasonName = $ReasonName ? $ReasonName->name : $mpr->reason_exp;
                                             
-                                            // Get change reason data for amendments
                                             $changeReasonData = null;
                                             if ($isAmendmentRequest && !empty($mpr->change_req)) {
                                                 $changeReasonData = $this->getAmendmentChangeReason($mpr);
@@ -1264,61 +1356,20 @@ class vgMprCtrl extends Controller
                                                     'date' => $mpr->key_in_date,
                                                     'qty' => json_decode($mpr->qty_req, true),
                                                     'reason' => $typereasonName,
-                                                    'status' => $nextStatus,
                                                     'reason_change' => $changeReasonData,
-                                                    'remark_change' => $mpr->remark_change
+                                                    'status' => $isAmendmentRequest ? 'declined' : 'declined',
+                                                    'reason_denied' => $reason
                                                     ]
                                                 ];
                                                 
-                                                if (!in_array($nextStatus, ['completed', 'completed'])) {
-                                                    // Send to next level approvers
-                                                    $recipientsList = [];
-                                                    $nextLevelIndex = $statusFlow[$currentStatus]['level'];
-                                                    
-                                                    if (isset($dataFlow[$nextLevelIndex])) {
-                                                        foreach ($dataFlow[$nextLevelIndex]['managers'] as $manager) {
-                                                            $recipientsList[] = [
-                                                                'email' => $manager['email'],
-                                                                'name' => $manager['name'],
-                                                                'empno' => $manager['empno'],
-                                                                'dept' => $manager['dept_code'][0] ?? '',
-                                                                'type' => 'manager'
-                                                            ];
-                                                            
-                                                            if (!empty($manager['deputies'])) {
-                                                                foreach ($manager['deputies'] as $deputy) {
-                                                                    if (!empty($deputy['status'])) {
-                                                                        $recipientsList[] = [
-                                                                            'email' => $deputy['email'],
-                                                                            'name' => $deputy['name'],
-                                                                            'empno' => $deputy['empno'],
-                                                                            'dept' => $manager['dept_code'][0] ?? '',
-                                                                            'type' => 'deputy'
-                                                                        ];
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    
-                                                    $emailList = array_column($recipientsList, 'email');
-                                                    $templateView = $isAmendmentRequest ? 'VgMpr-approval_amd' : 'VgMpr-approval';
-                                                    $emailSubject = $isAmendmentRequest 
-                                                    ? "[MPR] 人員增補需求變更申請通知 / MPR Amendment Request Notification / Thông báo điều chỉnh Phiếu yêu cầu nhân sự"
-                                                    : "[MPR] 人員增補單簽核通知 / Manpower Request Form Pending Your Approval / Thông báo phê duyệt đơn bổ sung nhân sự";
-                                                } else {
-                                                    // Send completion notification to submitter
-                                                    $emailList = [$submitter['email']];
-                                                    $templateView = $isAmendmentRequest ? 'VgMpr-completed_amd' : 'VgMpr-completed';
-                                                    $emailSubject = $isAmendmentRequest 
-                                                    ? "[MPR] 人員增補需求變更核准通知 / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã được phê duyệt"
-                                                    : "[MPR] 人員增補單核准通知 / Đơn xin bổ sung nhân sự đã được phê duyệt";
-                                                }
-                                                
+                                                $templateView = $isAmendmentRequest ? 'VgMpr-denial_amd' : 'VgMpr-denial';
                                                 $emailContent = view($templateView, $templateData)->render();
+                                                $emailSubject = $isAmendmentRequest 
+                                                ? "[MPR] 人員增補需求變更否決通知 / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã bị từ chối"
+                                                : "[MPR] 人員增補單否決通知 / Đơn xin bổ sung nhân sự đã bị từ chối";
                                                 
                                                 $mailData = [
-                                                    'to' => $emailList,
+                                                    'to' => [$submitter['email']],
                                                     'subject' => $emailSubject,
                                                     'msgBody' => $emailContent,
                                                 ];
@@ -1336,8 +1387,71 @@ class vgMprCtrl extends Controller
                                                 $this->sendMsg($params);
                                             }
                                             
-                                            private function sendDenialEmailNotification($mpr, $reason, $isAmendmentRequest)
+                                            private function sendReturnEmailNotification($mpr, $reason, $returnStatus, $recipientsList, $isAmendmentRequest)
                                             {
+                                                // $submitter = json_decode($mpr->submitter, true);
+                                                
+                                                // $typeApply = TypeApply::where('id', $mpr->pos)->where('loc', $mpr->loc)->first();
+                                                // $positionName = $typeApply ? $typeApply->type_name : $mpr->pos;
+                                                
+                                                // $ReasonName = RecReason::where('id', $mpr->reason_exp)->where('loc', $mpr->loc)->first();
+                                                // $typereasonName = $ReasonName ? $ReasonName->name : $mpr->reason_exp;
+                                                
+                                                // $changeReasonData = null;
+                                                // if ($isAmendmentRequest && !empty($mpr->change_req)) {
+                                                //     $changeReasonData = $this->getAmendmentChangeReason($mpr);
+                                                // }
+                                                
+                                                // $templateData = [
+                                                //     'department' => $submitter['dept_sumt'] ?? '',
+                                                //     'requester' => [
+                                                //         'name' => $submitter['name'] ?? '',
+                                                //         'empno' => $submitter['empno'] ?? '',
+                                                //         'position' => $positionName
+                                                //     ],
+                                                //     'request' => [
+                                                //         'id' => $mpr->req_id,
+                                                //         're_id' => $mpr->req_id_change,
+                                                //         'dept' => $submitter['dept'] ?? '',
+                                                //         'div' => $submitter['div'] ?? '',
+                                                //         'unit' => $submitter['unit'] ?? '',
+                                                //         'date' => $mpr->key_in_date,
+                                                //         'qty' => json_decode($mpr->qty_req, true),
+                                                //         'reason' => $typereasonName,
+                                                //         'status' => $returnStatus,
+                                                //         'return_reason' => $reason,
+                                                //         'reason_change' => $changeReasonData,
+                                                //         'return_to' => $this->getLevelName($returnStatus)
+                                                //         ]
+                                                //     ];
+                                                
+                                                //     $templateView = $isAmendmentRequest ? 'VgMpr-return_amd' : 'VgMpr-return';
+                                                //     $emailContent = view($templateView, $templateData)->render();
+                                                
+                                                //     $emailSubject = $isAmendmentRequest
+                                                //     ? "[MPR] 人員增補需求變更退回通知 / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã bị trả về"
+                                                //     : "[MPR] 人員增補單退回通知 / Đơn xin bổ sung nhân sự đã bị trả về";
+                                                
+                                                //     $emailList = array_column($recipientsList, 'email');
+                                                
+                                                //     $mailData = [
+                                                //         'to' => $emailList,
+                                                //         'subject' => $emailSubject,
+                                                //         'msgBody' => $emailContent,
+                                                //     ];
+                                                
+                                                //     $params = [
+                                                //         'target' => $isAmendmentRequest ? 'VG-MPR' : 'VG-MPR',
+                                                //         'body' => $emailContent,
+                                                //         'msg_type' => "m",
+                                                //         'msg_method' => "both",
+                                                //         'msg_subject' => $emailSubject,
+                                                //         'mail_template' => "msgCenterMailTemplate",
+                                                //         'mail_data' => json_encode($mailData),
+                                                //     ];
+                                                
+                                                //     $this->sendMsg($params);
+                                                
                                                 $submitter = json_decode($mpr->submitter, true);
                                                 
                                                 $typeApply = TypeApply::where('id', $mpr->pos)->where('loc', $mpr->loc)->first();
@@ -1367,20 +1481,33 @@ class vgMprCtrl extends Controller
                                                         'date' => $mpr->key_in_date,
                                                         'qty' => json_decode($mpr->qty_req, true),
                                                         'reason' => $typereasonName,
+                                                        'status' => $returnStatus,
+                                                        'return_reason' => $reason,
                                                         'reason_change' => $changeReasonData,
-                                                        'status' => $isAmendmentRequest ? 'declined' : 'declined',
-                                                        'reason_denied' => $reason
+                                                        'return_to' => $this->getLevelName($returnStatus)
                                                         ]
                                                     ];
                                                     
-                                                    $templateView = $isAmendmentRequest ? 'VgMpr-denial_amd' : 'VgMpr-denial';
+                                                    $templateView = $isAmendmentRequest ? 'VgMpr-return_amd' : 'VgMpr-return';
                                                     $emailContent = view($templateView, $templateData)->render();
-                                                    $emailSubject = $isAmendmentRequest 
-                                                    ? "[MPR] 人員增補需求變更否決通知 / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã bị từ chối"
-                                                    : "[MPR] 人員增補單否決通知 / Đơn xin bổ sung nhân sự đã bị từ chối";
+                                                    
+                                                    $emailSubject = $isAmendmentRequest
+                                                    ? "[MPR] 人員增補需求變更退回通知 / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã bị trả về"
+                                                    : "[MPR] 人員增補單退回通知 / Đơn xin bổ sung nhân sự đã bị trả về";
+                                                    
+                                                    // --- CHANGED: gửi ưu tiên về người tạo đơn (submitter). nếu không có email thì fallback về recipientsList ---
+                                                    $submitterEmail = $submitter['email'] ?? null;
+                                                    $emailList = [];
+                                                    if (!empty($submitterEmail) && filter_var($submitterEmail, FILTER_VALIDATE_EMAIL)) {
+                                                        $emailList = [$submitterEmail];
+                                                    } else {
+                                                        $emailList = array_values(array_filter(array_column($recipientsList, 'email')));
+                                                    }
+                                                    $emailList = array_values(array_unique($emailList));
+                                                    // --- end change ---
                                                     
                                                     $mailData = [
-                                                        'to' => [$submitter['email']],
+                                                        'to' => $emailList,
                                                         'subject' => $emailSubject,
                                                         'msgBody' => $emailContent,
                                                     ];
@@ -1397,1092 +1524,954 @@ class vgMprCtrl extends Controller
                                                     
                                                     $this->sendMsg($params);
                                                 }
-                                                
-                                                private function sendReturnEmailNotification($mpr, $reason, $returnStatus, $recipientsList, $isAmendmentRequest)
+                                                private function getLevelName($level) {
+                                                    $levels = [
+                                                        'waiting_dept' => 'Department',
+                                                        'waiting_div' => 'Division', 
+                                                        'waiting_hr_rec_sf' => 'HR Staff',
+                                                        'waiting_hr' => 'HR',
+                                                        'waiting_ad' => 'AD',
+                                                        'waiting_gm' => 'GM'
+                                                    ];
+                                                    return $levels[$level] ?? 'Unknown';
+                                                }
+                                                public function getMprById($id='')
                                                 {
-                                                    // $submitter = json_decode($mpr->submitter, true);
-                                                    
-                                                    // $typeApply = TypeApply::where('id', $mpr->pos)->where('loc', $mpr->loc)->first();
-                                                    // $positionName = $typeApply ? $typeApply->type_name : $mpr->pos;
-                                                    
-                                                    // $ReasonName = RecReason::where('id', $mpr->reason_exp)->where('loc', $mpr->loc)->first();
-                                                    // $typereasonName = $ReasonName ? $ReasonName->name : $mpr->reason_exp;
-                                                    
-                                                    // $changeReasonData = null;
-                                                    // if ($isAmendmentRequest && !empty($mpr->change_req)) {
-                                                    //     $changeReasonData = $this->getAmendmentChangeReason($mpr);
-                                                    // }
-                                                    
-                                                    // $templateData = [
-                                                    //     'department' => $submitter['dept_sumt'] ?? '',
-                                                    //     'requester' => [
-                                                    //         'name' => $submitter['name'] ?? '',
-                                                    //         'empno' => $submitter['empno'] ?? '',
-                                                    //         'position' => $positionName
-                                                    //     ],
-                                                    //     'request' => [
-                                                    //         'id' => $mpr->req_id,
-                                                    //         're_id' => $mpr->req_id_change,
-                                                    //         'dept' => $submitter['dept'] ?? '',
-                                                    //         'div' => $submitter['div'] ?? '',
-                                                    //         'unit' => $submitter['unit'] ?? '',
-                                                    //         'date' => $mpr->key_in_date,
-                                                    //         'qty' => json_decode($mpr->qty_req, true),
-                                                    //         'reason' => $typereasonName,
-                                                    //         'status' => $returnStatus,
-                                                    //         'return_reason' => $reason,
-                                                    //         'reason_change' => $changeReasonData,
-                                                    //         'return_to' => $this->getLevelName($returnStatus)
-                                                    //         ]
-                                                    //     ];
-                                                    
-                                                    //     $templateView = $isAmendmentRequest ? 'VgMpr-return_amd' : 'VgMpr-return';
-                                                    //     $emailContent = view($templateView, $templateData)->render();
-                                                    
-                                                    //     $emailSubject = $isAmendmentRequest
-                                                    //     ? "[MPR] 人員增補需求變更退回通知 / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã bị trả về"
-                                                    //     : "[MPR] 人員增補單退回通知 / Đơn xin bổ sung nhân sự đã bị trả về";
-                                                    
-                                                    //     $emailList = array_column($recipientsList, 'email');
-                                                    
-                                                    //     $mailData = [
-                                                    //         'to' => $emailList,
-                                                    //         'subject' => $emailSubject,
-                                                    //         'msgBody' => $emailContent,
-                                                    //     ];
-                                                    
-                                                    //     $params = [
-                                                    //         'target' => $isAmendmentRequest ? 'VG-MPR' : 'VG-MPR',
-                                                    //         'body' => $emailContent,
-                                                    //         'msg_type' => "m",
-                                                    //         'msg_method' => "both",
-                                                    //         'msg_subject' => $emailSubject,
-                                                    //         'mail_template' => "msgCenterMailTemplate",
-                                                    //         'mail_data' => json_encode($mailData),
-                                                    //     ];
-                                                    
-                                                    //     $this->sendMsg($params);
-                                                    
-                                                    $submitter = json_decode($mpr->submitter, true);
-                                                    
-                                                    $typeApply = TypeApply::where('id', $mpr->pos)->where('loc', $mpr->loc)->first();
-                                                    $positionName = $typeApply ? $typeApply->type_name : $mpr->pos;
-                                                    
-                                                    $ReasonName = RecReason::where('id', $mpr->reason_exp)->where('loc', $mpr->loc)->first();
-                                                    $typereasonName = $ReasonName ? $ReasonName->name : $mpr->reason_exp;
-                                                    
-                                                    $changeReasonData = null;
-                                                    if ($isAmendmentRequest && !empty($mpr->change_req)) {
-                                                        $changeReasonData = $this->getAmendmentChangeReason($mpr);
+                                                    try {
+                                                        $mpr = Mpr::find($id);
+                                                        
+                                                        if (!$mpr) {
+                                                            return response()->json([
+                                                                'success' => false,
+                                                                'message' => 'MPR record not found'
+                                                            ], 404);
+                                                        }
+                                                        
+                                                        return response()->json([
+                                                            'success' => true,
+                                                            'data' => $mpr
+                                                        ]);
+                                                        
+                                                    } catch (\Exception $e) {
+                                                        return response()->json([
+                                                            'success' => false,
+                                                            'message' => 'Error retrieving MPR record: ' . $e->getMessage()
+                                                        ], 500);
                                                     }
-                                                    
-                                                    $templateData = [
-                                                        'department' => $submitter['dept_sumt'] ?? '',
-                                                        'requester' => [
-                                                            'name' => $submitter['name'] ?? '',
-                                                            'empno' => $submitter['empno'] ?? '',
-                                                            'position' => $positionName
-                                                        ],
-                                                        'request' => [
-                                                            'id' => $mpr->req_id,
-                                                            're_id' => $mpr->req_id_change,
-                                                            'dept' => $submitter['dept'] ?? '',
-                                                            'div' => $submitter['div'] ?? '',
-                                                            'unit' => $submitter['unit'] ?? '',
-                                                            'date' => $mpr->key_in_date,
-                                                            'qty' => json_decode($mpr->qty_req, true),
-                                                            'reason' => $typereasonName,
-                                                            'status' => $returnStatus,
-                                                            'return_reason' => $reason,
-                                                            'reason_change' => $changeReasonData,
-                                                            'return_to' => $this->getLevelName($returnStatus)
-                                                            ]
-                                                        ];
+                                                }
+                                                
+                                                public function getLatestReqId(Request $request)
+                                                {
+                                                    try {
+                                                        $year = $request->query('year');
+                                                        $month = $request->query('month');
                                                         
-                                                        $templateView = $isAmendmentRequest ? 'VgMpr-return_amd' : 'VgMpr-return';
-                                                        $emailContent = view($templateView, $templateData)->render();
+                                                        if (!$year || !$month) {
+                                                            return response()->json([
+                                                                'success' => false,
+                                                                'message' => 'Year and month parameters are required'
+                                                            ], 400);
+                                                        }
                                                         
-                                                        $emailSubject = $isAmendmentRequest
-                                                        ? "[MPR] 人員增補需求變更退回通知 / Đơn điều chỉnh yêu cầu bổ sung nhân sự đã bị trả về"
-                                                        : "[MPR] 人員增補單退回通知 / Đơn xin bổ sung nhân sự đã bị trả về";
+                                                        $pattern = "HR-MPR00-{$year}{$month}-%";
                                                         
-                                                        // --- CHANGED: gửi ưu tiên về người tạo đơn (submitter). nếu không có email thì fallback về recipientsList ---
-                                                        $submitterEmail = $submitter['email'] ?? null;
-                                                        $emailList = [];
-                                                        if (!empty($submitterEmail) && filter_var($submitterEmail, FILTER_VALIDATE_EMAIL)) {
-                                                            $emailList = [$submitterEmail];
+                                                        $latestRequest = Mpr::where('req_id', 'LIKE', $pattern)
+                                                        ->orderBy('req_id', 'desc')
+                                                        ->first();
+                                                        
+                                                        if (!$latestRequest) {
+                                                            return response()->json([
+                                                                'success' => true,
+                                                                'latestNumber' => 0
+                                                            ]);
+                                                        }
+                                                        
+                                                        $matches = [];
+                                                        if (preg_match('/(\d{4})$/', $latestRequest->req_id, $matches)) {
+                                                            $latestNumber = intval($matches[1]);
                                                         } else {
-                                                            $emailList = array_values(array_filter(array_column($recipientsList, 'email')));
+                                                            $latestNumber = 0;
                                                         }
-                                                        $emailList = array_values(array_unique($emailList));
-                                                        // --- end change ---
                                                         
-                                                        $mailData = [
-                                                            'to' => $emailList,
-                                                            'subject' => $emailSubject,
-                                                            'msgBody' => $emailContent,
-                                                        ];
+                                                        return response()->json([
+                                                            'success' => true,
+                                                            'latestNumber' => $latestNumber
+                                                        ]);
                                                         
-                                                        $params = [
-                                                            'target' => $isAmendmentRequest ? 'VG-MPR' : 'VG-MPR',
-                                                            'body' => $emailContent,
-                                                            'msg_type' => "m",
-                                                            'msg_method' => "both",
-                                                            'msg_subject' => $emailSubject,
-                                                            'mail_template' => "msgCenterMailTemplate",
-                                                            'mail_data' => json_encode($mailData),
-                                                        ];
-                                                        
-                                                        $this->sendMsg($params);
+                                                    } catch (\Exception $e) {
+                                                        return response()->json([
+                                                            'success' => false,
+                                                            'message' => 'Error getting latest request ID: ' . $e->getMessage()
+                                                        ], 500);
                                                     }
-                                                    private function getLevelName($level) {
-                                                        $levels = [
-                                                            'waiting_dept' => 'Department',
-                                                            'waiting_div' => 'Division', 
-                                                            'waiting_hr_rec_sf' => 'HR Staff',
-                                                            'waiting_hr' => 'HR',
-                                                            'waiting_ad' => 'AD',
-                                                            'waiting_gm' => 'GM'
-                                                        ];
-                                                        return $levels[$level] ?? 'Unknown';
-                                                    }
-                                                    public function getMprById($id='')
-                                                    {
-                                                        try {
-                                                            $mpr = Mpr::find($id);
-                                                            
-                                                            if (!$mpr) {
-                                                                return response()->json([
-                                                                    'success' => false,
-                                                                    'message' => 'MPR record not found'
-                                                                ], 404);
-                                                            }
-                                                            
+                                                }
+                                                public function getLatestReqIdChange(Request $request)
+                                                {
+                                                    try {
+                                                        $year = $request->query('year');
+                                                        $month = $request->query('month');
+                                                        
+                                                        if (!$year || !$month) {
                                                             return response()->json([
-                                                                'success' => true,
-                                                                'data' => $mpr
+                                                                'success' => false,
+                                                                'message' => 'Year and month are required'
+                                                            ], 400);
+                                                        }
+                                                        
+                                                        $pattern = "HR-MPRA0-{$year}{$month}-%";
+                                                        
+                                                        $latestRequest = Mpr::where('req_id_change', 'LIKE', $pattern)
+                                                        ->orderBy('req_id_change', 'desc')
+                                                        ->first();
+                                                        
+                                                        if (!$latestRequest) {
+                                                            return response()->json([
+                                                                'latestNumber' => 0
+                                                            ]);
+                                                        }
+                                                        
+                                                        $matches = [];
+                                                        if (preg_match('/(\d{4})$/', $latestRequest->req_id_change, $matches)) {
+                                                            $latestNumber = intval($matches[1]);
+                                                        } else {
+                                                            $latestNumber = 0;
+                                                        }
+                                                        
+                                                        return response()->json([
+                                                            'latestNumber' => $latestNumber
+                                                        ]);
+                                                        
+                                                    } catch (\Exception $e) {
+                                                        return response()->json([
+                                                            'success' => false,
+                                                            'message' => 'Error getting latest request ID: ' . $e->getMessage()
+                                                        ], 500);
+                                                    }
+                                                }
+                                                public function updateCancelDate(Request $req)
+                                                {
+                                                    try {
+                                                        $demand = Mpr::find($req->id);
+                                                        if (!$demand) {
+                                                            return response()->json([
+                                                                'success' => false,
+                                                                'message' => 'Demand not found'
+                                                            ], 404);
+                                                        }
+                                                        
+                                                        $demand->cancel_date = $req->cancel_date;
+                                                        $demand->save();
+                                                        
+                                                        return response()->json([
+                                                            'success' => true,
+                                                            'message' => 'Cancel date updated successfully'
+                                                        ]);
+                                                        
+                                                    } catch (\Exception $e) {
+                                                        return response()->json([
+                                                            'success' => false,
+                                                            'message' => 'Error updating cancel date: ' . $e->getMessage()
+                                                        ], 500);
+                                                    }
+                                                }
+                                                public function getDataByMprFromRecruitReport($id)
+                                                {
+                                                    try {
+                                                        $manPower = Mpr::find($id);
+                                                        
+                                                        if (!$manPower) {
+                                                            return response()->json([
+                                                                'success' => false,
+                                                                'message' => 'ManPower not found'
+                                                            ], 404);
+                                                        }
+                                                        
+                                                        return response()->json([
+                                                            'success' => true,
+                                                            'data' => $manPower
+                                                        ]);
+                                                    }
+                                                    catch (\Exception $e) {
+                                                        return response()->json([
+                                                            'success' => false,
+                                                            'message' => 'Error retrieving data: ' . $e->getMessage()
+                                                        ], 500);
+                                                    }
+                                                }
+                                                public function transferCandidates(Request $request)
+                                                {
+                                                    try {
+                                                        $validator = Validator::make($request->all(), [
+                                                            'fromId' => 'required|integer',
+                                                            'toId' => 'required|integer',
+                                                            'candidates' => 'required|array',
+                                                            'candidates.*.empno' => 'required|string',
+                                                            'candidates.*.name' => 'required|string',
+                                                            'candidates.*.date' => 'required|string',
+                                                        ]);
+                                                        
+                                                        if ($validator->fails()) {
+                                                            return response()->json([
+                                                                'success' => false,
+                                                                'errors' => $validator->errors()
+                                                            ], 400);
+                                                        }
+                                                        
+                                                        // Get source and target MPR records
+                                                        $sourceMpr = Mpr::find($request->fromId);
+                                                        $targetMpr = Mpr::find($request->toId);
+                                                        
+                                                        if (!$sourceMpr || !$targetMpr) {
+                                                            return response()->json([
+                                                                'success' => false,
+                                                                'message' => 'Source or target MPR not found'
+                                                            ], 404);
+                                                        }
+                                                        
+                                                        $sourceCandidates = array_values(json_decode($sourceMpr->candidates ?? '[]', true) ?: []);
+                                                        $targetCandidates = array_values(json_decode($targetMpr->candidates ?? '[]', true) ?: []);
+                                                        $transferCandidates = array_values($request->candidates);
+                                                        
+                                                        $sourceCandidates = array_values(array_filter($sourceCandidates, function($candidate) use ($transferCandidates) {
+                                                            return !in_array($candidate['empno'], array_column($transferCandidates, 'empno'));
+                                                        }));
+                                                        
+                                                        $targetCandidates = array_values(array_merge($targetCandidates, $transferCandidates));
+                                                        
+                                                        $sourceQtyReq = json_decode($sourceMpr->qty_req, true);
+                                                        $totalSourceQty = array_sum(array_map('intval', array_filter($sourceQtyReq)));
+                                                        $sourceMpr->recruited = count($sourceCandidates);
+                                                        $sourceMpr->stocknumber = $totalSourceQty - $sourceMpr->recruited;
+                                                        $sourceMpr->fulfilled = $sourceMpr->stocknumber <= 0 ? 'yes' : 'no';
+                                                        $sourceMpr->candidates = json_encode(array_values($sourceCandidates));
+                                                        
+                                                        if ($sourceMpr->stocknumber > 0) {
+                                                            $sourceMpr->fullfilldate = null;
+                                                            $sourceMpr->fulfilled = 'no';
+                                                        } else if ($sourceMpr->stocknumber <= 0 && empty($sourceMpr->fullfilldate)) {
+                                                            $sourceMpr->fullfilldate = date('Y-m-d');
+                                                            $sourceMpr->fulfilled = 'yes';
+                                                        }
+                                                        
+                                                        $targetQtyReq = json_decode($targetMpr->qty_req, true);
+                                                        $totalTargetQty = array_sum(array_map('intval', array_filter($targetQtyReq)));
+                                                        $targetMpr->recruited = count($targetCandidates);
+                                                        $targetMpr->stocknumber = $totalTargetQty - $targetMpr->recruited;
+                                                        $targetMpr->fulfilled = $targetMpr->stocknumber <= 0 ? 'yes' : 'no';
+                                                        $targetMpr->candidates = json_encode(array_values($targetCandidates));
+                                                        
+                                                        // Update target fullfilldate based on new status
+                                                        if ($targetMpr->stocknumber > 0) {
+                                                            $targetMpr->fullfilldate = null;
+                                                            $targetMpr->fulfilled = 'no';
+                                                        } else if ($targetMpr->stocknumber <= 0 && empty($targetMpr->fullfilldate)) {
+                                                            // Only set fullfilldate if becoming fulfilled for the first time
+                                                            $targetMpr->fullfilldate = date('Y-m-d');
+                                                            $targetMpr->fulfilled = 'yes';
+                                                        }
+                                                        
+                                                        // Save both records
+                                                        $sourceMpr->save();
+                                                        $targetMpr->save();
+                                                        
+                                                        return response()->json([
+                                                            'success' => true,
+                                                            'message' => 'Candidates transferred successfully',
+                                                            'data' => [
+                                                                'source' => $sourceMpr,
+                                                                'target' => $targetMpr
+                                                                ]
                                                             ]);
                                                             
                                                         } catch (\Exception $e) {
                                                             return response()->json([
                                                                 'success' => false,
-                                                                'message' => 'Error retrieving MPR record: ' . $e->getMessage()
+                                                                'message' => 'Error transferring candidates: ' . $e->getMessage()
                                                             ], 500);
                                                         }
                                                     }
                                                     
-                                                    public function getLatestReqId(Request $request)
+                                                    public static function getFilteredRequests($userData, $includeDeputy = true)
                                                     {
                                                         try {
-                                                            $year = $request->query('year');
-                                                            $month = $request->query('month');
-                                                            
-                                                            if (!$year || !$month) {
-                                                                return response()->json([
+                                                            if (!isset($userData['empno'])) {
+                                                                return [
                                                                     'success' => false,
-                                                                    'message' => 'Year and month parameters are required'
-                                                                ], 400);
-                                                            }
-                                                            
-                                                            $pattern = "HR-MPR00-{$year}{$month}-%";
-                                                            
-                                                            $latestRequest = Mpr::where('req_id', 'LIKE', $pattern)
-                                                            ->orderBy('req_id', 'desc')
-                                                            ->first();
-                                                            
-                                                            if (!$latestRequest) {
-                                                                return response()->json([
-                                                                    'success' => true,
-                                                                    'latestNumber' => 0
-                                                                ]);
-                                                            }
-                                                            
-                                                            $matches = [];
-                                                            if (preg_match('/(\d{4})$/', $latestRequest->req_id, $matches)) {
-                                                                $latestNumber = intval($matches[1]);
-                                                            } else {
-                                                                $latestNumber = 0;
-                                                            }
-                                                            
-                                                            return response()->json([
-                                                                'success' => true,
-                                                                'latestNumber' => $latestNumber
-                                                            ]);
-                                                            
-                                                        } catch (\Exception $e) {
-                                                            return response()->json([
-                                                                'success' => false,
-                                                                'message' => 'Error getting latest request ID: ' . $e->getMessage()
-                                                            ], 500);
-                                                        }
-                                                    }
-                                                    public function getLatestReqIdChange(Request $request)
-                                                    {
-                                                        try {
-                                                            $year = $request->query('year');
-                                                            $month = $request->query('month');
-                                                            
-                                                            if (!$year || !$month) {
-                                                                return response()->json([
-                                                                    'success' => false,
-                                                                    'message' => 'Year and month are required'
-                                                                ], 400);
-                                                            }
-                                                            
-                                                            $pattern = "HR-MPRA0-{$year}{$month}-%";
-                                                            
-                                                            $latestRequest = Mpr::where('req_id_change', 'LIKE', $pattern)
-                                                            ->orderBy('req_id_change', 'desc')
-                                                            ->first();
-                                                            
-                                                            if (!$latestRequest) {
-                                                                return response()->json([
-                                                                    'latestNumber' => 0
-                                                                ]);
-                                                            }
-                                                            
-                                                            $matches = [];
-                                                            if (preg_match('/(\d{4})$/', $latestRequest->req_id_change, $matches)) {
-                                                                $latestNumber = intval($matches[1]);
-                                                            } else {
-                                                                $latestNumber = 0;
-                                                            }
-                                                            
-                                                            return response()->json([
-                                                                'latestNumber' => $latestNumber
-                                                            ]);
-                                                            
-                                                        } catch (\Exception $e) {
-                                                            return response()->json([
-                                                                'success' => false,
-                                                                'message' => 'Error getting latest request ID: ' . $e->getMessage()
-                                                            ], 500);
-                                                        }
-                                                    }
-                                                    public function updateCancelDate(Request $req)
-                                                    {
-                                                        try {
-                                                            $demand = Mpr::find($req->id);
-                                                            if (!$demand) {
-                                                                return response()->json([
-                                                                    'success' => false,
-                                                                    'message' => 'Demand not found'
-                                                                ], 404);
-                                                            }
-                                                            
-                                                            $demand->cancel_date = $req->cancel_date;
-                                                            $demand->save();
-                                                            
-                                                            return response()->json([
-                                                                'success' => true,
-                                                                'message' => 'Cancel date updated successfully'
-                                                            ]);
-                                                            
-                                                        } catch (\Exception $e) {
-                                                            return response()->json([
-                                                                'success' => false,
-                                                                'message' => 'Error updating cancel date: ' . $e->getMessage()
-                                                            ], 500);
-                                                        }
-                                                    }
-                                                    public function getDataByMprFromRecruitReport($id)
-                                                    {
-                                                        try {
-                                                            $manPower = Mpr::find($id);
-                                                            
-                                                            if (!$manPower) {
-                                                                return response()->json([
-                                                                    'success' => false,
-                                                                    'message' => 'ManPower not found'
-                                                                ], 404);
-                                                            }
-                                                            
-                                                            return response()->json([
-                                                                'success' => true,
-                                                                'data' => $manPower
-                                                            ]);
-                                                        }
-                                                        catch (\Exception $e) {
-                                                            return response()->json([
-                                                                'success' => false,
-                                                                'message' => 'Error retrieving data: ' . $e->getMessage()
-                                                            ], 500);
-                                                        }
-                                                    }
-                                                    public function transferCandidates(Request $request)
-                                                    {
-                                                        try {
-                                                            $validator = Validator::make($request->all(), [
-                                                                'fromId' => 'required|integer',
-                                                                'toId' => 'required|integer',
-                                                                'candidates' => 'required|array',
-                                                                'candidates.*.empno' => 'required|string',
-                                                                'candidates.*.name' => 'required|string',
-                                                                'candidates.*.date' => 'required|string',
-                                                            ]);
-                                                            
-                                                            if ($validator->fails()) {
-                                                                return response()->json([
-                                                                    'success' => false,
-                                                                    'errors' => $validator->errors()
-                                                                ], 400);
-                                                            }
-                                                            
-                                                            // Get source and target MPR records
-                                                            $sourceMpr = Mpr::find($request->fromId);
-                                                            $targetMpr = Mpr::find($request->toId);
-                                                            
-                                                            if (!$sourceMpr || !$targetMpr) {
-                                                                return response()->json([
-                                                                    'success' => false,
-                                                                    'message' => 'Source or target MPR not found'
-                                                                ], 404);
-                                                            }
-                                                            
-                                                            $sourceCandidates = array_values(json_decode($sourceMpr->candidates ?? '[]', true) ?: []);
-                                                            $targetCandidates = array_values(json_decode($targetMpr->candidates ?? '[]', true) ?: []);
-                                                            $transferCandidates = array_values($request->candidates);
-                                                            
-                                                            $sourceCandidates = array_values(array_filter($sourceCandidates, function($candidate) use ($transferCandidates) {
-                                                                return !in_array($candidate['empno'], array_column($transferCandidates, 'empno'));
-                                                            }));
-                                                            
-                                                            $targetCandidates = array_values(array_merge($targetCandidates, $transferCandidates));
-                                                            
-                                                            $sourceQtyReq = json_decode($sourceMpr->qty_req, true);
-                                                            $totalSourceQty = array_sum(array_map('intval', array_filter($sourceQtyReq)));
-                                                            $sourceMpr->recruited = count($sourceCandidates);
-                                                            $sourceMpr->stocknumber = $totalSourceQty - $sourceMpr->recruited;
-                                                            $sourceMpr->fulfilled = $sourceMpr->stocknumber <= 0 ? 'yes' : 'no';
-                                                            $sourceMpr->candidates = json_encode(array_values($sourceCandidates));
-                                                            
-                                                            if ($sourceMpr->stocknumber > 0) {
-                                                                $sourceMpr->fullfilldate = null;
-                                                                $sourceMpr->fulfilled = 'no';
-                                                            } else if ($sourceMpr->stocknumber <= 0 && empty($sourceMpr->fullfilldate)) {
-                                                                $sourceMpr->fullfilldate = date('Y-m-d');
-                                                                $sourceMpr->fulfilled = 'yes';
-                                                            }
-                                                            
-                                                            $targetQtyReq = json_decode($targetMpr->qty_req, true);
-                                                            $totalTargetQty = array_sum(array_map('intval', array_filter($targetQtyReq)));
-                                                            $targetMpr->recruited = count($targetCandidates);
-                                                            $targetMpr->stocknumber = $totalTargetQty - $targetMpr->recruited;
-                                                            $targetMpr->fulfilled = $targetMpr->stocknumber <= 0 ? 'yes' : 'no';
-                                                            $targetMpr->candidates = json_encode(array_values($targetCandidates));
-                                                            
-                                                            // Update target fullfilldate based on new status
-                                                            if ($targetMpr->stocknumber > 0) {
-                                                                $targetMpr->fullfilldate = null;
-                                                                $targetMpr->fulfilled = 'no';
-                                                            } else if ($targetMpr->stocknumber <= 0 && empty($targetMpr->fullfilldate)) {
-                                                                // Only set fullfilldate if becoming fulfilled for the first time
-                                                                $targetMpr->fullfilldate = date('Y-m-d');
-                                                                $targetMpr->fulfilled = 'yes';
-                                                            }
-                                                            
-                                                            // Save both records
-                                                            $sourceMpr->save();
-                                                            $targetMpr->save();
-                                                            
-                                                            return response()->json([
-                                                                'success' => true,
-                                                                'message' => 'Candidates transferred successfully',
-                                                                'data' => [
-                                                                    'source' => $sourceMpr,
-                                                                    'target' => $targetMpr
-                                                                    ]
-                                                                ]);
-                                                                
-                                                            } catch (\Exception $e) {
-                                                                return response()->json([
-                                                                    'success' => false,
-                                                                    'message' => 'Error transferring candidates: ' . $e->getMessage()
-                                                                ], 500);
-                                                            }
-                                                        }
-                                                        
-                                                        public static function getFilteredRequests($userData, $includeDeputy = true)
-                                                        {
-                                                            try {
-                                                                if (!isset($userData['empno'])) {
-                                                                    return [
-                                                                        'success' => false,
-                                                                        'message' => 'Missing employee number',
-                                                                        'data' => collect([])
-                                                                    ];
-                                                                }
-                                                                
-                                                                // Define valid request statuses
-                                                                $validStatuses = [
-                                                                    'waiting_dept',
-                                                                    'waiting_div',
-                                                                    'waiting_hr_rec_sf',
-                                                                    'waiting_hr', 
-                                                                    'waiting_ad',
-                                                                    'waiting_gm'
+                                                                    'message' => 'Missing employee number',
+                                                                    'data' => collect([])
                                                                 ];
-                                                                
-                                                                // Get requests with valid statuses
-                                                                $requests = Mpr::whereIn('status', $validStatuses)
-                                                                ->orWhereIn('status_amendent', $validStatuses)
-                                                                ->orderBy('id', 'desc')
-                                                                ->get();
-                                                                
-                                                                // Map status levels
-                                                                $statusLevels = [
-                                                                    'waiting_dept' => 0,
-                                                                    'waiting_div' => 1, 
-                                                                    'waiting_hr_rec_sf' => 2,
-                                                                    'waiting_hr' => 3,
-                                                                    'waiting_ad' => 4,
-                                                                    'waiting_gm' => 5
-                                                                ];
-                                                                
-                                                                $controller = new self();
-                                                                $vfaController = new vfaCtrl();
-                                                                
-                                                                // Map reason_exp with SubPos data
-                                                                $requests = $requests->map(function($request) {
-                                                                    if ($request->reason_exp) {
-                                                                        $subPosData = RecReason::find($request->reason_exp);
-                                                                        if ($subPosData) {
-                                                                            try {
-                                                                                // Check if sub_name is JSON
-                                                                                $subName = json_decode($subPosData->name, true);
-                                                                                if (json_last_error() === JSON_ERROR_NONE) {
-                                                                                    $request->reason_exp = $subName;
-                                                                                } else {
-                                                                                    $request->reason_exp = $subPosData->name;
-                                                                                }
-                                                                            } catch (\Exception $e) {
-                                                                                \Log::error('Error mapping reason_exp: ' . $e->getMessage());
+                                                            }
+                                                            
+                                                            // Define valid request statuses
+                                                            $validStatuses = [
+                                                                'waiting_dept',
+                                                                'waiting_div',
+                                                                'waiting_hr_rec_sf',
+                                                                'waiting_hr', 
+                                                                'waiting_ad',
+                                                                'waiting_gm'
+                                                            ];
+                                                            
+                                                            // Get requests with valid statuses
+                                                            $requests = Mpr::whereIn('status', $validStatuses)
+                                                            ->orWhereIn('status_amendent', $validStatuses)
+                                                            ->orderBy('id', 'desc')
+                                                            ->get();
+                                                            
+                                                            // Map status levels
+                                                            $statusLevels = [
+                                                                'waiting_dept' => 0,
+                                                                'waiting_div' => 1, 
+                                                                'waiting_hr_rec_sf' => 2,
+                                                                'waiting_hr' => 3,
+                                                                'waiting_ad' => 4,
+                                                                'waiting_gm' => 5
+                                                            ];
+                                                            
+                                                            $controller = new self();
+                                                            $vfaController = new vfaCtrl();
+                                                            
+                                                            // Map reason_exp with SubPos data
+                                                            $requests = $requests->map(function($request) {
+                                                                if ($request->reason_exp) {
+                                                                    $subPosData = RecReason::find($request->reason_exp);
+                                                                    if ($subPosData) {
+                                                                        try {
+                                                                            // Check if sub_name is JSON
+                                                                            $subName = json_decode($subPosData->name, true);
+                                                                            if (json_last_error() === JSON_ERROR_NONE) {
+                                                                                $request->reason_exp = $subName;
+                                                                            } else {
                                                                                 $request->reason_exp = $subPosData->name;
                                                                             }
+                                                                        } catch (\Exception $e) {
+                                                                            \Log::error('Error mapping reason_exp: ' . $e->getMessage());
+                                                                            $request->reason_exp = $subPosData->name;
                                                                         }
                                                                     }
-                                                                    return $request;
-                                                                });
+                                                                }
+                                                                return $request;
+                                                            });
+                                                            
+                                                            // Filter requests based on user access
+                                                            $filteredRequests = $requests->filter(function ($request) use ($userData, $statusLevels, $validStatuses, $includeDeputy, $controller, $vfaController) {
+                                                                $empno = $userData['empno'];
+                                                                $submitter = json_decode($request->submitter, true);
                                                                 
-                                                                // Filter requests based on user access
-                                                                $filteredRequests = $requests->filter(function ($request) use ($userData, $statusLevels, $validStatuses, $includeDeputy, $controller, $vfaController) {
-                                                                    $empno = $userData['empno'];
-                                                                    $submitter = json_decode($request->submitter, true);
+                                                                // Get flow data specific to this request
+                                                                $requestParams = new Request();
+                                                                $requestParams->merge([
+                                                                    'empno' => $submitter['empno'],
+                                                                    'app_code' => 'MPR',
+                                                                    'location' => $userData['location'] ?? 'VN',
+                                                                    'custom_data' => json_encode([
+                                                                        'custom_dept' => $submitter['dept'] ?? null,
+                                                                        'custom_division' => $submitter['high_dept'] ?? null
+                                                                        ])
+                                                                    ]);
                                                                     
-                                                                    // Get flow data specific to this request
-                                                                    $requestParams = new Request();
-                                                                    $requestParams->merge([
-                                                                        'empno' => $submitter['empno'],
-                                                                        'app_code' => 'MPR',
-                                                                        'location' => $userData['location'] ?? 'VN',
-                                                                        'custom_data' => json_encode([
-                                                                            'custom_dept' => $submitter['dept'] ?? null,
-                                                                            'custom_division' => $submitter['high_dept'] ?? null
-                                                                            ])
-                                                                        ]);
-                                                                        
-                                                                        $flowResponse = $vfaController->getFlowUpdated($requestParams);
-                                                                        $flowData = json_decode(json_encode($flowResponse->flow_data ?? []), true);
-                                                                        
-                                                                        if (empty($flowData)) {
-                                                                            return false;
+                                                                    $flowResponse = $vfaController->getFlowUpdated($requestParams);
+                                                                    $flowData = json_decode(json_encode($flowResponse->flow_data ?? []), true);
+                                                                    
+                                                                    if (empty($flowData)) {
+                                                                        return false;
+                                                                    }
+                                                                    
+                                                                    // Check current status with priority for amendment status
+                                                                    $statusesToCheck = [];
+                                                                    if (!empty($request->status_amendent) && in_array($request->status_amendent, $validStatuses)) {
+                                                                        $statusesToCheck[] = $request->status_amendent;
+                                                                    }
+                                                                    if (!empty($request->status) && in_array($request->status, $validStatuses)) {
+                                                                        $statusesToCheck[] = $request->status;
+                                                                    }
+                                                                    
+                                                                    if (empty($statusesToCheck)) {
+                                                                        return false;
+                                                                    }
+                                                                    
+                                                                    foreach ($statusesToCheck as $status) {
+                                                                        if (!isset($statusLevels[$status])) {
+                                                                            continue;
                                                                         }
                                                                         
-                                                                        // Check current status with priority for amendment status
-                                                                        $statusesToCheck = [];
-                                                                        if (!empty($request->status_amendent) && in_array($request->status_amendent, $validStatuses)) {
-                                                                            $statusesToCheck[] = $request->status_amendent;
+                                                                        $currentLevel = $statusLevels[$status];
+                                                                        if (!isset($flowData[$currentLevel]) || empty($flowData[$currentLevel]['managers'])) {
+                                                                            continue;
                                                                         }
-                                                                        if (!empty($request->status) && in_array($request->status, $validStatuses)) {
-                                                                            $statusesToCheck[] = $request->status;
-                                                                        }
+                                                                        $currentFlow = $flowData[$currentLevel];
                                                                         
-                                                                        if (empty($statusesToCheck)) {
-                                                                            return false;
-                                                                        }
-                                                                        
-                                                                        foreach ($statusesToCheck as $status) {
-                                                                            if (!isset($statusLevels[$status])) {
-                                                                                continue;
+                                                                        foreach ($currentFlow['managers'] as $manager) {
+                                                                            // Direct manager check
+                                                                            if ($manager['empno'] === $empno) {
+                                                                                return true;
                                                                             }
                                                                             
-                                                                            $currentLevel = $statusLevels[$status];
-                                                                            if (!isset($flowData[$currentLevel]) || empty($flowData[$currentLevel]['managers'])) {
-                                                                                continue;
-                                                                            }
-                                                                            $currentFlow = $flowData[$currentLevel];
-                                                                            
-                                                                            foreach ($currentFlow['managers'] as $manager) {
-                                                                                // Direct manager check
-                                                                                if ($manager['empno'] === $empno) {
-                                                                                    return true;
-                                                                                }
-                                                                                
-                                                                                // Deputy check if enabled 
-                                                                                if ($includeDeputy && !empty($manager['deputies'])) {
-                                                                                    foreach ($manager['deputies'] as $deputy) {
-                                                                                        if ($deputy['empno'] === $empno && !empty($deputy['status']) && $deputy['status'] === true) {
-                                                                                            return true;
-                                                                                        }
+                                                                            // Deputy check if enabled 
+                                                                            if ($includeDeputy && !empty($manager['deputies'])) {
+                                                                                foreach ($manager['deputies'] as $deputy) {
+                                                                                    if ($deputy['empno'] === $empno && !empty($deputy['status']) && $deputy['status'] === true) {
+                                                                                        return true;
                                                                                     }
                                                                                 }
                                                                             }
                                                                         }
-                                                                        
-                                                                        return false;
-                                                                    });
+                                                                    }
                                                                     
-                                                                    return [
-                                                                        'success' => true,
-                                                                        'message' => 'Requests filtered successfully',
-                                                                        'data' => $filteredRequests->values()
+                                                                    return false;
+                                                                });
+                                                                
+                                                                return [
+                                                                    'success' => true,
+                                                                    'message' => 'Requests filtered successfully',
+                                                                    'data' => $filteredRequests->values()
+                                                                ];
+                                                                
+                                                            } catch (\Exception $e) {
+                                                                \Log::error('Error in getFilteredRequests:', [
+                                                                    'error' => $e->getMessage(),
+                                                                    'trace' => $e->getTraceAsString()
+                                                                ]);
+                                                                
+                                                                return [
+                                                                    'success' => false,
+                                                                    'message' => 'Error filtering requests: ' . $e->getMessage(),
+                                                                    'data' => collect([])
+                                                                ];
+                                                            }
+                                                        }
+                                                        
+                                                        public function getProcessedRequestsByEmpno(Request $req)
+                                                        {
+                                                            try {
+                                                                $validator = Validator::make($req->all(), [
+                                                                    'empno' => 'required|string'
+                                                                ]);
+                                                                
+                                                                if ($validator->fails()) {
+                                                                    return response()->json([
+                                                                        'success' => false,
+                                                                        'errors' => $validator->errors()
+                                                                    ], 400);
+                                                                }
+                                                                
+                                                                $empno = $req->input('empno');
+                                                                
+                                                                // Lấy tất cả các request đã hoàn thành hoặc bị từ chối
+                                                                $allRequests = Mpr::whereIn('status', ['completed', 'declined'])
+                                                                ->orderBy('updated_at', 'DESC')
+                                                                ->get([
+                                                                    'id',
+                                                                    'req_id',
+                                                                    'req_id_change',
+                                                                    'key_in_date',
+                                                                    'approval',
+                                                                    'status',
+                                                                    'status_amendent',
+                                                                    'submitter',
+                                                                    'pos',
+                                                                    'reason_exp',
+                                                                    'qty_req',
+                                                                    'recruited',
+                                                                    'stocknumber',
+                                                                    'fulfilled',
+                                                                    'fullfilldate',
+                                                                    'loc',
+                                                                    'supp_type',
+                                                                    'created_at',
+                                                                    'updated_at'
+                                                                ]);
+                                                                $processedRequests = [];
+                                                                $declinedRequests = [];
+                                                                
+                                                                foreach ($allRequests as $request) {
+                                                                    $approval = json_decode($request->approval, true);
+                                                                    $submitter = json_decode($request->submitter, true);
+                                                                    $qtyReq = json_decode($request->qty_req, true);
+                                                                    
+                                                                    if (!$approval || !is_array($approval)) {
+                                                                        continue;
+                                                                    }
+                                                                    
+                                                                    // Lấy thông tin position và reason
+                                                                    $typeApply = TypeApply::where('id', $request->pos)
+                                                                    ->where('loc', $request->loc)
+                                                                    ->first();
+                                                                    $positionName = $typeApply ? $typeApply->type_name : $request->pos;
+                                                                    
+                                                                    $reasonName = RecReason::where('id', $request->reason_exp)
+                                                                    ->where('loc', $request->loc)
+                                                                    ->first();
+                                                                    $typereasonName = $reasonName ? $reasonName->name : $request->reason_exp;
+                                                                    
+                                                                    // Tính tổng số lượng yêu cầu
+                                                                    $totalQty = 0;
+                                                                    if ($qtyReq) {
+                                                                        $totalQty = array_sum(array_filter([
+                                                                            $qtyReq['workers'] ?? 0,
+                                                                            $qtyReq['staff'] ?? 0,
+                                                                            $qtyReq['engineers'] ?? 0,
+                                                                            $qtyReq['leader'] ?? 0,
+                                                                            $qtyReq['tranlator'] ?? 0
+                                                                        ]));
+                                                                    }
+                                                                    
+                                                                    // Tạo object data để return
+                                                                    $requestData = [
+                                                                        'id' => $request->id,
+                                                                        'req_id' => $request->req_id,
+                                                                        'req_id_change' => $request->req_id_change,
+                                                                        'status' => $request->status,
+                                                                        'status_amendent' => $request->status_amendent,
+                                                                        'supp_type' => $request->supp_type,
+                                                                        'key_in_date' => $request->key_in_date,
+                                                                        'submitter' => [
+                                                                            'empno' => $submitter['empno'] ?? '',
+                                                                            'name' => $submitter['name'] ?? '',
+                                                                            'dept_sumt' => $submitter['dept_sumt'] ?? '',
+                                                                            'high_dept' => $submitter['high_dept'] ?? '',
+                                                                            'email' => $submitter['email'] ?? '',
+                                                                            'unit' => $submitter['unit'] ?? ''
+                                                                        ],
+                                                                        'position' => [
+                                                                            'id' => $request->pos,
+                                                                            'name' => $positionName
+                                                                        ],
+                                                                        'reason_exp' => $typereasonName ,
+                                                                        'quantity' => [
+                                                                            'requested' => $totalQty,
+                                                                            'recruited' => $request->recruited ?? 0,
+                                                                            'stocknumber' => $request->stocknumber ?? $totalQty,
+                                                                            'details' => $qtyReq
+                                                                        ],
+                                                                        'fulfilled' => $request->fulfilled,
+                                                                        'fullfilldate' => $request->fullfilldate,
+                                                                        'created_at' => $request->created_at,
+                                                                        'updated_at' => $request->updated_at
                                                                     ];
                                                                     
+                                                                    $isDenied = false;
+                                                                    
+                                                                    // Kiểm tra xem user có từ chối đơn này không
+                                                                    foreach ($approval as $level) {
+                                                                        if (isset($level['approver']['empno']) && 
+                                                                        $level['approver']['empno'] === $empno && 
+                                                                        isset($level['status']) && 
+                                                                        strtolower($level['status']) === 'rejected') {
+                                                                            
+                                                                            $requestData['deny_reason'] = $level['reason_denied'] ?? '';
+                                                                            $requestData['processed_at'] = $level['processed_at'] ?? '';
+                                                                            $declinedRequests[] = $requestData;
+                                                                            $isDenied = true;
+                                                                            break;
+                                                                        }
+                                                                    }
+                                                                    
+                                                                    if ($isDenied) continue;
+                                                                    
+                                                                    // Kiểm tra xem user có approve đơn này không
+                                                                    foreach ($approval as $level) {
+                                                                        if (isset($level['approver']['empno']) && 
+                                                                        $level['approver']['empno'] === $empno && 
+                                                                        isset($level['status']) && 
+                                                                        strtolower($level['status']) === 'approved') {
+                                                                            
+                                                                            $requestData['processed_at'] = $level['processed_at'] ?? '';
+                                                                            $processedRequests[] = $requestData;
+                                                                            break;
+                                                                        }
+                                                                    }
+                                                                }
+                                                                
+                                                                return response()->json([
+                                                                    'success' => true,
+                                                                    'message' => 'Processed requests retrieved successfully',
+                                                                    'data' => [
+                                                                        'approved' => $processedRequests,
+                                                                        'declined' => $declinedRequests
+                                                                    ],
+                                                                    'summary' => [
+                                                                        'total_approved' => count($processedRequests),
+                                                                        'total_declined' => count($declinedRequests),
+                                                                        'total_processed' => count($processedRequests) + count($declinedRequests)
+                                                                        ]
+                                                                    ]);
+                                                                    
                                                                 } catch (\Exception $e) {
-                                                                    \Log::error('Error in getFilteredRequests:', [
+                                                                    \Log::error('Error in getProcessedRequestsByEmpno:', [
                                                                         'error' => $e->getMessage(),
                                                                         'trace' => $e->getTraceAsString()
                                                                     ]);
                                                                     
-                                                                    return [
+                                                                    return response()->json([
                                                                         'success' => false,
-                                                                        'message' => 'Error filtering requests: ' . $e->getMessage(),
-                                                                        'data' => collect([])
-                                                                    ];
+                                                                        'message' => 'Error retrieving processed requests: ' . $e->getMessage()
+                                                                    ], 500);
                                                                 }
                                                             }
                                                             
-                                                            public function getProcessedRequestsByEmpno(Request $req)
+                                                            public function countResignedCandidates()
                                                             {
                                                                 try {
-                                                                    $validator = Validator::make($req->all(), [
-                                                                        'empno' => 'required|string'
-                                                                    ]);
+                                                                    // Get all MPRs with candidates but no resignList yet
+                                                                    $mprs = Mpr::whereNotNull('candidates')
+                                                                    ->where('candidates', '!=', '')
+                                                                    ->where(function($query) {
+                                                                        $query->whereNull('resignList')
+                                                                        ->orWhere('resignList', '');
+                                                                    })
+                                                                    // ->get();
+                                                                    ->paginate(500);
                                                                     
-                                                                    if ($validator->fails()) {
+                                                                    if ($mprs->isEmpty()) {
                                                                         return response()->json([
-                                                                            'success' => false,
-                                                                            'errors' => $validator->errors()
-                                                                        ], 400);
+                                                                            'status' => 'success',
+                                                                            'message' => 'No new MPRs to process',
+                                                                            'data' => []
+                                                                        ], 200);
                                                                     }
                                                                     
-                                                                    $empno = $req->input('empno');
+                                                                    // Collect all candidate empnos in one array
+                                                                    $allCandidateEmpnos = [];
+                                                                    $mprCandidatesMap = [];
                                                                     
-                                                                    // Lấy tất cả các request đã hoàn thành hoặc bị từ chối
-                                                                    $allRequests = Mpr::whereIn('status', ['completed', 'declined'])
-                                                                    ->orderBy('updated_at', 'DESC')
-                                                                    ->get([
-                                                                        'id',
-                                                                        'req_id',
-                                                                        'req_id_change',
-                                                                        'key_in_date',
-                                                                        'approval',
-                                                                        'status',
-                                                                        'status_amendent',
-                                                                        'submitter',
-                                                                        'pos',
-                                                                        'reason_exp',
-                                                                        'qty_req',
-                                                                        'recruited',
-                                                                        'stocknumber',
-                                                                        'fulfilled',
-                                                                        'fullfilldate',
-                                                                        'loc',
-                                                                        'supp_type',
-                                                                        'created_at',
-                                                                        'updated_at'
-                                                                    ]);
-                                                                    $processedRequests = [];
-                                                                    $declinedRequests = [];
+                                                                    foreach ($mprs as $mpr) {
+                                                                        $candidates = json_decode($mpr->candidates, true);
+                                                                        if (!empty($candidates)) {
+                                                                            $empnos = array_column($candidates, 'empno');
+                                                                            $allCandidateEmpnos = array_merge($allCandidateEmpnos, $empnos);
+                                                                            $mprCandidatesMap[$mpr->id] = $candidates;
+                                                                        }
+                                                                    }
                                                                     
-                                                                    foreach ($allRequests as $request) {
-                                                                        $approval = json_decode($request->approval, true);
-                                                                        $submitter = json_decode($request->submitter, true);
-                                                                        $qtyReq = json_decode($request->qty_req, true);
-                                                                        
-                                                                        if (!$approval || !is_array($approval)) {
+                                                                    // Single query to get all resigned employees
+                                                                    $resignedEmployees = ResignData::whereIn('er_empid', array_unique($allCandidateEmpnos))
+                                                                    ->get()
+                                                                    ->keyBy('er_empid');
+                                                                    
+                                                                    $results = [];
+                                                                    $bulkUpdateData = [];
+                                                                    
+                                                                    foreach ($mprs as $mpr) {
+                                                                        if (!isset($mprCandidatesMap[$mpr->id])) {
                                                                             continue;
                                                                         }
                                                                         
-                                                                        // Lấy thông tin position và reason
-                                                                        $typeApply = TypeApply::where('id', $request->pos)
-                                                                        ->where('loc', $request->loc)
-                                                                        ->first();
-                                                                        $positionName = $typeApply ? $typeApply->type_name : $request->pos;
+                                                                        $candidates = $mprCandidatesMap[$mpr->id];
+                                                                        $resignList = [];
+                                                                        $resignedCount = 0;
                                                                         
-                                                                        $reasonName = RecReason::where('id', $request->reason_exp)
-                                                                        ->where('loc', $request->loc)
-                                                                        ->first();
-                                                                        $typereasonName = $reasonName ? $reasonName->name : $request->reason_exp;
-                                                                        
-                                                                        // Tính tổng số lượng yêu cầu
-                                                                        $totalQty = 0;
-                                                                        if ($qtyReq) {
-                                                                            $totalQty = array_sum(array_filter([
-                                                                                $qtyReq['workers'] ?? 0,
-                                                                                $qtyReq['staff'] ?? 0,
-                                                                                $qtyReq['engineers'] ?? 0,
-                                                                                $qtyReq['leader'] ?? 0,
-                                                                                $qtyReq['tranlator'] ?? 0
-                                                                            ]));
+                                                                        foreach ($candidates as $candidate) {
+                                                                            if (isset($resignedEmployees[$candidate['empno']])) {
+                                                                                $resignData = $resignedEmployees[$candidate['empno']];
+                                                                                $resignList[] = [
+                                                                                    'empno' => $candidate['empno'],
+                                                                                    'date' => $resignData->er_resigndate,
+                                                                                    'name' => $candidate['name'],
+                                                                                    'key_in' => $candidate['key_in'],
+                                                                                    'position' => $mpr->pos
+                                                                                ];
+                                                                                $resignedCount++;
+                                                                            }
                                                                         }
                                                                         
-                                                                        // Tạo object data để return
-                                                                        $requestData = [
-                                                                            'id' => $request->id,
-                                                                            'req_id' => $request->req_id,
-                                                                            'req_id_change' => $request->req_id_change,
-                                                                            'status' => $request->status,
-                                                                            'status_amendent' => $request->status_amendent,
-                                                                            'supp_type' => $request->supp_type,
-                                                                            'key_in_date' => $request->key_in_date,
-                                                                            'submitter' => [
-                                                                                'empno' => $submitter['empno'] ?? '',
-                                                                                'name' => $submitter['name'] ?? '',
-                                                                                'dept_sumt' => $submitter['dept_sumt'] ?? '',
-                                                                                'high_dept' => $submitter['high_dept'] ?? '',
-                                                                                'email' => $submitter['email'] ?? '',
-                                                                                'unit' => $submitter['unit'] ?? ''
-                                                                            ],
-                                                                            'position' => [
-                                                                                'id' => $request->pos,
-                                                                                'name' => $positionName
-                                                                            ],
-                                                                            'reason_exp' => $typereasonName ,
-                                                                            'quantity' => [
-                                                                                'requested' => $totalQty,
-                                                                                'recruited' => $request->recruited ?? 0,
-                                                                                'stocknumber' => $request->stocknumber ?? $totalQty,
-                                                                                'details' => $qtyReq
-                                                                            ],
-                                                                            'fulfilled' => $request->fulfilled,
-                                                                            'fullfilldate' => $request->fullfilldate,
-                                                                            'created_at' => $request->created_at,
-                                                                            'updated_at' => $request->updated_at
+                                                                        // Prepare bulk update data
+                                                                        $bulkUpdateData[] = [
+                                                                            'id' => $mpr->id,
+                                                                            'resign' => $resignedCount,
+                                                                            'resignList' => !empty($resignList) ? json_encode($resignList) : null,
+                                                                            'updated_at' => now()
                                                                         ];
                                                                         
-                                                                        $isDenied = false;
-                                                                        
-                                                                        // Kiểm tra xem user có từ chối đơn này không
-                                                                        foreach ($approval as $level) {
-                                                                            if (isset($level['approver']['empno']) && 
-                                                                            $level['approver']['empno'] === $empno && 
-                                                                            isset($level['status']) && 
-                                                                            strtolower($level['status']) === 'rejected') {
-                                                                                
-                                                                                $requestData['deny_reason'] = $level['reason_denied'] ?? '';
-                                                                                $requestData['processed_at'] = $level['processed_at'] ?? '';
-                                                                                $declinedRequests[] = $requestData;
-                                                                                $isDenied = true;
-                                                                                break;
-                                                                            }
+                                                                        $results[] = [
+                                                                            'mpr_id' => $mpr->id,
+                                                                            'req_id' => $mpr->req_id,
+                                                                            'status' => 'success',
+                                                                            'resigned_count' => $resignedCount
+                                                                        ];
+                                                                    }
+                                                                    
+                                                                    // Bulk update using chunks
+                                                                    collect($bulkUpdateData)->chunk(100)->each(function ($chunk) {
+                                                                        foreach ($chunk as $data) {
+                                                                            Mpr::where('id', $data['id'])->update([
+                                                                                'resign' => $data['resign'],
+                                                                                'resignList' => $data['resignList'],
+                                                                                'updated_at' => $data['updated_at']
+                                                                            ]);
                                                                         }
-                                                                        
-                                                                        if ($isDenied) continue;
-                                                                        
-                                                                        // Kiểm tra xem user có approve đơn này không
-                                                                        foreach ($approval as $level) {
-                                                                            if (isset($level['approver']['empno']) && 
-                                                                            $level['approver']['empno'] === $empno && 
-                                                                            isset($level['status']) && 
-                                                                            strtolower($level['status']) === 'approved') {
-                                                                                
-                                                                                $requestData['processed_at'] = $level['processed_at'] ?? '';
-                                                                                $processedRequests[] = $requestData;
-                                                                                break;
-                                                                            }
+                                                                    });
+                                                                    
+                                                                    return response()->json([
+                                                                        'status' => 'success',
+                                                                        'message' => 'Processed ' . count($results) . ' MPR records',
+                                                                        'data' => $results
+                                                                    ], 200);
+                                                                    
+                                                                } catch (\Exception $e) {
+                                                                    \Log::error('Error in countResignedCandidates: ' . $e->getMessage());
+                                                                    return response()->json([
+                                                                        'status' => 'error',
+                                                                        'message' => $e->getMessage()
+                                                                    ], 500);
+                                                                }
+                                                            }
+                                                            private function processAutoCloseEmail($mpr)
+                                                            {
+                                                                try {
+                                                                    $submitter = json_decode($mpr->submitter, true);
+                                                                    
+                                                                    // Get position details from TypeApply
+                                                                    $typeApply = TypeApply::where('id', $mpr->pos)
+                                                                    ->where('loc', $mpr->loc)
+                                                                    ->first();
+                                                                    $position = $typeApply ? $typeApply->type_name : '';
+                                                                    
+                                                                    // Parse position name for different languages
+                                                                    $positionNames = [
+                                                                        'cn' => '',
+                                                                        'vi' => '',
+                                                                        'en' => ''
+                                                                    ];
+                                                                    
+                                                                    if ($position) {
+                                                                        try {
+                                                                            $positionObj = json_decode($position, true);
+                                                                            $positionNames['cn'] = $positionObj['cn'] ?? $positionObj['en'] ?? $position;
+                                                                            $positionNames['vi'] = $positionObj['vi'] ?? $positionObj['en'] ?? $position;
+                                                                            $positionNames['en'] = $positionObj['en'] ?? $position;
+                                                                        } catch (\Exception $e) {
+                                                                            // Fallback to original value for all languages
+                                                                            $positionNames['cn'] = $position;
+                                                                            $positionNames['vi'] = $position;
+                                                                            $positionNames['en'] = $position;
                                                                         }
                                                                     }
                                                                     
-                                                                    return response()->json([
-                                                                        'success' => true,
-                                                                        'message' => 'Processed requests retrieved successfully',
-                                                                        'data' => [
-                                                                            'approved' => $processedRequests,
-                                                                            'declined' => $declinedRequests
+                                                                    // Calculate quantity details
+                                                                    $qtyReq = json_decode($mpr->qty_req, true);
+                                                                    $totalQty = 0;
+                                                                    if ($qtyReq) {
+                                                                        $totalQty = array_sum(array_filter([
+                                                                            $qtyReq['workers'] ?? 0,
+                                                                            $qtyReq['staff'] ?? 0,
+                                                                            $qtyReq['engineers'] ?? 0,
+                                                                            $qtyReq['leader'] ?? 0,
+                                                                            $qtyReq['tranlator'] ?? 0
+                                                                        ]));
+                                                                    }
+                                                                    
+                                                                    $templateData = [
+                                                                        'requester' => [
+                                                                            'name' => $submitter['name'] ?? '',
+                                                                            'empno' => $submitter['empno'] ?? '',
+                                                                            'email' => $submitter['email'] ?? ''
                                                                         ],
-                                                                        'summary' => [
-                                                                            'total_approved' => count($processedRequests),
-                                                                            'total_declined' => count($declinedRequests),
-                                                                            'total_processed' => count($processedRequests) + count($declinedRequests)
+                                                                        'request' => [
+                                                                            'id' => $mpr->req_id,
+                                                                            'unit' => $submitter['unit'] ?? '',
+                                                                            'position' => $positionNames, // Truyền object chứa tất cả ngôn ngữ
+                                                                            'stocknumber' => $mpr->stocknumber ?? $totalQty,
+                                                                            'recruited' => $mpr->recruited ?? 0,
+                                                                            'hold_date' => $mpr->hold_date
                                                                             ]
+                                                                        ];
+                                                                        
+                                                                        $emailContent = view('vgMpr-autoClose', ['templateData' => $templateData])->render();
+                                                                        
+                                                                        $emailSubject = "[MPR] 人員增補申請自動結案通知 / MPR Auto Close Notification / Thông báo tự động đóng yêu cầu nhân sự";
+                                                                        
+                                                                        $mailData = [
+                                                                            'to' => [$submitter['email']],
+                                                                            'subject' => $emailSubject,
+                                                                            'msgBody' => $emailContent,
+                                                                        ];
+                                                                        
+                                                                        $params = [
+                                                                            'target' => 'VG-MPR',
+                                                                            'body' => $emailContent,
+                                                                            'msg_type' => "m",
+                                                                            'msg_method' => "both",
+                                                                            'msg_subject' => $emailSubject,
+                                                                            'mail_template' => "msgCenterMailTemplate",
+                                                                            'mail_data' => json_encode($mailData),
+                                                                        ];
+                                                                        
+                                                                        $this->sendMsg($params);
+                                                                        
+                                                                        return true;
+                                                                    } catch (\Exception $e) {
+                                                                        \Log::error('Error sending auto close email: ' . $e->getMessage());
+                                                                        return false;
+                                                                    }
+                                                                }
+                                                                public function sendAutoCloseEmail(Request $request)
+                                                                {
+                                                                    try {
+                                                                        $mpr = Mpr::find($request->id);
+                                                                        if (!$mpr) {
+                                                                            return response()->json([
+                                                                                'success' => false,
+                                                                                'message' => 'MPR record not found'
+                                                                            ], 404);
+                                                                        }
+                                                                        $emailSent = $this->processAutoCloseEmail($mpr);
+                                                                        return response()->json([
+                                                                            'success' => $emailSent,
+                                                                            'message' => $emailSent ? 'Auto close notification sent successfully' : 'Failed to send notification'
                                                                         ]);
                                                                         
                                                                     } catch (\Exception $e) {
-                                                                        \Log::error('Error in getProcessedRequestsByEmpno:', [
-                                                                            'error' => $e->getMessage(),
-                                                                            'trace' => $e->getTraceAsString()
-                                                                        ]);
-                                                                        
                                                                         return response()->json([
                                                                             'success' => false,
-                                                                            'message' => 'Error retrieving processed requests: ' . $e->getMessage()
+                                                                            'message' => 'Error sending auto close notification: ' . $e->getMessage()
                                                                         ], 500);
                                                                     }
                                                                 }
-                                                                
-                                                                public function countResignedCandidates()
+                                                                public function updateMprCandidates_ori()
                                                                 {
                                                                     try {
-                                                                        // Get all MPRs with candidates but no resignList yet
-                                                                        $mprs = Mpr::whereNotNull('candidates')
-                                                                        ->where('candidates', '!=', '')
-                                                                        ->where(function($query) {
-                                                                            $query->whereNull('resignList')
-                                                                            ->orWhere('resignList', '');
-                                                                        })
-                                                                        // ->get();
-                                                                        ->paginate(500);
+                                                                        // Get all registered candidates
+                                                                        $candidates = EmpnoInfo::where('reg', 'yes')
+                                                                        ->whereNotNull('emp_demandid')
+                                                                        ->get();
                                                                         
-                                                                        if ($mprs->isEmpty()) {
-                                                                            return response()->json([
-                                                                                'status' => 'success',
-                                                                                'message' => 'No new MPRs to process',
-                                                                                'data' => []
-                                                                            ], 200);
-                                                                        }
+                                                                        // Group candidates by emp_demandid
+                                                                        $groupedCandidates = $candidates->groupBy('emp_demandid');
                                                                         
-                                                                        // Collect all candidate empnos in one array
-                                                                        $allCandidateEmpnos = [];
-                                                                        $mprCandidatesMap = [];
-                                                                        
-                                                                        foreach ($mprs as $mpr) {
-                                                                            $candidates = json_decode($mpr->candidates, true);
-                                                                            if (!empty($candidates)) {
-                                                                                $empnos = array_column($candidates, 'empno');
-                                                                                $allCandidateEmpnos = array_merge($allCandidateEmpnos, $empnos);
-                                                                                $mprCandidatesMap[$mpr->id] = $candidates;
-                                                                            }
-                                                                        }
-                                                                        
-                                                                        // Single query to get all resigned employees
-                                                                        $resignedEmployees = ResignData::whereIn('er_empid', array_unique($allCandidateEmpnos))
-                                                                        ->get()
-                                                                        ->keyBy('er_empid');
-                                                                        
-                                                                        $results = [];
-                                                                        $bulkUpdateData = [];
-                                                                        
-                                                                        foreach ($mprs as $mpr) {
-                                                                            if (!isset($mprCandidatesMap[$mpr->id])) {
+                                                                        foreach ($groupedCandidates as $demandId => $candidateGroup) {
+                                                                            $mpr = Mpr::find($demandId);
+                                                                            if (!$mpr) {
                                                                                 continue;
                                                                             }
                                                                             
-                                                                            $candidates = $mprCandidatesMap[$mpr->id];
-                                                                            $resignList = [];
-                                                                            $resignedCount = 0;
+                                                                            $formattedCandidates = $candidateGroup->map(function($candidate) use ($mpr) {
+                                                                                return [
+                                                                                    'empno' => $candidate->newEmpno,
+                                                                                    'date' => $candidate->act_en_date,
+                                                                                    'name' => $candidate->candidate_name,
+                                                                                    'key_in' => $candidate->key_in_date,
+                                                                                    'position' => $mpr->pos 
+                                                                                ];
+                                                                            })->values()->toArray();
                                                                             
-                                                                            foreach ($candidates as $candidate) {
-                                                                                if (isset($resignedEmployees[$candidate['empno']])) {
-                                                                                    $resignData = $resignedEmployees[$candidate['empno']];
-                                                                                    $resignList[] = [
-                                                                                        'empno' => $candidate['empno'],
-                                                                                        'date' => $resignData->er_resigndate,
-                                                                                        'name' => $candidate['name'],
-                                                                                        'key_in' => $candidate['key_in'],
-                                                                                        'position' => $mpr->pos
-                                                                                    ];
-                                                                                    $resignedCount++;
-                                                                                }
-                                                                            }
+                                                                            $mpr->candidates = json_encode($formattedCandidates);
+                                                                            $mpr->recruited = count($formattedCandidates);
                                                                             
-                                                                            // Prepare bulk update data
-                                                                            $bulkUpdateData[] = [
-                                                                                'id' => $mpr->id,
-                                                                                'resign' => $resignedCount,
-                                                                                'resignList' => !empty($resignList) ? json_encode($resignList) : null,
-                                                                                'updated_at' => now()
-                                                                            ];
+                                                                            $qtyReq = json_decode($mpr->qty_req, true);
+                                                                            $totalQty = array_sum(array_filter(array_diff_key($qtyReq, ['level' => 0])));
+                                                                            $mpr->stocknumber = $totalQty - $mpr->recruited;
+                                                                            $mpr->fulfilled = $mpr->stocknumber <= 0 ? 'yes' : 'no';
+                                                                            // if ($mpr->stocknumber <= 0 && empty($mpr->fullfilldate)) {
+                                                                            //     $mpr->fullfilldate = date('Y-m-d');
+                                                                            // }
                                                                             
-                                                                            $results[] = [
-                                                                                'mpr_id' => $mpr->id,
-                                                                                'req_id' => $mpr->req_id,
-                                                                                'status' => 'success',
-                                                                                'resigned_count' => $resignedCount
-                                                                            ];
+                                                                            $mpr->save();
                                                                         }
                                                                         
-                                                                        // Bulk update using chunks
-                                                                        collect($bulkUpdateData)->chunk(100)->each(function ($chunk) {
-                                                                            foreach ($chunk as $data) {
-                                                                                Mpr::where('id', $data['id'])->update([
-                                                                                    'resign' => $data['resign'],
-                                                                                    'resignList' => $data['resignList'],
-                                                                                    'updated_at' => $data['updated_at']
-                                                                                ]);
-                                                                            }
-                                                                        });
-                                                                        
                                                                         return response()->json([
-                                                                            'status' => 'success',
-                                                                            'message' => 'Processed ' . count($results) . ' MPR records',
-                                                                            'data' => $results
-                                                                        ], 200);
+                                                                            'success' => true,
+                                                                            'message' => 'MPR candidates updated successfully',
+                                                                            'updated_count' => $groupedCandidates->count()
+                                                                        ]);
                                                                         
                                                                     } catch (\Exception $e) {
-                                                                        \Log::error('Error in countResignedCandidates: ' . $e->getMessage());
                                                                         return response()->json([
-                                                                            'status' => 'error',
-                                                                            'message' => $e->getMessage()
+                                                                            'success' => false,
+                                                                            'message' => 'Error updating MPR candidates: ' . $e->getMessage()
                                                                         ], 500);
                                                                     }
                                                                 }
-                                                                private function processAutoCloseEmail($mpr)
+                                                                public function updateMprCandidates()
                                                                 {
                                                                     try {
-                                                                        $submitter = json_decode($mpr->submitter, true);
+                                                                        // Get all registered candidates with an emp_demandid
+                                                                        $candidates = EmpnoInfo::where('reg', 'yes')
+                                                                        ->whereNotNull('emp_demandid')
+                                                                        ->get();
                                                                         
-                                                                        // Get position details from TypeApply
-                                                                        $typeApply = TypeApply::where('id', $mpr->pos)
-                                                                        ->where('loc', $mpr->loc)
-                                                                        ->first();
-                                                                        $position = $typeApply ? $typeApply->type_name : '';
+                                                                        // Group candidates by emp_demandid
+                                                                        $groupedCandidates = $candidates->groupBy('emp_demandid');
+                                                                        $updatedCount = 0;
                                                                         
-                                                                        // Parse position name for different languages
-                                                                        $positionNames = [
-                                                                            'cn' => '',
-                                                                            'vi' => '',
-                                                                            'en' => ''
-                                                                        ];
-                                                                        
-                                                                        if ($position) {
-                                                                            try {
-                                                                                $positionObj = json_decode($position, true);
-                                                                                $positionNames['cn'] = $positionObj['cn'] ?? $positionObj['en'] ?? $position;
-                                                                                $positionNames['vi'] = $positionObj['vi'] ?? $positionObj['en'] ?? $position;
-                                                                                $positionNames['en'] = $positionObj['en'] ?? $position;
-                                                                            } catch (\Exception $e) {
-                                                                                // Fallback to original value for all languages
-                                                                                $positionNames['cn'] = $position;
-                                                                                $positionNames['vi'] = $position;
-                                                                                $positionNames['en'] = $position;
+                                                                        foreach ($groupedCandidates as $demandId => $candidateGroup) {
+                                                                            // Find the Demand by its id (emp_demandid)
+                                                                            $demand = Demand::find($demandId);
+                                                                            if (!$demand || empty($demand->id_code)) {
+                                                                                continue;
                                                                             }
-                                                                        }
-                                                                        
-                                                                        // Calculate quantity details
-                                                                        $qtyReq = json_decode($mpr->qty_req, true);
-                                                                        $totalQty = 0;
-                                                                        if ($qtyReq) {
-                                                                            $totalQty = array_sum(array_filter([
-                                                                                $qtyReq['workers'] ?? 0,
-                                                                                $qtyReq['staff'] ?? 0,
-                                                                                $qtyReq['engineers'] ?? 0,
-                                                                                $qtyReq['leader'] ?? 0,
-                                                                                $qtyReq['tranlator'] ?? 0
-                                                                            ]));
-                                                                        }
-                                                                        
-                                                                        $templateData = [
-                                                                            'requester' => [
-                                                                                'name' => $submitter['name'] ?? '',
-                                                                                'empno' => $submitter['empno'] ?? '',
-                                                                                'email' => $submitter['email'] ?? ''
-                                                                            ],
-                                                                            'request' => [
-                                                                                'id' => $mpr->req_id,
-                                                                                'unit' => $submitter['unit'] ?? '',
-                                                                                'position' => $positionNames, // Truyền object chứa tất cả ngôn ngữ
-                                                                                'stocknumber' => $mpr->stocknumber ?? $totalQty,
-                                                                                'recruited' => $mpr->recruited ?? 0,
-                                                                                'hold_date' => $mpr->hold_date
-                                                                                ]
-                                                                            ];
                                                                             
-                                                                            $emailContent = view('vgMpr-autoClose', ['templateData' => $templateData])->render();
-                                                                            
-                                                                            $emailSubject = "[MPR] 人員增補申請自動結案通知 / MPR Auto Close Notification / Thông báo tự động đóng yêu cầu nhân sự";
-                                                                            
-                                                                            $mailData = [
-                                                                                'to' => [$submitter['email']],
-                                                                                'subject' => $emailSubject,
-                                                                                'msgBody' => $emailContent,
-                                                                            ];
-                                                                            
-                                                                            $params = [
-                                                                                'target' => 'VG-MPR',
-                                                                                'body' => $emailContent,
-                                                                                'msg_type' => "m",
-                                                                                'msg_method' => "both",
-                                                                                'msg_subject' => $emailSubject,
-                                                                                'mail_template' => "msgCenterMailTemplate",
-                                                                                'mail_data' => json_encode($mailData),
-                                                                            ];
-                                                                            
-                                                                            $this->sendMsg($params);
-                                                                            
-                                                                            return true;
-                                                                        } catch (\Exception $e) {
-                                                                            \Log::error('Error sending auto close email: ' . $e->getMessage());
-                                                                            return false;
-                                                                        }
-                                                                    }
-                                                                    public function sendAutoCloseEmail(Request $request)
-                                                                    {
-                                                                        try {
-                                                                            $mpr = Mpr::find($request->id);
+                                                                            // Find MPR by matching req_id with Demand.id_code
+                                                                            $mpr = Mpr::where('req_id', $demand->id_code)->first();
                                                                             if (!$mpr) {
-                                                                                return response()->json([
-                                                                                    'success' => false,
-                                                                                    'message' => 'MPR record not found'
-                                                                                ], 404);
-                                                                            }
-                                                                            $emailSent = $this->processAutoCloseEmail($mpr);
-                                                                            return response()->json([
-                                                                                'success' => $emailSent,
-                                                                                'message' => $emailSent ? 'Auto close notification sent successfully' : 'Failed to send notification'
-                                                                            ]);
-                                                                            
-                                                                        } catch (\Exception $e) {
-                                                                            return response()->json([
-                                                                                'success' => false,
-                                                                                'message' => 'Error sending auto close notification: ' . $e->getMessage()
-                                                                            ], 500);
-                                                                        }
-                                                                    }
-                                                                    public function updateMprCandidates_ori()
-                                                                    {
-                                                                        try {
-                                                                            // Get all registered candidates
-                                                                            $candidates = EmpnoInfo::where('reg', 'yes')
-                                                                            ->whereNotNull('emp_demandid')
-                                                                            ->get();
-                                                                            
-                                                                            // Group candidates by emp_demandid
-                                                                            $groupedCandidates = $candidates->groupBy('emp_demandid');
-                                                                            
-                                                                            foreach ($groupedCandidates as $demandId => $candidateGroup) {
-                                                                                $mpr = Mpr::find($demandId);
-                                                                                if (!$mpr) {
-                                                                                    continue;
-                                                                                }
-                                                                                
-                                                                                $formattedCandidates = $candidateGroup->map(function($candidate) use ($mpr) {
-                                                                                    return [
-                                                                                        'empno' => $candidate->newEmpno,
-                                                                                        'date' => $candidate->act_en_date,
-                                                                                        'name' => $candidate->candidate_name,
-                                                                                        'key_in' => $candidate->key_in_date,
-                                                                                        'position' => $mpr->pos 
-                                                                                    ];
-                                                                                })->values()->toArray();
-                                                                                
-                                                                                $mpr->candidates = json_encode($formattedCandidates);
-                                                                                $mpr->recruited = count($formattedCandidates);
-                                                                                
-                                                                                $qtyReq = json_decode($mpr->qty_req, true);
-                                                                                $totalQty = array_sum(array_filter(array_diff_key($qtyReq, ['level' => 0])));
-                                                                                $mpr->stocknumber = $totalQty - $mpr->recruited;
-                                                                                $mpr->fulfilled = $mpr->stocknumber <= 0 ? 'yes' : 'no';
-                                                                                // if ($mpr->stocknumber <= 0 && empty($mpr->fullfilldate)) {
-                                                                                //     $mpr->fullfilldate = date('Y-m-d');
-                                                                                // }
-                                                                                
-                                                                                $mpr->save();
+                                                                                continue;
                                                                             }
                                                                             
-                                                                            return response()->json([
-                                                                                'success' => true,
-                                                                                'message' => 'MPR candidates updated successfully',
-                                                                                'updated_count' => $groupedCandidates->count()
-                                                                            ]);
+                                                                            // Format candidates for this MPR
+                                                                            $formattedCandidates = $candidateGroup->map(function($candidate) use ($mpr) {
+                                                                                return [
+                                                                                    'empno' => $candidate->newEmpno,
+                                                                                    'date' => $candidate->act_en_date,
+                                                                                    'name' => $candidate->candidate_name,
+                                                                                    'key_in' => $candidate->key_in_date,
+                                                                                    'position' => $mpr->pos ?? 2
+                                                                                ];
+                                                                            })->values()->toArray();
                                                                             
-                                                                        } catch (\Exception $e) {
-                                                                            return response()->json([
-                                                                                'success' => false,
-                                                                                'message' => 'Error updating MPR candidates: ' . $e->getMessage()
-                                                                            ], 500);
-                                                                        }
-                                                                    }
-                                                                    public function updateMprCandidates()
-                                                                    {
-                                                                        try {
-                                                                            // Get all registered candidates with an emp_demandid
-                                                                            $candidates = EmpnoInfo::where('reg', 'yes')
-                                                                            ->whereNotNull('emp_demandid')
-                                                                            ->get();
+                                                                            // Update MPR fields
+                                                                            $mpr->candidates = json_encode($formattedCandidates);
+                                                                            $mpr->recruited = count($formattedCandidates);
                                                                             
-                                                                            // Group candidates by emp_demandid
-                                                                            $groupedCandidates = $candidates->groupBy('emp_demandid');
-                                                                            $updatedCount = 0;
-                                                                            
-                                                                            foreach ($groupedCandidates as $demandId => $candidateGroup) {
-                                                                                // Find the Demand by its id (emp_demandid)
-                                                                                $demand = Demand::find($demandId);
-                                                                                if (!$demand || empty($demand->id_code)) {
-                                                                                    continue;
-                                                                                }
-                                                                                
-                                                                                // Find MPR by matching req_id with Demand.id_code
-                                                                                $mpr = Mpr::where('req_id', $demand->id_code)->first();
-                                                                                if (!$mpr) {
-                                                                                    continue;
-                                                                                }
-                                                                                
-                                                                                // Format candidates for this MPR
-                                                                                $formattedCandidates = $candidateGroup->map(function($candidate) use ($mpr) {
-                                                                                    return [
-                                                                                        'empno' => $candidate->newEmpno,
-                                                                                        'date' => $candidate->act_en_date,
-                                                                                        'name' => $candidate->candidate_name,
-                                                                                        'key_in' => $candidate->key_in_date,
-                                                                                        'position' => $mpr->pos ?? 2
-                                                                                    ];
-                                                                                })->values()->toArray();
-                                                                                
-                                                                                // Update MPR fields
-                                                                                $mpr->candidates = json_encode($formattedCandidates);
-                                                                                $mpr->recruited = count($formattedCandidates);
-                                                                                
-                                                                                // Calculate total requested quantity from qty_req
-                                                                                $qtyReq = json_decode($mpr->qty_req, true);
-                                                                                $totalQty = 0;
-                                                                                if ($qtyReq) {
-                                                                                    $totalQty = array_sum(array_filter([
-                                                                                        $qtyReq['workers'] ?? 0,
-                                                                                        $qtyReq['staff'] ?? 0,
-                                                                                        $qtyReq['engineers'] ?? 0,
-                                                                                        $qtyReq['leader'] ?? 0,
-                                                                                        $qtyReq['tranlator'] ?? 0
-                                                                                    ]));
-                                                                                }
-                                                                                
-                                                                                $mpr->stocknumber = $totalQty - $mpr->recruited;
-                                                                                $mpr->fulfilled = $mpr->stocknumber <= 0 ? 'yes' : 'no';
-                                                                                $mpr->fullfilldate = $demand->dem_fullfilldate;
-                                                                                
-                                                                                // // Set fullfilldate from Demand.dem_fullfilldate if present
-                                                                                // if (!empty($demand->dem_fullfilldate)) {
-                                                                                // } else {
-                                                                                //     // If demand has no fullfill date, preserve existing behavior:
-                                                                                //     if ($mpr->stocknumber > 0) {
-                                                                                //         $mpr->fullfilldate = null;
-                                                                                //         $mpr->fulfilled = 'no';
-                                                                                //     } else if ($mpr->stocknumber <= 0 && empty($mpr->fullfilldate)) {
-                                                                                //         $mpr->fullfilldate = date('Y-m-d');
-                                                                                //         $mpr->fulfilled = 'yes';
-                                                                                //     }
-                                                                                // }
-                                                                                
-                                                                                $mpr->save();
-                                                                                $updatedCount++;
+                                                                            // Calculate total requested quantity from qty_req
+                                                                            $qtyReq = json_decode($mpr->qty_req, true);
+                                                                            $totalQty = 0;
+                                                                            if ($qtyReq) {
+                                                                                $totalQty = array_sum(array_filter([
+                                                                                    $qtyReq['workers'] ?? 0,
+                                                                                    $qtyReq['staff'] ?? 0,
+                                                                                    $qtyReq['engineers'] ?? 0,
+                                                                                    $qtyReq['leader'] ?? 0,
+                                                                                    $qtyReq['tranlator'] ?? 0
+                                                                                ]));
                                                                             }
                                                                             
-                                                                            return response()->json([
-                                                                                'success' => true,
-                                                                                'message' => 'MPR candidates updated successfully',
-                                                                                'updated_count' => $updatedCount
-                                                                            ]);
+                                                                            $mpr->stocknumber = $totalQty - $mpr->recruited;
+                                                                            $mpr->fulfilled = $mpr->stocknumber <= 0 ? 'yes' : 'no';
+                                                                            $mpr->fullfilldate = $demand->dem_fullfilldate;
                                                                             
-                                                                        } catch (\Exception $e) {
-                                                                            return response()->json([
-                                                                                'success' => false,
-                                                                                'message' => 'Error updating MPR candidates: ' . $e->getMessage()
-                                                                            ], 500);
+                                                                            // // Set fullfilldate from Demand.dem_fullfilldate if present
+                                                                            // if (!empty($demand->dem_fullfilldate)) {
+                                                                            // } else {
+                                                                            //     // If demand has no fullfill date, preserve existing behavior:
+                                                                            //     if ($mpr->stocknumber > 0) {
+                                                                            //         $mpr->fullfilldate = null;
+                                                                            //         $mpr->fulfilled = 'no';
+                                                                            //     } else if ($mpr->stocknumber <= 0 && empty($mpr->fullfilldate)) {
+                                                                            //         $mpr->fullfilldate = date('Y-m-d');
+                                                                            //         $mpr->fulfilled = 'yes';
+                                                                            //     }
+                                                                            // }
+                                                                            
+                                                                            $mpr->save();
+                                                                            $updatedCount++;
                                                                         }
+                                                                        
+                                                                        return response()->json([
+                                                                            'success' => true,
+                                                                            'message' => 'MPR candidates updated successfully',
+                                                                            'updated_count' => $updatedCount
+                                                                        ]);
+                                                                        
+                                                                    } catch (\Exception $e) {
+                                                                        return response()->json([
+                                                                            'success' => false,
+                                                                            'message' => 'Error updating MPR candidates: ' . $e->getMessage()
+                                                                        ], 500);
                                                                     }
-                                                                    public function migrateCompletedMprToDemand(Request $request)
-                                                                    {
-                                                                        try {
+                                                                }
+                                                                public function migrateCompletedMprToDemand(Request $request)
+                                                                {
+                                                                    try {
                                                                             $mprs = Mpr::where('status', 'completed')->get();
                                                                             $created = [];
                                                                             
@@ -2614,7 +2603,7 @@ class vgMprCtrl extends Controller
                                                                                 'message' => 'Error migrating MPR to Demand: ' . $e->getMessage()
                                                                             ], 500);
                                                                         }
-                                                                    }
-                                                                    
                                                                 }
                                                                 
+                                                            }
+                                                            
