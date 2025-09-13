@@ -266,16 +266,11 @@
     <v-icon @click="printDocument(item)">mdi-printer</v-icon>
 </template>
 <template v-slot:[`item.reason`]="{ item }">
-    <!-- <template v-if="item.reason_exp === 3">
-        {{ getLocalizedOtherReason(item.isOther_reason) }}
-    </template>
-    <template v-else>
-        {{ item.reasonInfo?.type }}
-    </template> -->
+   
     <template v-if="item.reason_exp === 3">
         <div class="d-flex align-center">
-            <span class="text-truncate" style="max-width:150px; display:inline-block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                {{ getLocalizedOtherReason(item.isOther_reason) }}
+            <span class="text-truncate" style="max-width:150px;">
+             {{  getLocalizedOtherReason(item.isOther_reason) }}
             </span>
             <v-btn x-small text color="primary" @click="openOtherReasonDialog(item)"><v-icon x-small>mdi-eye</v-icon></v-btn>
         </div>
@@ -482,13 +477,13 @@
                     </v-expansion-panel-content>
                 </v-expansion-panel>
                 <v-expansion-panel v-for="(cycle, cycleIndex) in groupedApprovalData" :key="cycleIndex">
-                     <v-expansion-panel-header>
-                         <div class="d-flex align-center">
-                             <v-chip label outlined :color="getCycleColor(cycleIndex + 1)" class="mr-4" >
-                                 {{ $t('Cycle') }} {{ cycleIndex + 1 }}
-                             </v-chip>
-                         </div>
-                     </v-expansion-panel-header>
+                    <v-expansion-panel-header>
+                        <div class="d-flex align-center">
+                            <v-chip label outlined :color="getCycleColor(cycleIndex + 1)" class="mr-4" >
+                                {{ $t('Cycle') }} {{ cycleIndex + 1 }}
+                            </v-chip>
+                        </div>
+                    </v-expansion-panel-header>
                     <v-expansion-panel-content>
                         <v-data-table :headers="approvalHeaders" :items="cycle" hide-default-footer class="elevation-1" >
                             <template v-slot:[`item.type`]="{ item }">
@@ -1393,23 +1388,82 @@ export default {
         getLocalizedOtherReason(otherReason) {
             try {
                 // Nếu otherReason là string JSON
-                if (typeof otherReason === 'string' && otherReason.startsWith('{')) {
-                    const parsedReason = JSON.parse(otherReason);
-                    const locale = this.$i18n?.locale || 'vi';
-                    return parsedReason[locale] || parsedReason.vi || parsedReason.en || '';
+                let obj = otherReason;
+                if (typeof otherReason === 'string') {
+                    otherReason = otherReason.trim();
+                    if (!otherReason) return '';
+                    if (otherReason.startsWith('{')) {
+                        obj = JSON.parse(otherReason);
+                    } else {
+                        return otherReason || '';
+                    }
                 }
+                if (!obj || typeof obj !== 'object') return obj || '';
                 
-                // Nếu otherReason đã là object
-                if (typeof otherReason === 'object' && otherReason !== null) {
-                    const locale = this.$i18n?.locale || 'vi';
-                    return otherReason[locale] || otherReason.vi || otherReason.en || '';
+                const langs = ['vi', 'en', 'cn'];
+                const locale = (this.$i18n && this.$i18n.locale) ? this.$i18n.locale : (localStorage.getItem('preferred-locale') || 'en');
+                
+                // If already has value for current locale, return it
+                if (obj[locale] && obj[locale].trim()) return obj[locale];
+                
+                // find a source language with text
+                const sourceLang = langs.find(k => obj[k] && obj[k].trim());
+                const sourceText = (sourceLang && obj[sourceLang]) ? obj[sourceLang] : '';
+                if (!sourceText) return '';
+                
+                // cache
+                if (!this._otherReasonCache) this._otherReasonCache = new Map();
+                const cacheKey = JSON.stringify(obj);
+                if (!this._otherReasonCache.has(cacheKey)) {
+                    this._otherReasonCache.set(cacheKey, Object.assign({}, obj));
                 }
+                const cached = this._otherReasonCache.get(cacheKey);
+                if (cached[locale] && cached[locale].trim()) return cached[locale];
                 
-                // Nếu là string thường
-                return otherReason || '';
+                const translate = async (text, target) => {
+                    let code = "";
+                    switch (target) {
+                        case "vi": code = "secret-v"; break;
+                        case "en": code = "secret-e"; break;
+                        case "cn": code = "secret-c"; break;
+                        default: return "";
+                    }
+                    try {
+                        const formData = new FormData();
+                        formData.append("type", code);
+                        formData.append("string", text);
+                        const response = await this.$axios.post("http://gmo021.cansportsvg.com/public/gg-trans/curl.php", formData);
+                        if (response && response.status === 200) {
+                            return (typeof response.data === 'string') ? response.data : (response.data?.result || '');
+                        }
+                    } catch (e) {
+                        console.error("translate error:", e);
+                    }
+                    return "";
+                };
+                
+                (async () => {
+                    try {
+                        const missing = langs.filter(k => !cached[k] || !cached[k].toString().trim());
+                        for (const tgt of missing) {
+                            if (tgt === sourceLang) continue;
+                            const tr = await translate(sourceText, tgt);
+                            if (tr) {
+                                const cur = this._otherReasonCache.get(cacheKey) || {};
+                                cur[tgt] = tr;
+                                this._otherReasonCache.set(cacheKey, cur);
+                            }
+                        }
+                        this.$forceUpdate();
+                    } catch (e) {
+                        console.error("background translate failed:", e);
+                    }
+                })();
+                
+                return sourceText;
             } catch (error) {
                 console.error('Error getting localized other reason:', error);
-                return otherReason || ''; // Trả về nguyên dạng nếu có lỗi
+                return otherReason || '';
             }
         },
         setDefaultTab() {
@@ -3037,7 +3091,7 @@ export default {
                     }
                     return a.level - b.level;
                 });
-                 this.approvalPanelsActive = 0;
+                this.approvalPanelsActive = 0;
                 this.approvalDialog = true;
             } catch (error) {
                 console.error('Error opening approval details:', error);
@@ -3099,7 +3153,7 @@ export default {
                     let reason = returnedLevel.return_reason;
                     try {
                         const reasonObj = JSON.parse(reason);
-                        const currentLang = this.$i18n?.locale || 'vi'; // hoặc lấy từ localStorage, config
+                        const currentLang = this.$i18n?.locale || 'vi'; 
                         reason = reasonObj[currentLang] || reasonObj['vi'] || '';
                     } catch (e) {
                     }
@@ -3296,17 +3350,24 @@ export default {
                             `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';
                             break;
                             case 'status':
-                            row[header.title] = this.$t(this.getStatusText(item.status, item));
+                            row[header.title] = this.getStatusText(item.status, item);
+                            if (item.status_amendent) {
+                                row[header.title] += ' / ' + this.getAmendmentStatusText(item.status_amendent);
+                            }
+                            break;
+                            case 'recruited_status':
+                            const recruitmentStatus = this.getRecruitmentStatus(item);
+                            row[header.title] = recruitmentStatus.show ? 
+                            `${recruitmentStatus.text}${recruitmentStatus.detail ? ' ' + recruitmentStatus.detail : ''}` : '';
                             break;
                             case 'pos':
                             row[header.title] = this.getPositionName(item.pos);
                             break;
                             case 'sub_pos':
-                            // Thêm case mới cho sub_pos
                             row[header.title] = this.getSubPositionName(item.sub_pos, true);
                             break;
                             case 'qty_req':
-                            row[header.title] = this.getDisplayQuantity(item.qty_req);
+                            row[header.title] = this.getDisplayQuantity(item.qty_req, item);
                             break;
                             case 'date_req':
                             case 'key_in_date':

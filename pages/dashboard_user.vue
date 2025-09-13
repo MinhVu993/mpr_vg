@@ -201,7 +201,6 @@
 </template>
 <template v-slot:[`item.status`]="{ item }">
     <div class="d-flex align-center flex-wrap">
-        <!-- Main Status Chip with Tooltip -->
         <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
             <template v-slot:activator="{ on, attrs }">
                 <v-chip 
@@ -266,12 +265,7 @@
     </div>
 </template>
 <template v-slot:[`item.reason`]="{ item }">
-    <!-- <template v-if="item.reason_exp === 3">
-        {{ getLocalizedOtherReason(item.isOther_reason) }}
-    </template>
-    <template v-else>
-        {{ item.reasonInfo?.type }}
-    </template> -->
+    
     <template v-if="item.reason_exp === 3">
         <div class="d-flex align-center">
             <span class="text-truncate" style="max-width:150px; display:inline-block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
@@ -1279,22 +1273,22 @@ export default {
             }
         },
         approvalFlowDependency() {
-        return {
-            cache: Object.keys(this.approvalFlowCache).length,
-            generalFlow: !!this.generalFlowData,
-            timestamp: Date.now() 
-        };
-    },
+            return {
+                cache: Object.keys(this.approvalFlowCache).length,
+                generalFlow: !!this.generalFlowData,
+                timestamp: Date.now() 
+            };
+        },
         statusCounts() {
-        this.approvalFlowDependency;
-        
-        const all = this.dataFilteredByYear.length;
-        let todo = 0, completed = 0, processing = 0, returned = 0, declined = 0;
-        
-        this.dataFilteredByYear.forEach(item => {
-            if (this.canApproveItemForTodo(item)) {
-                todo++;
-            }
+            this.approvalFlowDependency;
+            
+            const all = this.dataFilteredByYear.length;
+            let todo = 0, completed = 0, processing = 0, returned = 0, declined = 0;
+            
+            this.dataFilteredByYear.forEach(item => {
+                if (this.canApproveItemForTodo(item)) {
+                    todo++;
+                }
                 if ([ 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
                 ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)) {
                     processing++;
@@ -1351,23 +1345,82 @@ export default {
         getLocalizedOtherReason(otherReason) {
             try {
                 // Nếu otherReason là string JSON
-                if (typeof otherReason === 'string' && otherReason.startsWith('{')) {
-                    const parsedReason = JSON.parse(otherReason);
-                    const locale = this.$i18n?.locale || 'vi';
-                    return parsedReason[locale] || parsedReason.vi || parsedReason.en || '';
+                let obj = otherReason;
+                if (typeof otherReason === 'string') {
+                    otherReason = otherReason.trim();
+                    if (!otherReason) return '';
+                    if (otherReason.startsWith('{')) {
+                        obj = JSON.parse(otherReason);
+                    } else {
+                        return otherReason || '';
+                    }
                 }
+                if (!obj || typeof obj !== 'object') return obj || '';
                 
-                // Nếu otherReason đã là object
-                if (typeof otherReason === 'object' && otherReason !== null) {
-                    const locale = this.$i18n?.locale || 'vi';
-                    return otherReason[locale] || otherReason.vi || otherReason.en || '';
+                const langs = ['vi', 'en', 'cn'];
+                const locale = (this.$i18n && this.$i18n.locale) ? this.$i18n.locale : (localStorage.getItem('preferred-locale') || 'en');
+                
+                // If already has value for current locale, return it
+                if (obj[locale] && obj[locale].trim()) return obj[locale];
+                
+                // find a source language with text
+                const sourceLang = langs.find(k => obj[k] && obj[k].trim());
+                const sourceText = (sourceLang && obj[sourceLang]) ? obj[sourceLang] : '';
+                if (!sourceText) return '';
+                
+                // cache
+                if (!this._otherReasonCache) this._otherReasonCache = new Map();
+                const cacheKey = JSON.stringify(obj);
+                if (!this._otherReasonCache.has(cacheKey)) {
+                    this._otherReasonCache.set(cacheKey, Object.assign({}, obj));
                 }
+                const cached = this._otherReasonCache.get(cacheKey);
+                if (cached[locale] && cached[locale].trim()) return cached[locale];
                 
-                // Nếu là string thường
-                return otherReason || '';
+                const translate = async (text, target) => {
+                    let code = "";
+                    switch (target) {
+                        case "vi": code = "secret-v"; break;
+                        case "en": code = "secret-e"; break;
+                        case "cn": code = "secret-c"; break;
+                        default: return "";
+                    }
+                    try {
+                        const formData = new FormData();
+                        formData.append("type", code);
+                        formData.append("string", text);
+                        const response = await this.$axios.post("http://gmo021.cansportsvg.com/public/gg-trans/curl.php", formData);
+                        if (response && response.status === 200) {
+                            return (typeof response.data === 'string') ? response.data : (response.data?.result || '');
+                        }
+                    } catch (e) {
+                        console.error("translate error:", e);
+                    }
+                    return "";
+                };
+                
+                (async () => {
+                    try {
+                        const missing = langs.filter(k => !cached[k] || !cached[k].toString().trim());
+                        for (const tgt of missing) {
+                            if (tgt === sourceLang) continue;
+                            const tr = await translate(sourceText, tgt);
+                            if (tr) {
+                                const cur = this._otherReasonCache.get(cacheKey) || {};
+                                cur[tgt] = tr;
+                                this._otherReasonCache.set(cacheKey, cur);
+                            }
+                        }
+                        this.$forceUpdate();
+                    } catch (e) {
+                        console.error("background translate failed:", e);
+                    }
+                })();
+                
+                return sourceText;
             } catch (error) {
                 console.error('Error getting localized other reason:', error);
-                return otherReason || ''; // Trả về nguyên dạng nếu có lỗi
+                return otherReason || '';
             }
         },
         getRecruitmentStatus(item) {
@@ -1773,7 +1826,7 @@ export default {
                 const res = await this.$axios.post(this.api + 'getAllDataMpr', params);
                 if (res.status === 200) {
                     this.dataMpr = res.data.dataMpr;
-                     await this.$nextTick();
+                    await this.$nextTick();
                     this.setDefaultTab();
                 } else {
                     throw new Error('Failed to fetch data');
@@ -2519,6 +2572,7 @@ export default {
             }
             const prefix = "🔄";
             switch (status) {
+                
                 case "waiting_dept":
                 return prefix + this.$t("Pending Dept");
                 case "waiting_div":
@@ -2544,6 +2598,7 @@ export default {
         
         getAmendmentStatusColor(status) {
             switch (status) {
+                
                 case "waiting_dept":
                 return "deep-orange darken-1";
                 case "waiting_div":
@@ -2567,9 +2622,13 @@ export default {
             }
         },
         getStatusText(status, item = {}) {
+            if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
+                return this.$t("Returned");
+            }
             switch (status) {
                 case "completed":
                 return this.$t("Approved");
+                
                 case "waiting_dept":
                 return this.$t("Pending Dept");
                 case "waiting_div":
@@ -2591,7 +2650,6 @@ export default {
             }
         },
         getStatusColor(status,item = {}) {
-            
             switch (status) {
                 
                 case "waiting_dept":
@@ -3254,17 +3312,24 @@ export default {
                             `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';
                             break;
                             case 'status':
-                            row[header.title] = this.$t(this.getStatusText(item.status, item));
+                            row[header.title] = this.getStatusText(item.status, item);
+                            if (item.status_amendent) {
+                                row[header.title] += ' / ' + this.getAmendmentStatusText(item.status_amendent);
+                            }
+                            break;
+                            case 'recruited_status':
+                            const recruitmentStatus = this.getRecruitmentStatus(item);
+                            row[header.title] = recruitmentStatus.show ? 
+                            `${recruitmentStatus.text}${recruitmentStatus.detail ? ' ' + recruitmentStatus.detail : ''}` : '';
                             break;
                             case 'pos':
                             row[header.title] = this.getPositionName(item.pos);
                             break;
                             case 'sub_pos':
-                            // Thêm case mới cho sub_pos
                             row[header.title] = this.getSubPositionName(item.sub_pos, true);
                             break;
                             case 'qty_req':
-                            row[header.title] = this.getDisplayQuantity(item.qty_req);
+                            row[header.title] = this.getDisplayQuantity(item.qty_req, item);
                             break;
                             case 'date_req':
                             case 'key_in_date':

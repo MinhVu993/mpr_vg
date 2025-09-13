@@ -154,7 +154,7 @@
                         <v-col cols="12" md="1">
                             <v-autocomplete :disabled="formDisabled" v-model="form.pos" :items="posItems" :label="$t('Type Apply')" item-text="name" :rules="[rules.required]" required item-value="id" outlined dense hide-details clearable @change="handleTypeApplyChange" ></v-autocomplete>
                         </v-col>
-                        <v-col cols="12" md="1" v-if="isHrManager && form.pos !== 1">
+                        <v-col cols="12" md="1" v-if="isHrManager && ![1,3].includes(Number(form.pos))">
                             <v-autocomplete 
                             background-color="#fff9c4" 
                             color="#000000" 
@@ -2112,7 +2112,6 @@ export default {
                 },
                 populateForm(data) {
                     if (!data) return;
-                    
                     // 1. Parse submitter info
                     const submitter = JSON.parse(data.submitter);
                     if (submitter) {
@@ -2151,6 +2150,7 @@ export default {
                                         // find the item in formattedChangeReasons so v-combobox can show text property
                                         const matched = this.formattedChangeReasons.find(i => i.id === changeId);
                                         this.form.changeReason = matched ? { ...matched } : { id: changeId };
+                                        this.form.changeQty = lastChangeReq.change_qty || "";
                                     }
                                 }
                             } catch (e) {
@@ -3236,9 +3236,29 @@ export default {
                 sub_positionItems() {
                     if (!this.subItems) return [];
                     
-                    if (this.form.pos === 6) {
-                        return this.subItems
-                        .filter((type) => type.id >= 6 && type.id <= 9)
+                    // if (this.form.pos === 6) {
+                    //     return this.subItems
+                    //     .filter((type) => type.id >= 6 && type.id <= 9)
+                    //     .map((type) => {
+                    //         const sub_name = JSON.parse(type.sub_name.trim());
+                    //         return {
+                    //             id: type.id,
+                    //             name: sub_name[this.$i18n.locale] || sub_name.en,
+                    //         };
+                    //     });
+                    // } else if (this.form.pos === 2 || this.form.pos === 3) {
+                    //     return this.subItems
+                    //     .filter((type) => type.id >= 1 && type.id <= 5)
+                    //     .map((type) => {
+                    //         const sub_name = JSON.parse(type.sub_name.trim());
+                    //         return {
+                    //             id: type.id,
+                    //             name: sub_name[this.$i18n.locale] || sub_name.en,
+                    //         };
+                    //     });
+                    // }
+                     return this.subItems
+                        .filter((type) => type.id >= 1 && type.id <= 9)
                         .map((type) => {
                             const sub_name = JSON.parse(type.sub_name.trim());
                             return {
@@ -3246,19 +3266,7 @@ export default {
                                 name: sub_name[this.$i18n.locale] || sub_name.en,
                             };
                         });
-                    } else if (this.form.pos === 2 || this.form.pos === 3) {
-                        return this.subItems
-                        .filter((type) => type.id >= 1 && type.id <= 5)
-                        .map((type) => {
-                            const sub_name = JSON.parse(type.sub_name.trim());
-                            return {
-                                id: type.id,
-                                name: sub_name[this.$i18n.locale] || sub_name.en,
-                            };
-                        });
-                    }
-                    
-                    return [];
+                    // return [];
                 },
                 suppTypeItems() {
                     return this.iSuppType.map((type) => {
@@ -3377,19 +3385,19 @@ export default {
                     return levels.filter((level) => statusLevels[level.value] < currentLevel);
                 },
                 getJobDescColWidth() {
-                    let width = 8;
+                    let width = 10;
                     
-                    if (
-                    this.form.pos === 1 &&
-                    this.form.recruitment.reason !== 2
-                    ) {
-                        width = 12;
-                    } else if (
-                    this.form.pos === 1 ||
-                    this.form.recruitment.reason !== 2
-                    ) {
-                        width = 10;
-                    }
+                    // if (
+                    // this.form.pos === 1 &&
+                    // this.form.recruitment.reason !== 2
+                    // ) {
+                    //     width = 12;
+                    // } else if (
+                    // this.form.pos === 1 ||
+                    // this.form.recruitment.reason !== 2
+                    // ) {
+                    //     width = 10;
+                    // }
                     return width;
                 },
                 hasEitherSelected() {
@@ -3733,7 +3741,8 @@ export default {
                 "Change quantity cannot be greater than or equal to request quantity": "Change quantity cannot be greater than or equal to request quantity",
                 "Min": "Min",
                 "Max": "Max",
-                "This field is required": "This field is required"
+                "This field is required": "This field is required",
+                "Delete": "Delete"
             },
             "vi": {
                 "Create new request": "Tạo yêu cầu mới",
@@ -3855,7 +3864,8 @@ export default {
                 "Change quantity cannot be greater than or equal to request quantity": "Số lượng thay đổi không được lớn hơn hoặc bằng số lượng yêu cầu",
                 "Min": "Tối thiểu",
                 "Max": "Tối đa",
-                "This field is required": "Trường này là bắt buộc"
+                "This field is required": "Trường này là bắt buộc",
+                "Delete": "Xóa"
             },
             "cn": {
                 "Create new request": "创建新请求",
@@ -3977,7 +3987,8 @@ export default {
                 "Min": "最少",
                 "Max": "最多",
                 "This field is required": "此字段为必填项",
-                "Change remark": "其他意見"
+                "Change remark": "其他意見",
+                "Delete": "删除"
             }
         }
     </i18n>
