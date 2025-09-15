@@ -236,7 +236,7 @@
                                                 outlined
                                                 auto-grow
                                                 rows="2"
-                                                :rules="[rules.required]"
+                                                :rules="otherReasonValidation"
                                                 :error-messages="!form.recruitment.isOther_reason.vi ? $t('This field is required') : ''"
                                                 placeholder="Nhập lý do bằng tiếng Việt..."
                                                 background-color="grey lighten-5"
@@ -248,11 +248,11 @@
                                             <v-tab-item>
                                                 <v-textarea
                                                 :disabled="formDisabled"
-                                                v-model="form.recruitment.isOther_reason.en" 
+                                                v-model="form.recruitment.isOther_reason.en"
                                                 outlined
                                                 auto-grow
                                                 rows="2"
-                                                :rules="[rules.required]"
+                                                :rules="otherReasonValidation"
                                                 :error-messages="!form.recruitment.isOther_reason.en ? $t('This field is required') : ''"
                                                 placeholder="Enter reason in English..."
                                                 background-color="grey lighten-5"
@@ -268,10 +268,10 @@
                                                 outlined
                                                 auto-grow
                                                 rows="2"
-                                                :rules="[rules.required]"
+                                                :rules="otherReasonValidation"
                                                 :error-messages="!form.recruitment.isOther_reason.cn ? $t('This field is required') : ''"
                                                 placeholder="用中文输入原因..."
-                                                background-color="grey lighten-5" 
+                                                background-color="grey lighten-5"
                                                 class="other-reason-textarea"
                                                 required
                                                 ></v-textarea>
@@ -1450,7 +1450,7 @@ export default {
                 
                 // Đợi next tick để đảm bảo Vue cập nhật DOM
                 await this.$nextTick();
-                
+                await this.handleLanguageChange(tg);
                 // Force cập nhật các computed properties
                 if (this._computedWatchers) {
                     Object.keys(this._computedWatchers).forEach(key => {
@@ -1710,13 +1710,33 @@ export default {
                 
                 // Handle attachments
                 if (this.form.attachments.jobDesc instanceof File) {
-                    formData.append("jobDescFile", this.form.attachments.jobDesc);
+                    const originalName = this.form.attachments.jobDesc.name;
+                    const fileExt = originalName.split('.').pop();
+                    const newFileName = `${requestId}_jobdesc.${fileExt}`;
+                    
+                    // Create new File object with custom name
+                    const renamedJobDescFile = new File(
+                    [this.form.attachments.jobDesc], 
+                    newFileName,
+                    { type: this.form.attachments.jobDesc.type }
+                    );
+                    formData.append("jobDescFile", renamedJobDescFile);
                 } else if (this.editData?.att_jd && this.filePreview.jobDesc) {
                     formData.append("att_jd", this.editData.att_jd);
                 }
                 
                 if (this.form.attachments.dimissionList instanceof File) {
-                    formData.append("dimissionFile", this.form.attachments.dimissionList);
+                    const originalName = this.form.attachments.dimissionList.name;
+                    const fileExt = originalName.split('.').pop();
+                    const newFileName = `${requestId}_dimission.${fileExt}`;
+                    
+                    // Create new File object with custom name
+                    const renamedDimissionFile = new File(
+                    [this.form.attachments.dimissionList],
+                    newFileName,
+                    { type: this.form.attachments.dimissionList.type }
+                    );
+                    formData.append("dimissionFile", renamedDimissionFile);
                 } else if (this.editData?.att_dis && this.filePreview.dimissionList) {
                     formData.append("att_dis", this.editData.att_dis);
                 }
@@ -2901,6 +2921,19 @@ export default {
         },
     },
     computed: {
+        otherReasonValidation() {
+            const vi = this.form.recruitment.isOther_reason.vi;
+            const en = this.form.recruitment.isOther_reason.en; 
+            const cn = this.form.recruitment.isOther_reason.cn;
+            
+            return {
+                required: (value) => !!value || this.$t('This field is required'),
+                allFields: () => {
+                    if (!vi && !en && !cn) return true; // Chưa nhập gì thì OK
+                    return (!!vi && !!en && !!cn) || this.$t('All language fields are required');
+                }
+            };
+        },
         showLevelField() {
             return this.form.pos === 3;
         },
@@ -2908,9 +2941,7 @@ export default {
             if (!this.unitNames || !Array.isArray(this.unitNames)) return [];
             if (!this.user.div || !this.user.dept) return [];
             
-            // Lọc units dựa trên Division và Department đã chọn
             const filteredUnits = this.unitNames.filter(unit => {
-                // Logic lọc dựa trên departmentData hoặc dept structure
                 const dept = this.departmentData.find(d => d.department === this.user.div);
                 if (!dept) return false;
                 
@@ -3144,6 +3175,13 @@ export default {
             !this.form.specialization || 
             !this.form.jobDesc ||
             !this.form.safetyLevels;
+            if (this.form.recruitment.reason === 3) {
+                if (!this.form.recruitment.isOther_reason.vi || 
+                !this.form.recruitment.isOther_reason.en || 
+                !this.form.recruitment.isOther_reason.cn) {
+                    return true;
+                }
+            }
             
             if (this.form.pos === 1) {
                 return baseValidation;

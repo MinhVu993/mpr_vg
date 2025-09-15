@@ -266,11 +266,11 @@
     <v-icon @click="printDocument(item)">mdi-printer</v-icon>
 </template>
 <template v-slot:[`item.reason`]="{ item }">
-   
+    
     <template v-if="item.reason_exp === 3">
         <div class="d-flex align-center">
             <span class="text-truncate" style="max-width:150px;">
-             {{  getLocalizedOtherReason(item.isOther_reason) }}
+                {{  getLocalizedOtherReason(item.isOther_reason) }}
             </span>
             <v-btn x-small text color="primary" @click="openOtherReasonDialog(item)"><v-icon x-small>mdi-eye</v-icon></v-btn>
         </div>
@@ -1498,7 +1498,7 @@ export default {
             return remaining;
         },
         getRecruitmentStatus(item) {
-
+            
             const stocknumber = parseInt(item.stocknumber);
             const recruited = parseInt(item.recruited);
             const hold = parseInt(item.hold);
@@ -2627,6 +2627,9 @@ export default {
             }
         },
         getStatusText(status, item = {}) {
+            if (status === "declined") {
+                return this.$t("Rejected");
+            }
             if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
                 return this.$t("Returned");
             }

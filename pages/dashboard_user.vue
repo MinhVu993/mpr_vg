@@ -2622,6 +2622,9 @@ export default {
             }
         },
         getStatusText(status, item = {}) {
+            if (status === "declined") {
+                return this.$t("Rejected");
+            }
             if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
                 return this.$t("Returned");
             }
