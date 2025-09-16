@@ -8,13 +8,16 @@
                 <v-toolbar-title>{{ dialogTitle }}</v-toolbar-title>
                 <v-spacer></v-spacer>
                 <v-toolbar-items>
-                    <v-btn @click="handleLanguageChange('vi')" text>VI</v-btn>
+                    <!-- <v-btn @click="handleLanguageChange('vi')" text>VI</v-btn>
                     <v-btn @click="handleLanguageChange('cn')" text>中文</v-btn>
-                    <v-btn @click="handleLanguageChange('en')" text class="mr-5" >EN</v-btn >
+                    <v-btn @click="handleLanguageChange('en')" text class="mr-5" >EN</v-btn > -->
+                        <v-btn @click="setLocale('vi')" text>VI</v-btn>
+                        <v-btn @click="setLocale('en')" text>EN</v-btn>
+                        <v-btn @click="setLocale('cn')" text class="mr-5">中文</v-btn>
                     </v-toolbar-items>
                 </v-toolbar>
                 <!-- <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :key="flowKey" :appCode="form.suppType === 1 ? 'mpr_flow2' : 'mpr'" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow" class="mb-2" ></VfaAppFlow> -->
-                <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :key="flowKey" :appCode="getAppCode" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow" class="mb-2" ></VfaAppFlow>
+                <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :locale="$i18n.locale" :key="flowKey" :appCode="getAppCode" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow" class="mb-2" ></VfaAppFlow>
                 
                 <v-app-bar v-if="showFlowSign" class="flow-sign-container mb-3" flat dense >
                     <v-icon color="info" class="mr-2">mdi-information-outline</v-icon>
@@ -30,7 +33,19 @@
                 <v-card-text class="approval-history-section"  v-if="showAmendmentSection" >
                     <v-row style="background-color: #fff9c4;">
                         <v-col cols="12" md="4">
-                            <v-combobox :disabled="disAmendent"  v-model="form.changeReason" :items="formattedChangeReasons" item-text="text" item-value="id" :label="$t('Change Reason')" outlined dense hide-details clearable></v-combobox>
+                            <v-combobox 
+                            :disabled="disAmendent"  
+                            v-model="form.changeReason" 
+                            :items="formattedChangeReasons"
+                            item-text="text"
+                            item-value="id"
+                            return-object
+                            :label="$t('Change Reason')" 
+                            outlined 
+                            dense 
+                            hide-details 
+                            clearable
+                            ></v-combobox>
                         </v-col>
                         <v-col cols="12" md="2">
                             <v-text-field v-if="showChangeQuantityField" 
@@ -116,22 +131,53 @@
                             <v-autocomplete :disabled="formDisabled" v-model="user.dept" :items="itemsDept" :label="$t('Dept') " outlined dense :rules="[rules.required]" required hide-details clearable ></v-autocomplete>
                         </v-col>
                         <v-col cols="1" md="2">
-                            <v-autocomplete :disabled="formDisabled" v-model="user.unit" :items="itemUnits" :label="$t('Unit') " outlined dense :rules="[rules.required]" required hide-details clearable ></v-autocomplete>
+                            <v-autocomplete 
+                            :disabled="formDisabled" 
+                            v-model="user.unit" 
+                            :items="filteredUnitItems"
+                            item-text="display"
+                            item-value="dept_code"
+                            :label="$t('Unit')" 
+                            outlined 
+                            dense 
+                            :rules="[rules.required]" 
+                            required 
+                            hide-details 
+                            clearable
+                            :no-data-text="!user.div || !user.dept ? $t('Please select Division and Department first') : $t('No data available')"
+                            ></v-autocomplete>
                         </v-col>
-                        <v-col cols="12" md="3">
+                        
+                        <v-col cols="12" md="2">
                             <v-autocomplete :disabled="formDisabled" v-model="form.suppType" :items="suppTypeItems" :label="$t('Supp.Type')" :rules="[rules.required]" required item-text="name" item-value="id" outlined dense hide-details clearable ></v-autocomplete>
                         </v-col>
                         <v-col cols="12" md="1">
                             <v-autocomplete :disabled="formDisabled" v-model="form.pos" :items="posItems" :label="$t('Type Apply')" item-text="name" :rules="[rules.required]" required item-value="id" outlined dense hide-details clearable @change="handleTypeApplyChange" ></v-autocomplete>
                         </v-col>
-                        <v-col cols="2" md="1">
+                        <v-col cols="12" md="1" v-if="isHrManager && ![1,3].includes(Number(form.pos))">
+                            <v-autocomplete 
+                            background-color="#fff9c4" 
+                            color="#000000" 
+                            v-model="form.sub_position" 
+                            :items="sub_positionItems" 
+                            item-text="name" 
+                            :disabled="!!editData?.sub_pos" 
+                            item-value="id" 
+                            :label="$t('Sub Position')" 
+                            outlined 
+                            dense 
+                            hide-details 
+                            clearable
+                            ></v-autocomplete>
+                        </v-col>
+                        <v-col cols="2" md="1" v-if="showLevelField">
                             <v-text-field :disabled="formDisabled || !showLevelField" v-model="form.level" :label="$t('Level')" outlined dense hide-details ></v-text-field>
                         </v-col>
-                    </v-row>
-                    <v-row>
                         <v-col cols="1" md="1">
                             <v-text-field :disabled="formDisabled" v-model="form.quantity" :label="$t('Quantity request') " type="number" min="1" :rules="[rules.required]" outlined dense hide-details="auto" required @input="(val) => (form.quantity = val > 0 ? val : '')" ></v-text-field>
                         </v-col>
+                    </v-row>
+                    <v-row>
                         <v-col cols="2" md="2">
                             <v-menu v-model="dateRequestMenu" :close-on-content-click="false" transition="scale-transition" offset-y>
                                 <template v-slot:activator="{ on, attrs }">
@@ -155,7 +201,7 @@
                                 ></v-date-picker>
                             </v-menu>
                         </v-col>
-                        <v-col cols="4" md="4">
+                        <v-col cols="4" md="5">
                             <v-card outlined :class="{ 'error--text': formErrors.recruitment }" class="pa-2 custom-card-hover" >
                                 <v-row dense>
                                     <v-col cols="12" class="d-flex flex-wrap align-center">
@@ -171,8 +217,8 @@
                                         </v-radio>
                                     </v-radio-group>
                                 </v-col>
-                                <v-col cols="12" v-if="form.recruitment.reason === 2"> <!-- For replacement -->
-                                    <v-text-field :disabled="formDisabled" v-model="form.recruitment.oldempno" :label="$t('Old empno')" outlined dense hide-details></v-text-field>
+                                <v-col cols="12" v-if="form.recruitment.reason === 2"> <!-- For2-->
+                                    <v-text-field :rules="[rules.required]" required :disabled="formDisabled" v-model="form.recruitment.oldempno" :label="$t('Old empno')" outlined dense hide-details></v-text-field>
                                 </v-col>
                                 <v-col cols="12" v-if="form.recruitment.reason === 3"> <!-- For other -->
                                     <v-card outlined class="pa-0">
@@ -190,7 +236,7 @@
                                                 outlined
                                                 auto-grow
                                                 rows="2"
-                                                :rules="[rules.required]"
+                                                :rules="otherReasonValidation"
                                                 :error-messages="!form.recruitment.isOther_reason.vi ? $t('This field is required') : ''"
                                                 placeholder="Nhập lý do bằng tiếng Việt..."
                                                 background-color="grey lighten-5"
@@ -202,11 +248,11 @@
                                             <v-tab-item>
                                                 <v-textarea
                                                 :disabled="formDisabled"
-                                                v-model="form.recruitment.isOther_reason.en" 
+                                                v-model="form.recruitment.isOther_reason.en"
                                                 outlined
                                                 auto-grow
                                                 rows="2"
-                                                :rules="[rules.required]"
+                                                :rules="otherReasonValidation"
                                                 :error-messages="!form.recruitment.isOther_reason.en ? $t('This field is required') : ''"
                                                 placeholder="Enter reason in English..."
                                                 background-color="grey lighten-5"
@@ -222,10 +268,10 @@
                                                 outlined
                                                 auto-grow
                                                 rows="2"
-                                                :rules="[rules.required]"
+                                                :rules="otherReasonValidation"
                                                 :error-messages="!form.recruitment.isOther_reason.cn ? $t('This field is required') : ''"
                                                 placeholder="用中文输入原因..."
-                                                background-color="grey lighten-5" 
+                                                background-color="grey lighten-5"
                                                 class="other-reason-textarea"
                                                 required
                                                 ></v-textarea>
@@ -236,23 +282,23 @@
                             </v-row>
                         </v-card>
                     </v-col>
-                    <v-col cols="12" :md="!isHrManager ? 5 : 3">
+                    <v-col cols="12" md="5">
                         <v-file-input
                         :disabled="formDisabled"
                         v-model="form.attachments.dimissionList"
                         :label="$t('Dimission list file')"
                         outlined
                         dense
-                        :error="form.recruitment.reason === 'replacement'"
-                        :required="form.recruitment.reason === 'replacement'"
+                        :error="form.recruitment.reason === 2"
+                        :required="form.recruitment.reason === 2"
                         hide-details="auto"
                         @change="previewFile('dimissionList', $event)"
                         prepend-inner-icon="mdi-file-account"
                         :clearable="true"
-                        :enablad="form.recruitment.reason === 'replacement'"
+                        :enablad="form.recruitment.reason === 2"
                         accept=".doc,.docx,.pdf,.xls,.xlsx"
                         ></v-file-input>
-                        <div v-show=" filePreview.dimissionList && form.recruitment.reason === 'replacement' " class="file-preview mt-2" >
+                        <div v-show=" filePreview.dimissionList && form.recruitment.reason === 2 " class="file-preview mt-2" >
                             <v-chip small close @click:close="clearFile('dimissionList')" class="mb-1" >
                                 <v-icon left small>{{ getFileIcon( form.attachments.dimissionList?.type || getFileTypeFromName(form.attachments.dimissionList) ) }}</v-icon>
                                 {{ getFileName("dimissionList") }}
@@ -261,25 +307,10 @@
                                 <span class="caption grey--text">{{
                                     form.attachments.dimissionList_size || ""
                                 }}</span>
-                                <v-btn x-small text color="primary" @click="openFile('dimissionList')" > <v-icon small left>mdi-eye</v-icon> {{ $t("View") }} </v-btn>
+                                <v-btn  x-small text color="primary" @click="openFile('dimissionList')" > <v-icon small left>mdi-eye</v-icon> {{ $t("View") }} </v-btn>
+                                <v-btn  :disabled="formDisabled" x-small text color="error" @click="clearFile('dimissionList')" > <v-icon small left>mdi-delete</v-icon> {{ $t("Delete") }} </v-btn>
                             </div>
                         </div>
-                    </v-col>
-                    <v-col cols="12" md="2" v-if="isHrManager">
-                        <v-autocomplete 
-                        background-color="#fff9c4" 
-                        color="#000000" 
-                        v-model="form.sub_position" 
-                        :items="sub_positionItems" 
-                        item-text="name" 
-                        :disabled="!!editData?.sub_pos" 
-                        item-value="id" 
-                        :label="$t('Sub Position')" 
-                        outlined 
-                        dense 
-                        hide-details 
-                        clearable
-                        ></v-autocomplete>
                     </v-col>
                 </v-row>
                 <v-row>
@@ -326,9 +357,13 @@
                                     <span class="caption grey--text">{{
                                         form.attachments.jobDesc_size || ""
                                     }}</span>
-                                    <v-btn x-small text color="primary" @click="openFile('jobDesc')" >
+                                    <v-btn  x-small text color="primary" @click="openFile('jobDesc')" >
                                         <v-icon small left>mdi-eye</v-icon>
                                         {{ $t("View") }}
+                                    </v-btn>
+                                    <v-btn :disabled="formDisabled" x-small text color="error" @click="clearFile('jobDesc')" >
+                                        <v-icon small left>mdi-delete</v-icon>
+                                        {{ $t("Delete") }}
                                     </v-btn>
                                 </div>
                             </div>
@@ -515,6 +550,10 @@
                 <v-icon left dark>mdi-check</v-icon>
                 {{ $t("Confirm Action") }}
                 <v-spacer></v-spacer>
+                <v-btn-toggle v-model="selectedLanguage" group class="mr-4" dark>
+                    <v-btn x-small value="vi">VI</v-btn>
+                    <v-btn x-small value="cn">中文</v-btn>
+                </v-btn-toggle>
                 <v-btn icon dark @click="confirmAcceptDialog = false"> <v-icon>mdi-close</v-icon> </v-btn>
             </v-card-title>
             <v-card-text class="pt-4">
@@ -722,7 +761,7 @@ export default {
                 vi: "Áp dụng đối với cán bộ Việt Nam cấp Trưởng ngành thâm niên trở lên",
             },
             ],
-             flow_sign: [
+            flow_sign: [
             {
                 id: 1,
                 cn: "填表人➜ 單位主管 部級主管 ➜ 處級主管 ➜ 人力資源部 (適用於越籍課長級(含)以下幹部/職員/工人)",
@@ -779,12 +818,11 @@ export default {
                     })(),
                 },
                 staffCount: {
-                    workers: "",
-                    staff: "",
-                    staff_lang: "",
-                    engineers: "",
-                    leader: "",
-                    tranlator: "",
+                    workers: 0,
+                    staff: 0,
+                    engineers: 0,
+                    leader: 0,
+                    tranlator: 0,
                     level: "",
                 },
                 jobDesc: "",
@@ -834,7 +872,6 @@ export default {
             eduReq: [],
             lang: [],
             wps: [],
-            showLevelField: false,
             parsedLanguageLevels: [],
             parsedSafetyLevels: [],
             defaultWpsSafety: "",
@@ -889,11 +926,18 @@ export default {
             isLoadingReqId: false,
             dataRecruitmentReason: [],
             changeQtyError: '',
-            selectedLanguage:'vi',
-            unitNames:[]
+            selectedLanguage:'cn',
+            unitNames:[],
+            localizedApprovalRecords: {},
         };
     },
     watch: {
+        // '$i18n.locale'() {
+        //     // Trigger lại computed property khi ngôn ngữ thay đổi
+        //     // if (this._computedWatchers.formattedChangeReasons) {
+        //     //     this._computedWatchers.formattedChangeReasons.update();
+        //     // }
+        // },
         isChange: {
             immediate: true,
             async handler(newVal) {
@@ -955,12 +999,14 @@ export default {
                 } else {
                     this.itemsDept = [];
                 }
+                // Reset unit khi division thay đổi
+                this.user.unit = "";
             },
             immediate: true,
         },
         "user.dept": {
             handler(newDept) {
-                if (newDept) {
+                if (newDept && this.user.div) {
                     const dept = this.departmentData.find(
                     (d) => d.department === this.user.div
                     );
@@ -971,37 +1017,31 @@ export default {
                 } else {
                     this.itemUnits = [];
                 }
+                // Reset unit khi department thay đổi
+                this.user.unit = "";
             },
         },
-        "form.pos": {
-            immediate: true,
-            handler(newValue) {
-                this.showLevelField = newValue === 3;
-            },
-        },
+        
         "form.quantity": {
             handler(newQuantity) {
                 if (!this.form.pos) return;
                 
                 const qty = parseInt(newQuantity);
                 switch (this.form.pos) {
-                    case 1: // Worker
+                    case 1:
                     this.form.staffCount.workers = qty;
                     break;
-                    case 2: // Staff
+                    case 2:
                     this.form.staffCount.staff = qty;
                     break;
-                    case 3: // Staff with language
-                    this.form.staffCount.staff_lang = qty;
+                    case 3: // THÊM CASE CHO LEADER
+                    this.form.staffCount.leader = qty;
+                    this.form.staffCount.level = this.form.level;
                     break;
-                    case 4: // Engineers
+                    case 4:
                     this.form.staffCount.engineers = qty;
                     break;
-                    case 5: // Leader
-                    this.form.staffCount.leader = qty;
-                    this.form.staffCount.level = this.form.level || "";
-                    break;
-                    case 6: // Translator
+                    case 5:
                     this.form.staffCount.tranlator = qty;
                     break;
                 }
@@ -1009,19 +1049,30 @@ export default {
         },
         "form.level": {
             handler(newLevel) {
-                if (this.form.pos === 4) {
+                if (this.form.pos === 3) {  // SỬA: Thay đổi từ 4 thành 3
                     this.form.staffCount.level = newLevel;
                 }
             },
         },
-        "$i18n.locale": {
+        '$i18n.locale': {
             immediate: true,
-            handler(newLocale) {
+            async handler(newLocale) {
+                // Force cập nhật các computed properties
+                this.$nextTick(() => {
+                    if (this._computedWatchers) {
+                        Object.keys(this._computedWatchers).forEach(key => {
+                            if (this._computedWatchers[key]) {
+                                this._computedWatchers[key].update();
+                            }
+                        });
+                    }
+                });
+                
+                // Cập nhật dữ liệu được localized
                 this.updateLocalizedData();
-                // Trigger validation lại để cập nhật message
-                if (this.form.changeQty) {
-                    this.form.changeQty = this.form.changeQty;
-                }
+                
+                // Force re-render toàn bộ component
+                this.$forceUpdate();
             }
         },
         "form.pos"() {
@@ -1101,7 +1152,55 @@ export default {
         },
     },
     methods: {
+        async translateApprovalRecord(text, targetLang) {
+            if (!text) return '';
+            
+            try {
+                const formData = new FormData();
+                formData.append("type", targetLang === 'vi' ? 'secret-v' : 
+                targetLang === 'cn' ? 'secret-c' : 'secret-e');
+                formData.append("string", text);
+                
+                const response = await this.$axios.post(
+                "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
+                formData
+                );
+                
+                if (response.status === 200) {
+                    return response.data;
+                }
+                return text;
+            } catch (e) {
+                console.error('Translation error:', e);
+                return text;
+            }
+        },
         
+        // Thêm một phương thức để quản lý cached translations
+        getCachedTranslation(originalText, locale) {
+            if (!this.localizedApprovalRecords[originalText]) {
+                this.localizedApprovalRecords[originalText] = {};
+            }
+            return this.localizedApprovalRecords[originalText][locale];
+        },
+        
+        setCachedTranslation(originalText, locale, translation) {
+            if (!this.localizedApprovalRecords[originalText]) {
+                this.localizedApprovalRecords[originalText] = {};
+            }
+            this.localizedApprovalRecords[originalText][locale] = translation;
+        },
+        getLocalizedFromMultiLang(value) {
+            if (!value) return "";
+            try {
+                const obj = typeof value === "string" ? JSON.parse(value) : value;
+                if (typeof obj === "string") return obj;
+                return obj[this.$i18n.locale] || obj.vi || obj.en || obj.cn || "";
+            } catch (e) {
+                // không phải JSON, trả thẳng
+                return value;
+            }
+        },
         getEffectiveDate() {
             const today = new Date();
             today.setDate(today.getDate() + 7); // Cộng thêm 7 ngày
@@ -1112,7 +1211,7 @@ export default {
             this.dialog = false;
             this.reqId = null;
             this.autocompleteKey++;
-            
+            this.form.level = "";
         },
         getReasonLabel(reason) {
             try {
@@ -1224,25 +1323,33 @@ export default {
             return new Date().toISOString().substr(0, 10);
         },
         async handleLanguageChange(targetLang) {
-            localStorage.setItem("preferred-locale", targetLang);
-            this.$i18n.locale = targetLang;
-            await this.$nextTick();
-            if (this.form.changeQty) {
-                const tempQty = this.form.changeQty;
-                this.form.changeQty = null;
+            try {
+                localStorage.setItem("preferred-locale", targetLang);
+                if (this.$i18n && typeof this.$i18n.locale !== "undefined") {
+                    this.$i18n.locale = targetLang;
+                } else if (this.$i18n && this.$i18n.global && this.$i18n.global.locale) {
+                    this.$i18n.global.locale.value = targetLang;
+                }
                 await this.$nextTick();
-                this.form.changeQty = tempQty;
-            }
-            this.updateLocalizedData();
-            await this.helpTrans(targetLang);
-            if (this._computedWatchers) {
-                Object.keys(this._computedWatchers).forEach(key => {
-                    if (this._computedWatchers[key]) {
-                        this._computedWatchers[key].update();
+                this.updateLocalizedData();
+                const currentId =
+                this.form.changeReason && (this.form.changeReason.id ?? (typeof this.form.changeReason === "number" ? this.form.changeReason : null));
+                if (currentId != null) {
+                    const matched = this.formattedChangeReasons.find((i) => i.id === currentId);
+                    if (matched) {
+                        this.form.changeReason = { ...matched };
                     }
-                });
+                }
+                await this.helpTrans(targetLang).catch(() => {});
+                if (this._computedWatchers) {
+                    Object.keys(this._computedWatchers).forEach((key) => {
+                        if (this._computedWatchers[key]) this._computedWatchers[key].update();
+                    });
+                }
+                this.$forceUpdate();
+            } catch (e) {
+                console.error("handleLanguageChange error:", e);
             }
-            this.$forceUpdate();
         },
         async helpTrans(target) {
             if (
@@ -1339,34 +1446,25 @@ export default {
                 localStorage.setItem("preferred-locale", tg);
                 
                 // Set locale cho i18n
-                if (this.$i18n.locale) {
-                    this.$i18n.locale = tg;
-                } else if (this.$i18n.setLocale) {
-                    await this.$i18n.setLocale(tg);
+                this.$i18n.locale = tg;
+                
+                // Đợi next tick để đảm bảo Vue cập nhật DOM
+                await this.$nextTick();
+                await this.handleLanguageChange(tg);
+                // Force cập nhật các computed properties
+                if (this._computedWatchers) {
+                    Object.keys(this._computedWatchers).forEach(key => {
+                        if (this._computedWatchers[key]) {
+                            this._computedWatchers[key].update();
+                        }
+                    });
                 }
-                
-                // Emit event để các component khác biết về thay đổi ngôn ngữ
-                this.$root.$emit('languageChanged', tg);
-                
-                // Cập nhật dữ liệu được localized
-                this.updateLocalizedData();
                 
                 // Force re-render component
-                await this.$nextTick();
                 this.$forceUpdate();
                 
-                // Cập nhật các validation messages
-                if (this.form.changeQty) {
-                    // Trigger validation lại để cập nhật message
-                    this.form.changeQty = this.form.changeQty;
-                }
-                
-                // Refresh các computed properties
-                Object.keys(this.$options.computed).forEach(key => {
-                    if (this._computedWatchers[key]) {
-                        this._computedWatchers[key].update();
-                    }
-                });
+                // Emit event để các component khác biết về thay đổi ngôn ngữ  
+                this.$root.$emit('languageChanged', tg);
                 
             } catch (error) {
                 console.error('Error setting locale:', error);
@@ -1485,7 +1583,7 @@ export default {
                     }
                 });
                 this.departmentData = Array.from(deptMap.values()).map((dept) => ({
-                    department: dept.department, // Sử dụng giá trị department từ data thay vì activeUser.division
+                    department: dept.department, 
                     units: Array.from(dept.units.entries()).map(
                     ([unitName, subUnits]) => ({
                         name: unitName,
@@ -1518,14 +1616,7 @@ export default {
                 
                 const formData = new FormData();
                 formData.append("req_id", requestId);
-                const isAmendmentRequest = this.form.changeReason || 
-                this.form.changeQty || 
-                this.form.either_change || 
-                this.form.english_change || 
-                this.form.chinese_change || 
-                this.form.tranlator_change || 
-                this.form.computerSkills_change?.length > 0 || 
-                this.form.remark_change;
+                const isAmendmentRequest = this.form.changeReason
                 
                 // Set status dựa trên loại request
                 if (isAmendmentRequest) {
@@ -1619,13 +1710,33 @@ export default {
                 
                 // Handle attachments
                 if (this.form.attachments.jobDesc instanceof File) {
-                    formData.append("jobDescFile", this.form.attachments.jobDesc);
+                    const originalName = this.form.attachments.jobDesc.name;
+                    const fileExt = originalName.split('.').pop();
+                    const newFileName = `${requestId}_jobdesc.${fileExt}`;
+                    
+                    // Create new File object with custom name
+                    const renamedJobDescFile = new File(
+                    [this.form.attachments.jobDesc], 
+                    newFileName,
+                    { type: this.form.attachments.jobDesc.type }
+                    );
+                    formData.append("jobDescFile", renamedJobDescFile);
                 } else if (this.editData?.att_jd && this.filePreview.jobDesc) {
                     formData.append("att_jd", this.editData.att_jd);
                 }
                 
                 if (this.form.attachments.dimissionList instanceof File) {
-                    formData.append("dimissionFile", this.form.attachments.dimissionList);
+                    const originalName = this.form.attachments.dimissionList.name;
+                    const fileExt = originalName.split('.').pop();
+                    const newFileName = `${requestId}_dimission.${fileExt}`;
+                    
+                    // Create new File object with custom name
+                    const renamedDimissionFile = new File(
+                    [this.form.attachments.dimissionList],
+                    newFileName,
+                    { type: this.form.attachments.dimissionList.type }
+                    );
+                    formData.append("dimissionFile", renamedDimissionFile);
                 } else if (this.editData?.att_dis && this.filePreview.dimissionList) {
                     formData.append("att_dis", this.editData.att_dis);
                 }
@@ -1752,7 +1863,6 @@ export default {
                     formData.append("deny_temp", JSON.stringify(denyTempData));
                 }
                 
-                // Submit form
                 const response = await this.$axios.post(
                 this.api + "saveManpower", 
                 formData,
@@ -1828,14 +1938,13 @@ export default {
                     },
                     requestDate: (() => {
                         const d = new Date();
-                        d.setDate(d.getDate() + 7);             // cộng thêm 7 ngày
-                        return d.toISOString().substr(0, 10);   // lấy yyyy-mm-dd
+                        d.setDate(d.getDate() + 7);             
+                        return d.toISOString().substr(0, 10);  
                     })(),
                 },
                 staffCount: {
                     workers: 0,
                     staff: 0,
-                    staff_lang: 0,
                     engineers: 0,
                     leader: 0,
                     tranlator: 0,
@@ -1918,7 +2027,7 @@ export default {
             }
         },
         handleTypeApplyChange(value) {
-            this.showLevelField = value === 3;
+            this.showLevelField = value === 3; 
             
             if (value !== 3) {
                 this.form.level = "";
@@ -1928,10 +2037,10 @@ export default {
                 this.clearFile("jobDesc");
             }
             
+            // Reset staff count
             this.form.staffCount = {
                 workers: 0,
                 staff: 0,
-                staff_lang: 0,
                 engineers: 0,
                 leader: 0,
                 tranlator: 0,
@@ -1940,6 +2049,7 @@ export default {
             
             if (value) {
                 const qty = parseInt(this.form.quantity);
+                
                 switch (value) {
                     case 1: // Worker
                     this.form.staffCount.workers = qty;
@@ -1947,18 +2057,18 @@ export default {
                     case 2: // Staff
                     this.form.staffCount.staff = qty;
                     break;
-                    case 3: // Staff with language
-                    this.form.staffCount.staff_lang = qty;
-                    case 4: // Engineers
-                    this.form.staffCount.engineers = qty;
-                    case 5: // Leader
+                    case 3: // Leader - THÊM CASE MỚI
                     this.form.staffCount.leader = qty;
                     this.form.staffCount.level = this.form.level;
                     break;
-                    case 6: // Translator
+                    case 4: // Engineer
+                    this.form.staffCount.engineers = qty;
+                    break;
+                    case 5: // Translator
                     this.form.staffCount.tranlator = qty;
                     break;
                 }
+                
             }
         },
         clearFile(fileType) {
@@ -2058,7 +2168,6 @@ export default {
         },
         populateForm(data) {
             if (!data) return;
-            
             // 1. Parse submitter info
             const submitter = JSON.parse(data.submitter);
             if (submitter) {
@@ -2092,11 +2201,16 @@ export default {
                         const changeReqHistory = JSON.parse(data.change_req);
                         if (Array.isArray(changeReqHistory) && changeReqHistory.length > 0) {
                             const lastChangeReq = changeReqHistory[changeReqHistory.length - 1];
-                            this.form.changeReason = lastChangeReq.change_reason;
-                            this.form.changeQty = lastChangeReq.change_qty;
+                            if (lastChangeReq && lastChangeReq.change_reason) {
+                                const changeId = lastChangeReq.change_reason.id;
+                                // find the item in formattedChangeReasons so v-combobox can show text property
+                                const matched = this.formattedChangeReasons.find(i => i.id === changeId);
+                                this.form.changeReason = matched ? { ...matched } : { id: changeId };
+                                this.form.changeQty = lastChangeReq.change_qty || "";
+                            }
                         }
                     } catch (e) {
-                        console.error('Error parsing change_req:', e);
+                        console.error('Error parsing change_req', e);
                     }
                 }
                 
@@ -2213,24 +2327,30 @@ export default {
                 this.form.staffCount = {
                     workers: parseInt(qtyData.workers) || 0,
                     staff: parseInt(qtyData.staff) || 0,
-                    staff_lang: parseInt(qtyData.staff_lang) || 0,
                     engineers: parseInt(qtyData.engineers) || 0,
                     leader: parseInt(qtyData.leader) || 0,
                     tranlator: parseInt(qtyData.tranlator) || 0,
                     level: qtyData.level || ""
                 };
                 
+                // LUÔN gán level nếu có trong dữ liệu
+                if (qtyData.level) {
+                    this.form.level = qtyData.level;
+                }
+                
                 // Set form quantity based on position type
-                if (this.form.pos === 1) this.form.quantity = this.form.staffCount.workers;
-                else if (this.form.pos === 2) this.form.quantity = this.form.staffCount.staff;
-                else if (this.form.pos === 3) this.form.quantity = this.form.staffCount.staff_lang;
-                else if (this.form.pos === 4) this.form.quantity = this.form.staffCount.engineers;
-                else if (this.form.pos === 5) {
+                if (this.form.pos === 1) {
+                    this.form.quantity = this.form.staffCount.workers;
+                } else if (this.form.pos === 2) {
+                    this.form.quantity = this.form.staffCount.staff;
+                } else if (this.form.pos === 3) {  // SỬA: Thêm case cho pos === 3
                     this.form.quantity = this.form.staffCount.leader;
                     this.form.level = this.form.staffCount.level;
+                } else if (this.form.pos === 4) {
+                    this.form.quantity = this.form.staffCount.engineers;
+                } else if (this.form.pos === 5) {
+                    this.form.quantity = this.form.staffCount.tranlator;
                 }
-                else if (this.form.pos === 6) this.form.quantity = this.form.staffCount.tranlator;
-                else this.form.quantity = "";
                 
                 if (data.total_qty) {
                     this.form.quantity = parseInt(data.total_qty);
@@ -2239,6 +2359,7 @@ export default {
                 console.error("Error parsing quantity data:", e);
                 this.form.quantity = "";
             }
+            
             
             // 12. Language skills
             this.form.english = (data.eng_skill ?? "").toString();
@@ -2299,6 +2420,7 @@ export default {
             return level[this.$i18n.locale] || level.en || level.label;
         },
         handleAppFlow(appFlow) {
+            
             this.dataAppFlow = appFlow.map((item, index) => ({
                 level: "level" + (index + 1),
                 managers: item.managers.map((x) => {
@@ -2343,7 +2465,6 @@ export default {
         },
         async openReturnDialog() {
             if (!this.editData) return;
-            
             this.returnReason = {
                 vi: "",
                 cn: ""
@@ -2389,12 +2510,14 @@ export default {
                 this.api + "getDataFlowForItem",
                 params
                 );
-                if (res.data && res.data.flow_data) {
+                if (res.data) {
                     this.dataFlow = res.data.flow_data;
+                    
                     this.flowDataTimestamp = new Date().getTime();
                     this.$emit("flow-data-fetched", {
                         id: this.editData.id,
                         data: res.data.flow_data,
+                        
                     });
                 } else {
                     console.warn("No flow data in response:", res.data);
@@ -2705,7 +2828,7 @@ export default {
                 ...this.formErrors,
                 jobDesc: this.form.pos === 1 && !this.form.attachments.jobDesc,
                 dimissionList:
-                this.form.recruitment.reason === "replacement" &&
+                this.form.recruitment.reason === 2 &&
                 !this.form.attachments.dimissionList,
             };
         },
@@ -2725,7 +2848,6 @@ export default {
             }
         },
         handleReasonChange(reasonId) {
-            // Reset fields
             this.form.recruitment.oldempno = "";
             this.form.recruitment.isOther_reason = {
                 vi: "",
@@ -2799,6 +2921,55 @@ export default {
         },
     },
     computed: {
+        otherReasonValidation() {
+            const vi = this.form.recruitment.isOther_reason.vi;
+            const en = this.form.recruitment.isOther_reason.en; 
+            const cn = this.form.recruitment.isOther_reason.cn;
+            
+            return {
+                required: (value) => !!value || this.$t('This field is required'),
+                allFields: () => {
+                    if (!vi && !en && !cn) return true; // Chưa nhập gì thì OK
+                    return (!!vi && !!en && !!cn) || this.$t('All language fields are required');
+                }
+            };
+        },
+        showLevelField() {
+            return this.form.pos === 3;
+        },
+        filteredUnitItems() {
+            if (!this.unitNames || !Array.isArray(this.unitNames)) return [];
+            if (!this.user.div || !this.user.dept) return [];
+            
+            const filteredUnits = this.unitNames.filter(unit => {
+                const dept = this.departmentData.find(d => d.department === this.user.div);
+                if (!dept) return false;
+                
+                const deptUnit = dept.units.find(u => u.name === this.user.dept);
+                if (!deptUnit) return false;
+                
+                // Kiểm tra xem unit có thuộc về dept này không
+                return deptUnit.sub_units.includes(unit.dept_code);
+            });
+            
+            return filteredUnits.map(unit => {
+                let displayName = '';
+                if (unit.name) {
+                    try {
+                        const parsedName = JSON.parse(unit.name);
+                        displayName = parsedName[this.$i18n.locale] || parsedName.en || unit.name;
+                    } catch (e) {
+                        displayName = unit.name;
+                    }
+                }
+                
+                return {
+                    dept_code: unit.dept_code,
+                    display: `${unit.dept_code} - ${displayName}`,
+                    name: displayName
+                };
+            });
+        },
         isDenyReasonValid() {
             if (!this.denyReason) return false;
             return Boolean(
@@ -2829,9 +3000,9 @@ export default {
             const changeReasonId = this.form.changeReason?.id || '';
             const suppType = this.form.suppType || '';
             const empno = this.flowEmpno || '';
-            
-            // Include all relevant factors that should trigger re-render
-            return `${this.getAppCode}-${empno}-${suppType}-${changeReasonId}-${Date.now()}`;
+            const locale = this.$i18n ? this.$i18n.locale : '';
+            // include locale so component remounts when language changes
+            return `${this.getAppCode}-${empno}-${suppType}-${changeReasonId}-${locale}`;
         },
         getChangeQuantityHint() {
             const minRecruitedQty = this.editData?.recruited || 0;
@@ -2898,20 +3069,21 @@ export default {
             });
         },
         formattedChangeReasons() {
-            if (!this.item_changeReason) return [];
-            
-            return this.item_changeReason.map((item) => {
+            if (!Array.isArray(this.item_changeReason)) return [];
+            return this.item_changeReason.map(item => {
                 try {
-                    const reasonObj = JSON.parse(item.reason);
+                    const reasonObj = JSON.parse(item.reason || "{}");
+                    const text = reasonObj[this.$i18n.locale] || reasonObj.en || Object.values(reasonObj)[0] || item.reason || "";
                     return {
                         id: item.id,
-                        text: reasonObj[this.$i18n.locale] || reasonObj.en, 
+                        text,            // must be a string for display
+                        raw: reasonObj   // keep raw if needed
                     };
                 } catch (e) {
-                    console.error("Error parsing reason:", e);
+                    // fallback: use raw reason string
                     return {
                         id: item.id,
-                        text: item.reason,
+                        text: item.reason || String(item.id)
                     };
                 }
             });
@@ -2957,6 +3129,29 @@ export default {
             return !!this.editData && !this.isCreating;
         },
         disableSaveButton() {
+            // Nếu đang ở chế độ change, luôn cho phép submit (trừ khi có lỗi validation)
+            if (this.isChange) {
+                const baseValidation =
+                !this.form.pos || 
+                !this.form.suppType || 
+                !this.form.quantity || 
+                !this.user.unit ||
+                !this.form.educationLevel || 
+                !this.form.workExperience || 
+                !this.form.recruitment.reason || 
+                !this.form.specialization || 
+                !this.form.jobDesc ||
+                !this.form.safetyLevels;
+                
+                if (this.form.pos === 1) {
+                    return baseValidation;
+                }
+                return (baseValidation || 
+                !(this.form.computerSkills && this.form.computerSkills.length > 0) || 
+                !(this.form.either || this.form.english || this.form.chinese));
+            }
+            
+            // Logic cũ cho các trường hợp khác
             if(this.editData && this.editData.approval && 
             JSON.parse(this.editData.approval).some(level => level.status === 'returned')) {
                 return false;
@@ -2965,16 +3160,35 @@ export default {
             JSON.parse(this.editData.submitter).empno === this.activeUser.empno) {
                 return true; 
             }
+            
+            if(this.isEdit) return true;
+            
+            // Validation cho form mới
             const baseValidation =
-            !this.form.pos || !this.form.suppType || !this.form.quantity || !this.user.dept || !this.user.div || !this.user.unit || !this.form.educationLevel || !this.form.workExperience || !this.form.recruitment.reason || !this.form.specialization || !this.form.jobDesc ||
+            !this.form.pos || 
+            !this.form.suppType || 
+            !this.form.quantity || 
+            !this.user.unit ||
+            !this.form.educationLevel || 
+            !this.form.workExperience || 
+            !this.form.recruitment.reason || 
+            !this.form.specialization || 
+            !this.form.jobDesc ||
             !this.form.safetyLevels;
+            if (this.form.recruitment.reason === 3) {
+                if (!this.form.recruitment.isOther_reason.vi || 
+                !this.form.recruitment.isOther_reason.en || 
+                !this.form.recruitment.isOther_reason.cn) {
+                    return true;
+                }
+            }
             
             if (this.form.pos === 1) {
                 return baseValidation;
             }
-            return ( baseValidation  || !(this.form.computerSkills && this.form.computerSkills.length > 0) || !(this.form.either || this.form.english || this.form.chinese) );
-            
-            
+            return (baseValidation || 
+            !(this.form.computerSkills && this.form.computerSkills.length > 0) || 
+            !(this.form.either || this.form.english || this.form.chinese));
         },
         isCreating() {
             return !this.editData;
@@ -3062,14 +3276,13 @@ export default {
             }
             
             // Filter pos items based on suppType
-            const positions = this.pos.filter((type) => {
-                if (this.form.suppType === 1) {
-                    // For suppType 1, exclude position with id 1 (Worker)
-                    return type.id !== 1;
-                }
-                // For suppType 2 or no selection, show all positions
-                return true;
-            });
+           const positions = this.pos.filter((type) => {
+               if (this.form.suppType === 1) {
+                   // For suppType 1, exclude position with id 1 (Worker)
+                   return type.id !== 1;
+               }
+               return true;
+           });
             
             return positions.map((type) => {
                 try {
@@ -3096,29 +3309,37 @@ export default {
         sub_positionItems() {
             if (!this.subItems) return [];
             
-            if (this.form.pos === 6) {
-                return this.subItems
-                .filter((type) => type.id >= 6 && type.id <= 9)
-                .map((type) => {
-                    const sub_name = JSON.parse(type.sub_name.trim());
-                    return {
-                        id: type.id,
-                        name: sub_name[this.$i18n.locale] || sub_name.en,
-                    };
-                });
-            } else if (this.form.pos === 2 || this.form.pos === 3) {
-                return this.subItems
-                .filter((type) => type.id >= 1 && type.id <= 5)
-                .map((type) => {
-                    const sub_name = JSON.parse(type.sub_name.trim());
-                    return {
-                        id: type.id,
-                        name: sub_name[this.$i18n.locale] || sub_name.en,
-                    };
-                });
-            }
-            
-            return [];
+            // if (this.form.pos === 6) {
+            //     return this.subItems
+            //     .filter((type) => type.id >= 6 && type.id <= 9)
+            //     .map((type) => {
+            //         const sub_name = JSON.parse(type.sub_name.trim());
+            //         return {
+            //             id: type.id,
+            //             name: sub_name[this.$i18n.locale] || sub_name.en,
+            //         };
+            //     });
+            // } else if (this.form.pos === 2 || this.form.pos === 3) {
+            //     return this.subItems
+            //     .filter((type) => type.id >= 1 && type.id <= 5)
+            //     .map((type) => {
+            //         const sub_name = JSON.parse(type.sub_name.trim());
+            //         return {
+            //             id: type.id,
+            //             name: sub_name[this.$i18n.locale] || sub_name.en,
+            //         };
+            //     });
+            // }
+            return this.subItems
+            .filter((type) => type.id >= 1 && type.id <= 9)
+            .map((type) => {
+                const sub_name = JSON.parse(type.sub_name.trim());
+                return {
+                    id: type.id,
+                    name: sub_name[this.$i18n.locale] || sub_name.en,
+                };
+            });
+            // return [];
         },
         suppTypeItems() {
             return this.iSuppType.map((type) => {
@@ -3237,19 +3458,19 @@ export default {
             return levels.filter((level) => statusLevels[level.value] < currentLevel);
         },
         getJobDescColWidth() {
-            let width = 8;
+            let width = 10;
             
-            if (
-            this.form.pos === 1 &&
-            this.form.recruitment.reason !== "replacement"
-            ) {
-                width = 12;
-            } else if (
-            this.form.pos === 1 ||
-            this.form.recruitment.reason !== "replacement"
-            ) {
-                width = 10;
-            }
+            // if (
+            // this.form.pos === 1 &&
+            // this.form.recruitment.reason !== 2
+            // ) {
+            //     width = 12;
+            // } else if (
+            // this.form.pos === 1 ||
+            // this.form.recruitment.reason !== 2
+            // ) {
+            //     width = 10;
+            // }
             return width;
         },
         hasEitherSelected() {
@@ -3340,42 +3561,70 @@ export default {
         },
         approvalStepperSteps() {
             if (!this.editData || !this.editData.approval) return [];
-            let approvalArr = [];
-            let approvalRecords = [];
             
             try {
-                approvalArr = typeof this.editData.approval === "string" ? JSON.parse(this.editData.approval) : this.editData.approval;
+                let approvalArr = typeof this.editData.approval === "string" ? 
+                JSON.parse(this.editData.approval) : this.editData.approval;
+                
+                let approvalRecords = [];
                 if (this.editData.approval_record) {
-                    const parsedRecords = JSON.parse(this.editData.approval_record);
-                    approvalRecords = Array.isArray(parsedRecords) ? parsedRecords : [parsedRecords];
+                    approvalRecords = JSON.parse(this.editData.approval_record);
                 }
                 
-                // Use the most recent record
-                const currentApprovalRecord = approvalRecords.length > 0 ? approvalRecords[approvalRecords.length - 1] : {};
+                const currentApprovalRecord = approvalRecords.length > 0 ? 
+                approvalRecords[approvalRecords.length - 1] : {};
                 
                 const levelNames = {
                     1: this.$t("Department Manager"),
-                    2: this.$t("Division Manager"),
+                    2: this.$t("Division Manager"), 
                     3: this.$t("HR Recruitment Staff"),
                     4: this.$t("HR Manager"),
                     5: this.$t("AD Manager"),
-                    6: this.$t("GM Manager"),
+                    6: this.$t("GM Manager")
                 };
                 
-                return approvalArr .filter( (lv) => lv.status && ["waiting", "approved", "rejected"].includes(lv.status) )
-                .map((lv) => {
+                // Get translated approval records
+                const translatedRecords = {};
+                for (const key in currentApprovalRecord) {
+                    const text = currentApprovalRecord[key];
+                    if (text) {
+                        // Check cache first
+                        const cached = this.getCachedTranslation(text, this.$i18n.locale);
+                        if (cached) {
+                            translatedRecords[key] = cached;
+                        } else {
+                            // If not in cache, queue translation
+                            this.translateApprovalRecord(text, this.$i18n.locale).then(translated => {
+                                this.setCachedTranslation(text, this.$i18n.locale, translated);
+                                translatedRecords[key] = translated;
+                                // Force update to reflect changes
+                                this.$forceUpdate();
+                            });
+                            // Use original text while waiting for translation
+                            translatedRecords[key] = text;
+                        }
+                    }
+                }
+                
+                return approvalArr
+                .filter(lv => lv.status && ["waiting", "approved", "rejected"].includes(lv.status))
+                .map(lv => {
                     const recordKey = lv.type || "";
-                    const record = currentApprovalRecord[recordKey] || "";
+                    const record = translatedRecords[recordKey] || "";
+                    
+                    const reasonDeniedText = this.getLocalizedFromMultiLang(lv.reason_denied);
+                    const returnReasonText = this.getLocalizedFromMultiLang(lv.return_reason);
+                    
                     return {
                         level: lv.level,
                         levelName: levelNames[lv.level] || lv.type || "",
                         approver: lv.approver,
                         status: lv.status,
                         processed_at: lv.processed_at,
-                        reason_denied: lv.reason_denied,
-                        return_reason: lv.return_reason,
+                        reason_denied: reasonDeniedText,
+                        return_reason: returnReasonText,
                         shouldShowError: lv.status === "rejected",
-                        approval_record: record,
+                        approval_record: record
                     };
                 });
             } catch (e) {
@@ -3401,20 +3650,35 @@ export default {
             return this.form.pos !== 1;
         },
         isHrManager() {
-            if (!this.dataFlow) return false;
-            // Kiểm tra dataFlow[3] (hr_rec_sf)
-            const hrRecSf = this.dataFlow[2] && this.dataFlow[2].lvl_code === 'hr_rec_sf' &&
-            this.dataFlow[2].managers.some(manager =>
-            manager.empno === this.activeUser.empno ||
-            (manager.deputies && manager.deputies.some(deputy => deputy.empno === this.activeUser.empno && deputy.status))
-            );
-            // Kiểm tra dataFlow[4] (hr_manager)
-            const hrManager = this.dataFlow[3] && this.dataFlow[3].lvl_code === 'hr_manager' &&
-            this.dataFlow[3].managers.some(manager =>
-            manager.empno === this.activeUser.empno ||
-            (manager.deputies && manager.deputies.some(deputy => deputy.empno === this.activeUser.empno && deputy.status))
-            );
-            return hrRecSf || hrManager;
+            try {
+                if (!this.dataFlow || !Array.isArray(this.dataFlow)) return false;
+                const empno = this.activeUser?.empno;
+                if (!empno) return false;
+                const currentStatus = this.editData?.status_amendent || this.editData?.status;
+                const isHrLevel = ['waiting_hr_rec_sf', 'waiting_hr'].includes(currentStatus);
+                const isHrUser = this.dataFlow.some(flow => {
+                    if (!['hr_rec_sf', 'hr_manager'].includes(flow.lvl_code)) {
+                        return false;
+                    }
+                    return flow.managers.some(manager => {
+                        if (manager.empno === empno) {
+                            return Array.isArray(manager.levels) && 
+                            manager.levels.some(level => ['hr_rec_sf', 'hr_manager'].includes(level));
+                        }
+                        return Array.isArray(manager.deputies) && 
+                        manager.deputies.some(d => d.empno === empno && d.status);
+                    });
+                });
+                
+                // 3. Chỉ cho phép hiển thị nếu:
+                // - Người dùng có quyền HR VÀ
+                // - Đơn đang ở level HR
+                return isHrUser && isHrLevel;
+                
+            } catch (e) {
+                console.error('isHrManager error:', e);
+                return false;
+            }
         },
         showLanguageAndComputerSkills() {
             if (!this.form.changeReason) return true; 
@@ -3573,7 +3837,8 @@ export default {
             "Change quantity cannot be greater than or equal to request quantity": "Change quantity cannot be greater than or equal to request quantity",
             "Min": "Min",
             "Max": "Max",
-            "This field is required": "This field is required"
+            "This field is required": "This field is required",
+            "Delete": "Delete"
         },
         "vi": {
             "Create new request": "Tạo yêu cầu mới",
@@ -3599,9 +3864,8 @@ export default {
             "Education Level": "Trình độ học vấn",
             "Work Experience": "Kinh nghiệm làm việc",
             "Enter specialization requirements...": "Nhập yêu cầu chuyên môn...",
-            "Job Description": "Mô tả công việc",
             "Basic Job Description": "Mô tả công việc cơ bản",
-            "Job description file": "Mô tả công việc",
+            "Job description file": "Liệt kê công việc",
             "Dimission list file": "Mô tả danh sách thôi việc",
             "Dimission list file is required": "Yêu cầu file danh sách thôi việc",
             "View": "Xem",
@@ -3682,7 +3946,7 @@ export default {
             "HR Manager": "Chủ quản nhân sự",
             "AD Manager": "Chủ quản AD",
             "GM Manager": "Tổng giám đốc",
-            "Translator": "Đây có phải là nhu cầu tuyển dụng biên dịch viên không?",
+            "Translator": "Đây có phải là nhu cầu tuyển dụng phiên dịch  không?",
             "Confirm": "Xác nhận",
             "Previous Approval History": "Lịch sử phê duyệt",
             "Current Approval History": "Lịch sử phê duyệt hiện tại",
@@ -3696,7 +3960,8 @@ export default {
             "Change quantity cannot be greater than or equal to request quantity": "Số lượng thay đổi không được lớn hơn hoặc bằng số lượng yêu cầu",
             "Min": "Tối thiểu",
             "Max": "Tối đa",
-            "This field is required": "Trường này là bắt buộc"
+            "This field is required": "Trường này là bắt buộc",
+            "Delete": "Xóa"
         },
         "cn": {
             "Create new request": "创建新请求",
@@ -3817,7 +4082,9 @@ export default {
             "Change quantity cannot be greater than or equal to request quantity": "更改数量不能大于或等于请求数量",
             "Min": "最少",
             "Max": "最多",
-            "This field is required": "此字段为必填项"
+            "This field is required": "此字段为必填项",
+            "Change remark": "其他意見",
+            "Delete": "删除"
         }
     }
 </i18n>

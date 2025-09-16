@@ -127,7 +127,7 @@
                             <v-autocomplete :disabled="formDisabled" v-model="user.div" :items="itemsDiv" :label="$t('Division') " outlined :required="true" :rules="[rules.required]" dense hide-details ></v-autocomplete>
                         </v-col>
                         
-                        <v-col cols="2">
+                        <v-col cols="2" md="2">
                             <v-autocomplete :disabled="formDisabled" v-model="user.dept" :items="itemsDept" :label="$t('Dept') " outlined dense :rules="[rules.required]" required hide-details clearable ></v-autocomplete>
                         </v-col>
                         <v-col cols="1" md="2">
@@ -170,14 +170,27 @@
                             clearable
                             ></v-autocomplete>
                         </v-col>
-                        <v-col cols="2" md="1" v-if="showLevelField">
-                            <v-text-field :disabled="formDisabled || !showLevelField" v-model="form.level" :label="$t('Level')" outlined dense hide-details ></v-text-field>
+                        <v-col cols="3" md="2" >
+                            <!-- <v-text-field :disabled="formDisabled || !showLevelField" v-model="form.level" :label="$t('Level')" outlined dense hide-details ></v-text-field> -->
+                            <v-autocomplete
+                            :disabled="formDisabled || !showLevelField"
+                            v-model="form.level"
+                            :items="dutyItems"
+                            item-text="label"
+                            item-value="value"
+                            :label="$t('Level')"
+                            outlined
+                            dense
+                            hide-details
+                            clearable
+                            ></v-autocomplete>
                         </v-col>
-                        <v-col cols="1" md="1">
-                            <v-text-field :disabled="formDisabled" v-model="form.quantity" :label="$t('Quantity request') " type="number" min="1" :rules="[rules.required]" outlined dense hide-details="auto" required @input="(val) => (form.quantity = val > 0 ? val : '')" ></v-text-field>
-                        </v-col>
+                       
                     </v-row>
                     <v-row>
+                         <v-col cols="1" md="1">
+                            <v-text-field :disabled="formDisabled" v-model="form.quantity" :label="$t('Quantity request') " type="number" min="1" :rules="[rules.required]" outlined dense hide-details="auto" required @input="(val) => (form.quantity = val > 0 ? val : '')" ></v-text-field>
+                        </v-col>
                         <v-col cols="2" md="2">
                             <v-menu v-model="dateRequestMenu" :close-on-content-click="false" transition="scale-transition" offset-y>
                                 <template v-slot:activator="{ on, attrs }">
@@ -201,7 +214,7 @@
                                 ></v-date-picker>
                             </v-menu>
                         </v-col>
-                        <v-col cols="4" md="5">
+                        <v-col cols="3" md="4">
                             <v-card outlined :class="{ 'error--text': formErrors.recruitment }" class="pa-2 custom-card-hover" >
                                 <v-row dense>
                                     <v-col cols="12" class="d-flex flex-wrap align-center">
@@ -329,7 +342,7 @@
                 <div class="mt-2">
                     <v-row>
                         <v-col cols="12" :md="getJobDescColWidth">
-                            <v-textarea :disabled="formDisabled" auto-grow v-model="form.jobDesc" outlined :label="$t('Basic Job Description')" :rules="[rules.required]" required rows="1" hide-details ></v-textarea>
+                            <v-textarea :disabled="formDisabled" auto-grow v-model="form.jobDesc" outlined :label="$t('Basic Job Description')" :rules="[rules.required]" dense required rows="1" hide-details ></v-textarea>
                         </v-col>
                         <v-col cols="12" md="2" v-if="form.pos !== 1">
                             <v-file-input
@@ -431,7 +444,7 @@
                                     <v-radio v-for="(level, index) in safetyLevels" :key="'safety-' + index" :value="level.id" :label="level.name" class="mr-4" hide-details ></v-radio>
                                 </v-radio-group>
                                 <v-col cols="12">
-                                    <v-textarea :disabled="formDisabled" v-model="form.remark" outlined :label="$t('Remark')" rows="1" hide-details auto-grow ></v-textarea>
+                                    <v-textarea :disabled="formDisabled" v-model="form.remark" outlined :label="$t('Remark')" rows="1" hide-details auto-grow dense></v-textarea>
                                 </v-col>
                             </div>
                         </v-col>
@@ -440,7 +453,6 @@
                                 <v-icon color="primary" class="mr-2">mdi-history</v-icon>
                                 <span class="text-subtitle-1 font-weight-medium">{{ $t("Approval History") }}</span>
                             </div>
-                            
                             <v-expansion-panels flat>
                                 <v-expansion-panel>
                                     <v-expansion-panel-header>
@@ -929,6 +941,7 @@ export default {
             selectedLanguage:'cn',
             unitNames:[],
             localizedApprovalRecords: {},
+            duty: [],
         };
     },
     watch: {
@@ -1529,6 +1542,7 @@ export default {
                 this.eduReq = response.data.dataEduReq;
                 this.lang = response.data.dataLang;
                 this.unitNames = response.data.dataDeptHrm;
+                this.duty = response.data.dataDutyHrm;
                 response.data.dataWps;
                 if (this.lang && this.lang.lang) {
                     try {
@@ -2027,8 +2041,6 @@ export default {
             }
         },
         handleTypeApplyChange(value) {
-            this.showLevelField = value === 3; 
-            
             if (value !== 3) {
                 this.form.level = "";
             }
@@ -2333,9 +2345,39 @@ export default {
                     level: qtyData.level || ""
                 };
                 
-                // LUÔN gán level nếu có trong dữ liệu
-                if (qtyData.level) {
-                    this.form.level = qtyData.level;
+                // Resolve level value so it matches dutyItems.item-value (duty_no)
+                const resolveLevelValue = (lvl) => {
+                    if (!lvl) return "";
+                    // already a duty_no string
+                    if (typeof lvl === "string" && lvl.trim()) return lvl.trim();
+                    // numeric id -> try to find duty by id
+                    if (typeof lvl === "number") {
+                        const found = this.duty && this.duty.find(d => Number(d.id) === Number(lvl));
+                        return found ? found.duty_no : String(lvl);
+                    }
+                    // object -> try common properties
+                    if (typeof lvl === "object") {
+                        if (lvl.duty_no) return lvl.duty_no;
+                        if (lvl.value) return lvl.value;
+                        if (lvl.id) {
+                            const foundById = this.duty && this.duty.find(d => Number(d.id) === Number(lvl.id));
+                            return foundById ? foundById.duty_no : String(lvl.id);
+                        }
+                        // fallback to JSON string (unlikely)
+                        return JSON.stringify(lvl);
+                    }
+                    return String(lvl);
+                };
+                
+                const resolvedLevel = resolveLevelValue(this.form.staffCount.level);
+                this.form.staffCount.level = resolvedLevel;
+                
+                if (resolvedLevel) {
+                    // Prefer matching duty_no from this.duty to ensure v-autocomplete selects correctly
+                    const matchedDuty = this.duty && this.duty.find(d => d.duty_no === resolvedLevel || String(d.id) === String(resolvedLevel));
+                    this.form.level = matchedDuty ? matchedDuty.duty_no : resolvedLevel;
+                } else {
+                    this.form.level = "";
                 }
                 
                 // Set form quantity based on position type
@@ -2343,9 +2385,9 @@ export default {
                     this.form.quantity = this.form.staffCount.workers;
                 } else if (this.form.pos === 2) {
                     this.form.quantity = this.form.staffCount.staff;
-                } else if (this.form.pos === 3) {  // SỬA: Thêm case cho pos === 3
+                } else if (this.form.pos === 3) {
                     this.form.quantity = this.form.staffCount.leader;
-                    this.form.level = this.form.staffCount.level;
+                    // ensure form.level already resolved above
                 } else if (this.form.pos === 4) {
                     this.form.quantity = this.form.staffCount.engineers;
                 } else if (this.form.pos === 5) {
@@ -2921,6 +2963,46 @@ export default {
         },
     },
     computed: {
+        dutyItems() {
+            if (!Array.isArray(this.duty)) return [];
+            const supp1List = [
+            "B08","B09","B13","B14","B15","C02",
+            "J201","J202","J203","J204","J205","J206","J207","J208","J209","J210",
+            "J211","J212","J213","J214","J215",
+            "J301","J302","J303","J304","J305","J306","J307","J308","J309","J310",
+            "J311","J312","J313","J314","J315",
+            "J401","J402","J403","J404","J405","J406","J407","J408","J409","J410",
+            "J411","J412","J413","J414","J415",
+            "J501","J502","J503","J504","J505","J506","J507","J508","J509","J510",
+            "J511","J512","J513","J514","J515",
+            "J601","J602","J603","J604","J605","J606","J607","J608","J609","J610",
+            "J611","J612","J613","J614","J615"
+            ];
+            
+            const items = this.duty.map(d => {
+                let name = d.duty_no;
+                try {
+                    const parsed = typeof d.duty_name === 'string' ? JSON.parse(d.duty_name) : d.duty_name;
+                    name = parsed[this.$i18n.locale] || parsed.en || parsed.vi || parsed.cn || d.duty_no;
+                } catch (e) {
+                    name = d.duty_no;
+                }
+                return {
+                    id: d.id,
+                    value: d.duty_no,
+                    label: `${name}`
+                };
+            });
+            
+            // suppType có thể là số hoặc string -> dùng so sánh lỏng
+            if (this.form.suppType == 1) {
+                return items.filter(it => supp1List.includes(it.value));
+            }
+            if (this.form.suppType == 2) {
+                return items.filter(it => !supp1List.includes(it.value));
+            }
+            return items;
+        },
         otherReasonValidation() {
             const vi = this.form.recruitment.isOther_reason.vi;
             const en = this.form.recruitment.isOther_reason.en; 
@@ -3277,11 +3359,10 @@ export default {
             
             // Filter pos items based on suppType
             const positions = this.pos.filter((type) => {
-                if (this.form.suppType === 1) {
-                    // For suppType 1, exclude position with id 1 (Worker)
-                    return type.id !== 1;
+                if (this.form.suppType === 2) {
+                    // suppType 2: only show id = 3
+                    return type.id === 3;
                 }
-                // For suppType 2 or no selection, show all positions
                 return true;
             });
             
@@ -3461,17 +3542,17 @@ export default {
         getJobDescColWidth() {
             let width = 10;
             
-            // if (
-            // this.form.pos === 1 &&
-            // this.form.recruitment.reason !== 2
-            // ) {
-            //     width = 12;
-            // } else if (
-            // this.form.pos === 1 ||
-            // this.form.recruitment.reason !== 2
-            // ) {
-            //     width = 10;
-            // }
+            if (
+            this.form.pos === 1 &&
+            this.form.recruitment.reason !== 2
+            ) {
+                width = 12;
+            } else if (
+            this.form.pos === 1 ||
+            this.form.recruitment.reason !== 2
+            ) {
+                width = 10;
+            }
             return width;
         },
         hasEitherSelected() {
@@ -3854,7 +3935,7 @@ export default {
             "Unit": "Đơn vị",
             "Type Apply": "Chức vụ",
             "Level": "Cấp bậc",
-            "Quantity request": "Số lượng yêu cẩu",
+            "Quantity request": "Số lượng",
             "Change Quantity": "Số lượng thay đổi",
             "Change Reason": "Lý do thay đổi",
             "Req.date": "Ngày yêu cầu công nhân - nhân viên đến",

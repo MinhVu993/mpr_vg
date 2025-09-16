@@ -95,7 +95,7 @@
                                         <label><input type="checkbox" readonly @click.prevent ref="reasonExpand" style="margin: 5px;">Mở rộng biên chế (擴大編制)</label>
                                         <label><input type="checkbox" readonly @click.prevent ref="reasonReplace" style="margin: 5px;">Bổ sung thôi việc (離職補充)</label>
                                         <label>MST(工號):&nbsp;<input type="text" ref="oldEmpNo"
-                                            style="width: 100px; margin: 5px; border-bottom: 1px solid black;"></label>
+                                            style="width: 300px; margin: 5px; border-bottom: 1px solid black;"></label>
                                             <label>
                                                 <input 
                                                 type="checkbox" 
@@ -122,7 +122,7 @@
                                                     (課員) </label>
                                                     <label><input type="text" ref="leader" style="width: 100px;  text-align: center; border-bottom: 1px solid black;">名 Cán bộ
                                                         (幹部) bậc 職級:<input type="text" ref="level"
-                                                        style="width: 50px; text-align: center; border-bottom: 1px solid black;"></label>
+                                                        style="width: 250px; text-align: center; border-bottom: 1px solid black;"></label>
                                                         <label><input type="text" ref="engineers" style="width: 100px;  text-align: center; border-bottom: 1px solid black;">名 Kỹ sư (工程師)</label>
                                                     </div>
                                                 </td>
@@ -216,12 +216,6 @@
                                                                     </tr>
                                                                     <tr>
                                                                         <td style="text-align: center; height: 100px;">
-                                                                            <template v-if="getApprover(3)">
-                                                                                {{ getApprover(3).empno }} - {{ getApprover(3).name }}
-                                                                                <div v-if="getApprovalDate(3)">{{ getApprovalDate(3) }}</div>
-                                                                            </template>
-                                                                        </td>
-                                                                        <td style="text-align: center; height: 100px;">
                                                                             <template v-if="getApprover(2)">
                                                                                 {{ getApprover(2).empno }} - {{ getApprover(2).name }}
                                                                                 <div v-if="getApprovalDate(2)">{{ getApprovalDate(2) }}</div>
@@ -232,6 +226,12 @@
                                                                                 {{ getApprover(1).empno }} - {{ getApprover(1).name }}
                                                                                 <div v-if="getApprovalDate(1)">{{ getApprovalDate(1) }}</div>
                                                                             </template>
+                                                                        </td>
+                                                                        <td style="text-align: center; height: 100px;">
+                                                                            <!-- <template v-if="getApprover(1)">
+                                                                                {{ getApprover(1).empno }} - {{ getApprover(1).name }}
+                                                                                <div v-if="getApprovalDate(1)">{{ getApprovalDate(1) }}</div>
+                                                                            </template> -->
                                                                         </td>
                                                                         <td style="text-align: center; height: 100px;">
                                                                             <template v-if="formData?.submitter">
@@ -249,17 +249,6 @@
                                                                             人力資源部審核與建議</strong></td>
                                                                         </tr>
                                                                         <tr>
-                                                                            <td style="text-align: center; height: 100px;">
-                                                                                <template v-if="getApprover(7)">
-                                                                                    <span v-if="getApprover(7).empno && getApprover(7).name">
-                                                                                        {{ getApprover(7).empno }} - {{ getApprover(7).name }}
-                                                                                    </span>
-                                                                                    <span v-else>
-                                                                                        {{ getApprover(7).empno || getApprover(7).name || '' }}
-                                                                                    </span>
-                                                                                    <div v-if="getApprovalDate(7)">{{ getApprovalDate(7) }}</div>
-                                                                                </template>
-                                                                            </td>
                                                                             <td style="text-align: center; height: 100px;">
                                                                                 <template v-if="getApprover(6)">
                                                                                     <span v-if="getApprover(6).empno && getApprover(6).name">
@@ -280,6 +269,17 @@
                                                                                         {{ getApprover(5).empno || getApprover(5).name || '' }}
                                                                                     </span>
                                                                                     <div v-if="getApprovalDate(5)">{{ getApprovalDate(5) }}</div>
+                                                                                </template>
+                                                                            </td>
+                                                                            <td style="text-align: center; height: 100px;">
+                                                                                <template v-if="getApprover(4)">
+                                                                                    <span v-if="getApprover(4).empno && getApprover(4).name">
+                                                                                        {{ getApprover(4).empno }} - {{ getApprover(4).name }}
+                                                                                    </span>
+                                                                                    <span v-else>
+                                                                                        {{ getApprover(4).empno || getApprover(4).name || '' }}
+                                                                                    </span>
+                                                                                    <div v-if="getApprovalDate(4)">{{ getApprovalDate(4) }}</div>
                                                                                 </template>
                                                                             </td>
                                                                         </tr>
@@ -320,10 +320,12 @@
                                                             data() {
                                                                 return {
                                                                     api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
-                                                                    formData: null
+                                                                    formData: null,
+                                                                    duty:[]
                                                                 };
                                                             },
                                                             async created() {
+                                                                await this.getDataModel();
                                                                 const id = this.$route.query.id;
                                                                 
                                                                 if (id) {
@@ -331,7 +333,6 @@
                                                                         const response = await this.$axios.get(`${this.api}getMprById/${id}`);
                                                                         if (response.data && response.data.success) {
                                                                             const data = response.data.data;
-                                                                            console.log("Fetched data:", data);
                                                                             let qtyReqData;
                                                                             try {
                                                                                 qtyReqData = data.qty_req ? JSON.parse(data.qty_req) : {};
@@ -520,6 +521,31 @@
                                                                 });
                                                             },
                                                             methods: {
+                                                                async getDataModel() {
+                                                                    let params = {
+                                                                        loc: 'vg'
+                                                                    };
+                                                                    try {
+                                                                        const response = await this.$axios.post(this.api + "getDataModel", params);
+                                                                        if (response.data) {
+                                                                            const dutyData = response.data.dataDutyHrm || [];
+                                                                            this.duty = dutyData;
+                                                                            console.log('Fetched duty data:', this.duty);
+                                                                            return dutyData;
+                                                                        } else {
+                                                                            console.error('API response missing data');
+                                                                            this.duty = [];
+                                                                            return [];
+                                                                        }
+                                                                    } catch (error) {
+                                                                        console.error('Error fetching duty data:', error);
+                                                                        if (error.response) {
+                                                                            console.error('API error details:', error.response.data);
+                                                                        }
+                                                                        this.duty = [];
+                                                                        return [];
+                                                                    }
+                                                                },
                                                                 getLocalizedOtherReason(reason) {
                                                                     try {
                                                                         if (!reason) return '';
@@ -540,6 +566,23 @@
                                                                     } catch (error) {
                                                                         console.error('Error parsing other reason:', error);
                                                                         return reason || '';
+                                                                    }
+                                                                },
+                                                                getLevelName(dutyNo) {
+                                                                    if (!dutyNo || !this.duty) return '';
+                                                                    
+                                                                    const dutyItem = this.duty.find(d => d.duty_no === dutyNo);
+                                                                    if (!dutyItem) return dutyNo;
+                                                                    
+                                                                    try {
+                                                                        const dutyName = typeof dutyItem.duty_name === 'string' 
+                                                                        ? JSON.parse(dutyItem.duty_name) 
+                                                                        : dutyItem.duty_name;
+                                                                        
+                                                                        return `${dutyName.vi}/${dutyName.cn}`; // Return format: Vietnamese/Chinese
+                                                                    } catch (e) {
+                                                                        console.error('Error parsing duty name:', e);
+                                                                        return dutyNo;
                                                                     }
                                                                 },
                                                                 updateFormFields() {
@@ -607,7 +650,11 @@
                                                                             if (this.formData.qtyReq.engineers && this.formData.qtyReq.engineers > 0) {
                                                                                 this.$refs.engineers.value = recruitedValue;
                                                                             }
-                                                                            this.$refs.level.value = this.formData.qtyReq.level || '';
+                                                                            if (this.formData.qtyReq && this.formData.qtyReq.level) {
+                                                                                const levelDutyNo = this.formData.qtyReq.level;
+                                                                                const levelName = this.getLevelName(levelDutyNo);
+                                                                                this.$refs.level.value = levelName;
+                                                                            }
                                                                         }
                                                                     } else {
                                                                         // Use original logic for quantity fields
@@ -630,7 +677,11 @@
                                                                             if (this.formData.qtyReq.engineers && this.formData.qtyReq.engineers > 0) {
                                                                                 this.$refs.engineers.value = this.formData.qtyReq.engineers;
                                                                             }
-                                                                            this.$refs.level.value = this.formData.qtyReq.level || '';
+                                                                            if (this.formData.qtyReq && this.formData.qtyReq.level) {
+                                                                                const levelDutyNo = this.formData.qtyReq.level;
+                                                                                const levelName = this.getLevelName(levelDutyNo);
+                                                                                this.$refs.level.value = levelName;
+                                                                            }
                                                                         }
                                                                     }
                                                                     
