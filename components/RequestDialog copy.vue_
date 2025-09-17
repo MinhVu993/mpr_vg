@@ -719,7 +719,7 @@ export default {
     data() {
         return {
             otherReasonTab: 0,
-            api: "http://gmo021.cansportsvg.com/api/vg-mpr/",
+            api: "http://gmo021.cansportsvg.com/api/vg-mpr-temp/",
             storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
             dateKeyInMenu: false,
             dateRequestMenu: false,
@@ -3375,18 +3375,77 @@ export default {
             return this.parsedSafetyLevels;
         },
         canApproveItem() {
-            if (!this.editData || !this.activeUser) return false;
+             // if (!this.editData || !this.activeUser) return false;
+            
+            // const originalStatus = this.editData.status;
+            // const amendmentStatus = this.editData.status_amendent;
+            
+            // if ((originalStatus === 'completed' || originalStatus === 'declined') &&
+            // (!amendmentStatus || amendmentStatus === 'completed' || amendmentStatus === 'declined')) {
+            //     return false;
+            // }
+            
+            // try {
+            //     const approvalData = this.editData.approval ? JSON.parse(this.editData.approval) : [];
+            //     if (!this.dataFlow || !Array.isArray(this.dataFlow)) return false;
+                
+            //     const statusToLevel = {
+            //         'waiting_dept': 0,
+            //         'waiting_div': 1,
+            //         'waiting_hr_rec_sf': 2,
+            //         'waiting_hr': 3,
+            //         'waiting_ad': 4,
+            //         'waiting_gm': 5
+            //     };
+                
+            //     let currentLevel;
+                
+            //     if (amendmentStatus && 
+            //     amendmentStatus !== 'completed' && 
+            //     amendmentStatus !== 'declined') {
+            //         currentLevel = statusToLevel[amendmentStatus];
+            //     } else {
+            //         // Otherwise use original status
+            //         currentLevel = statusToLevel[originalStatus];
+            //     }
+                
+            //     if (currentLevel === undefined) return false;
+                
+            //     const currentFlow = this.dataFlow[currentLevel];
+            //     if (!currentFlow?.managers) return false;
+                
+            //     // Check if current user is authorized approver
+            //     return currentFlow.managers.some(manager => {
+            //         if (manager.empno === this.activeUser.empno) return true;
+                    
+            //         return manager.deputies?.some(deputy => 
+            //         deputy.empno === this.activeUser.empno && 
+            //         deputy.status === true
+            //         );
+            //     });
+                
+            // } catch (error) {
+            //     console.error("Error in canApproveItem:", error);
+            //     return false;
+            // }
+
+             if (!this.editData || !this.activeUser) return false;
             
             const originalStatus = this.editData.status;
             const amendmentStatus = this.editData.status_amendent;
             
-            if ((originalStatus === 'completed' || originalStatus === 'declined') &&
-            (!amendmentStatus || amendmentStatus === 'completed' || amendmentStatus === 'declined')) {
-                return false;
-            }
-            
             try {
                 const approvalData = this.editData.approval ? JSON.parse(this.editData.approval) : [];
+                
+                // Kiểm tra nếu có bất kỳ level nào có status là "returned"
+                const hasReturnedStatus = approvalData.some(level => level.status === "returned");
+                if (hasReturnedStatus) return false;
+                
+                if ((originalStatus === 'completed' || originalStatus === 'declined') &&
+                (!amendmentStatus || amendmentStatus === 'completed' || amendmentStatus === 'declined')) {
+                    return false;
+                }
+                
                 if (!this.dataFlow || !Array.isArray(this.dataFlow)) return false;
                 
                 const statusToLevel = {
@@ -3405,7 +3464,6 @@ export default {
                 amendmentStatus !== 'declined') {
                     currentLevel = statusToLevel[amendmentStatus];
                 } else {
-                    // Otherwise use original status
                     currentLevel = statusToLevel[originalStatus];
                 }
                 
@@ -3414,7 +3472,6 @@ export default {
                 const currentFlow = this.dataFlow[currentLevel];
                 if (!currentFlow?.managers) return false;
                 
-                // Check if current user is authorized approver
                 return currentFlow.managers.some(manager => {
                     if (manager.empno === this.activeUser.empno) return true;
                     

@@ -151,7 +151,7 @@
                 {{ getSubPositionName(item.sub_pos, true) }}
             </template>
             <template v-slot:[`item.recruited_status`]="{ item }">
-                <v-card v-if="getRecruitmentStatus(item).show" 
+                <!-- <v-card v-if="getRecruitmentStatus(item).show" 
                 dark 
                 :style="{ backgroundColor: getRecruitmentStatus(item).color }"
                 outlined 
@@ -166,47 +166,65 @@
                         {{ getRecruitmentStatus(item).detail }}
                     </span>
                 </div>
-            </v-card>
-        </template>
-        <template v-slot:[`item.submitter`]="{ item }">
-            <v-btn v-if="item.submitter" color="blue" small text>
-                <v-icon left>mdi-account</v-icon>
-                {{ item.submiterInfo.name }}
-            </v-btn>
-            <br />
-            <v-btn v-if="item.submitter" color="blue" small text>
-                <v-icon left>mdi-card-account-details-outline</v-icon>
-                {{ item.submiterInfo.empno }} - {{ item.submiterInfo.dept_sumt }}
-            </v-btn>
-        </template>
-        <template v-slot:[`item.qty_req`]="{ item }">
-            <div>
-                {{ getDisplayQuantity(item.qty_req, item) }}
-                <v-tooltip bottom v-if="hasQuantityChange(item) && !isAmendmentDeniedButOriginalValid(item) && item.status_amendent === 'completed'" color="warning">
-                    <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                            <v-icon small color="warning" class="mx-1">mdi-arrow-right-bold</v-icon>
-                            <span class="font-weight-bold">{{ getChangeQuantity(item) }}</span>
-                        </span>
-                    </template>
-                    <span>{{ getChangeReason(item) }}</span>
-                </v-tooltip>
+            </v-card> -->
+            <v-chip 
+            v-if="getRecruitmentStatus(item).show"
+            :color="getRecruitmentStatus(item).color"
+            dark
+            dense
+            small
+            label
+            >
+            <div >
+                <span >
+                    {{ getRecruitmentStatus(item).text }}
+                </span>
+                <span>
+                    {{ getRecruitmentStatus(item).detail }}
+                </span>
             </div>
-        </template>
-        <template v-slot:[`item.recruited`]="{ item }">
-            <!-- {{ item.recruited || 0 }} -->
-            <div 
-            style="cursor: pointer; color: blue;" 
-            @click="showCandidatesDialog(item.candidates)">
-            {{ item.recruited || 0 }}
+        </v-chip>
+        
+    </template>
+    <template v-slot:[`item.submitter`]="{ item }">
+        <v-btn v-if="item.submitter" color="blue" small text>
+            <v-icon left>mdi-account</v-icon>
+            {{ item.submiterInfo.name }}
+        </v-btn>
+        <br />
+        <v-btn v-if="item.submitter" color="blue" small text>
+            <v-icon left>mdi-card-account-details-outline</v-icon>
+            {{ item.submiterInfo.empno }} - {{ item.submiterInfo.dept_sumt }}
+        </v-btn>
+    </template>
+    <template v-slot:[`item.qty_req`]="{ item }">
+        <div>
+            {{ getDisplayQuantity(item.qty_req, item) }}
+            <v-tooltip bottom v-if="hasQuantityChange(item) && !isAmendmentDeniedButOriginalValid(item) && item.status_amendent === 'completed'" color="warning">
+                <template v-slot:activator="{ on, attrs }">
+                    <span v-bind="attrs" v-on="on">
+                        <v-icon small color="warning" class="mx-1">mdi-arrow-right-bold</v-icon>
+                        <span class="font-weight-bold">{{ getChangeQuantity(item) }}</span>
+                    </span>
+                </template>
+                <span>{{ getChangeReason(item) }}</span>
+            </v-tooltip>
         </div>
     </template>
-    <template v-slot:[`item.resign`]="{ item }">
+    <template v-slot:[`item.recruited`]="{ item }">
+        <!-- {{ item.recruited || 0 }} -->
         <div 
-        style="cursor: pointer; color: red;" 
-        @click="showResignDialog(item.resignList)">
-        {{ item.resign || 0 }}
+        style="cursor: pointer; color: blue;" 
+        @click="showCandidatesDialog(item.candidates)">
+        {{ item.recruited || 0 }}
     </div>
+</template>
+<template v-slot:[`item.resign`]="{ item }">
+    <div 
+    style="cursor: pointer; color: red;" 
+    @click="showResignDialog(item.resignList)">
+    {{ item.resign || 0 }}
+</div>
 </template>
 <template v-slot:[`item.status`]="{ item }">
     <div class="d-flex align-center flex-wrap">
@@ -784,7 +802,7 @@ export default {
         
         return {
             search: '',
-            api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
+            api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
             storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
             loading: false,
             cancelDialog: false,
@@ -1513,10 +1531,10 @@ export default {
                 
                 if (denyTempData.fullfilldate) {
                     return {
-                        text: this.$t('Cancelled'),
-                        detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
+                        text: this.$t('Closed'),
+                        // detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
                         show: true,
-                        color: '#f44336', // Đỏ cảnh báo, hủy
+                        color: '#6c757d', 
                         dark: false,
                     };
                 }
@@ -1552,7 +1570,7 @@ export default {
                 return {
                     text: this.$t('Recruiting'),
                     show: true,
-                    color: '#E65100',
+                    color: '#43A047',
                     dark: false,
                 };
             }

@@ -28,7 +28,7 @@ export default {
   // Target: https://go.nuxtjs.dev/config-target
   target: "static",
   router: {
-    base: "/vg/hr/mpr",
+    base: "/exp/mpr",
   },
   generate: {
     dir: "./dist",

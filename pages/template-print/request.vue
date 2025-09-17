@@ -319,7 +319,7 @@
                                                             layout: "print",
                                                             data() {
                                                                 return {
-                                                                    api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
+                                                                    api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
                                                                     formData: null,
                                                                     duty:[]
                                                                 };
@@ -579,7 +579,29 @@
                                                                         ? JSON.parse(dutyItem.duty_name) 
                                                                         : dutyItem.duty_name;
                                                                         
-                                                                        return `${dutyName.vi}/${dutyName.cn}`; // Return format: Vietnamese/Chinese
+                                                                        // Get vi and cn values
+                                                                        let viName = dutyName.vi || '';
+                                                                        let cnName = dutyName.cn || '';
+                                                                        
+                                                                        // Handle VG prefix for Vietnamese name
+                                                                        if (viName.startsWith('VG')) {
+                                                                            const parts = viName.split(' ');
+                                                                            if (parts.length > 2) {
+                                                                                viName = parts.slice(2).join(' '); 
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        // Handle VG prefix for Chinese name
+                                                                        if (cnName.startsWith('VG')) {
+                                                                            const parts = cnName.split(' ');
+                                                                            if (parts.length > 2) {
+                                                                                cnName = parts.slice(2).join(' ');
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        // Return formatted string
+                                                                        return `${viName}/${cnName}`; 
+                                                                        
                                                                     } catch (e) {
                                                                         console.error('Error parsing duty name:', e);
                                                                         return dutyNo;

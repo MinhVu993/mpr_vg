@@ -144,7 +144,7 @@
                 @changed="updateFilter('recruited_status', $event)" />
             </template>
             <template v-slot:[`item.recruited_status`]="{ item }">
-                <v-card v-if="getRecruitmentStatus(item).show" 
+                <!-- <v-card v-if="getRecruitmentStatus(item).show" 
                 outlined 
                 dark
                 class="pa-1" 
@@ -157,7 +157,24 @@
                         {{ getRecruitmentStatus(item).detail }}
                     </span>
                 </div>
-            </v-card>
+            </v-card> -->
+             <v-chip 
+            v-if="getRecruitmentStatus(item).show"
+            :color="getRecruitmentStatus(item).color"
+            dark
+            dense
+            small
+            label
+            >
+            <div >
+                <span >
+                    {{ getRecruitmentStatus(item).text }}
+                </span>
+                <span>
+                    {{ getRecruitmentStatus(item).detail }}
+                </span>
+            </div>
+        </v-chip>
         </template>
         <template v-slot:[`item.submitter`]="{ item }">
             <v-btn v-if="item.submitter" color="blue" small text>
@@ -748,7 +765,7 @@ export default {
     data() {
         return {
             search: '',
-            api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
+            api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
             storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
             loading: false,
             cancelDialog: false,
@@ -1438,10 +1455,10 @@ export default {
                 
                 if (denyTempData.fullfilldate) {
                     return {
-                        text: this.$t('Cancelled'),
-                        detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
+                        text: this.$t('Closed'),
+                        // detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
                         show: true,
-                        color: '#f44336', // Đỏ cảnh báo, hủy
+                        color: '#6c757d', 
                         dark: false,
                     };
                 }
@@ -1477,7 +1494,7 @@ export default {
                 return {
                     text: this.$t('Recruiting'),
                     show: true,
-                    color: '#E65100',
+                    color: '#43A047',
                     dark: false,
                 };
             }

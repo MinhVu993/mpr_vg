@@ -185,10 +185,10 @@
                             clearable
                             ></v-autocomplete>
                         </v-col>
-                       
+                        
                     </v-row>
                     <v-row>
-                         <v-col cols="1" md="1">
+                        <v-col cols="1" md="1">
                             <v-text-field :disabled="formDisabled" v-model="form.quantity" :label="$t('Quantity request') " type="number" min="1" :rules="[rules.required]" outlined dense hide-details="auto" required @input="(val) => (form.quantity = val > 0 ? val : '')" ></v-text-field>
                         </v-col>
                         <v-col cols="2" md="2">
@@ -731,7 +731,7 @@ export default {
     data() {
         return {
             otherReasonTab: 0,
-            api: "http://gmo021.cansportsvg.com/api/vg-mpr/",
+            api: "http://gmo021.cansportsvg.com/api/vg-mpr-temp/",
             storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
             dateKeyInMenu: false,
             dateRequestMenu: false,
@@ -2966,7 +2966,7 @@ export default {
         dutyItems() {
             if (!Array.isArray(this.duty)) return [];
             const supp1List = [
-            "B08","B09","B13","B14","B15","C02",
+            "B08","B13","B14","B15",  // Đã xóa B09 và C02
             "J201","J202","J203","J204","J205","J206","J207","J208","J209","J210",
             "J211","J212","J213","J214","J215",
             "J301","J302","J303","J304","J305","J306","J307","J308","J309","J310",
@@ -2984,9 +2984,19 @@ export default {
                 try {
                     const parsed = typeof d.duty_name === 'string' ? JSON.parse(d.duty_name) : d.duty_name;
                     name = parsed[this.$i18n.locale] || parsed.en || parsed.vi || parsed.cn || d.duty_no;
+                    
+                    // Xử lý tên nếu bắt đầu bằng "VG"
+                    if (name.startsWith('VG')) {
+                        // Tách chuỗi theo khoảng trắng và bỏ 2 phần tử đầu
+                        const parts = name.split(' ');
+                        if (parts.length > 2) {
+                            name = parts.slice(2).join(' ');
+                        }
+                    }
                 } catch (e) {
                     name = d.duty_no;
                 }
+                
                 return {
                     id: d.id,
                     value: d.duty_no,
@@ -2994,14 +3004,29 @@ export default {
                 };
             });
             
-            // suppType có thể là số hoặc string -> dùng so sánh lỏng
+            // Lọc bỏ các item trùng lặp label
+            const uniqueItems = items.reduce((acc, current) => {
+                const isDuplicate = acc.find(item => item.label === current.label);
+                if (!isDuplicate) {
+                    acc.push(current);
+                }
+                return acc;
+            }, []);
+            
+            // Lọc theo suppType và loại bỏ B09, C02
             if (this.form.suppType == 1) {
-                return items.filter(it => supp1List.includes(it.value));
+                return uniqueItems.filter(it => 
+                supp1List.includes(it.value) && 
+                !["B09", "C02"].includes(it.value)
+                );
             }
             if (this.form.suppType == 2) {
-                return items.filter(it => !supp1List.includes(it.value));
+                return uniqueItems.filter(it => 
+                !supp1List.includes(it.value) && 
+                !["B09", "C02"].includes(it.value)
+                );
             }
-            return items;
+            return uniqueItems.filter(it => !["B09", "C02"].includes(it.value));
         },
         otherReasonValidation() {
             const vi = this.form.recruitment.isOther_reason.vi;
@@ -3462,13 +3487,18 @@ export default {
             const originalStatus = this.editData.status;
             const amendmentStatus = this.editData.status_amendent;
             
-            if ((originalStatus === 'completed' || originalStatus === 'declined') &&
-            (!amendmentStatus || amendmentStatus === 'completed' || amendmentStatus === 'declined')) {
-                return false;
-            }
-            
             try {
                 const approvalData = this.editData.approval ? JSON.parse(this.editData.approval) : [];
+                
+                // Kiểm tra nếu có bất kỳ level nào có status là "returned"
+                const hasReturnedStatus = approvalData.some(level => level.status === "returned");
+                if (hasReturnedStatus) return false;
+                
+                if ((originalStatus === 'completed' || originalStatus === 'declined') &&
+                (!amendmentStatus || amendmentStatus === 'completed' || amendmentStatus === 'declined')) {
+                    return false;
+                }
+                
                 if (!this.dataFlow || !Array.isArray(this.dataFlow)) return false;
                 
                 const statusToLevel = {
@@ -3487,7 +3517,6 @@ export default {
                 amendmentStatus !== 'declined') {
                     currentLevel = statusToLevel[amendmentStatus];
                 } else {
-                    // Otherwise use original status
                     currentLevel = statusToLevel[originalStatus];
                 }
                 
@@ -3496,7 +3525,6 @@ export default {
                 const currentFlow = this.dataFlow[currentLevel];
                 if (!currentFlow?.managers) return false;
                 
-                // Check if current user is authorized approver
                 return currentFlow.managers.some(manager => {
                     if (manager.empno === this.activeUser.empno) return true;
                     
