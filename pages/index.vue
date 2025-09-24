@@ -504,6 +504,7 @@
                     </v-expansion-panel-header>
                     <v-expansion-panel-content>
                         <v-data-table :headers="approvalHeaders" :items="cycle" hide-default-footer class="elevation-1" >
+                            
                             <template v-slot:[`item.type`]="{ item }">
                                 {{ item.type }}
                             </template>
@@ -802,7 +803,7 @@ export default {
         
         return {
             search: '',
-            api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
+            api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
             storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
             loading: false,
             cancelDialog: false,
@@ -824,17 +825,7 @@ export default {
             yearMenu: false,
             approvalDialog: false,
             selectedApprovalData: [],
-            approvalHeaders: [
-            { text: this.$t('Type'), value: 'type', align: 'center', sortable: false },
-            { text: this.$t('Empno'), value: 'empno', align: 'center', width: '100px', sortable: false },
-            { text: this.$t('Name'), value: 'name', width: '150px', sortable: false },
-            { text: this.$t('Department'), value: 'dept', width: '150px', sortable: false },
-            { text: this.$t('Status'), value: 'status', align: 'center', sortable: false },
-            { text: this.$t('Reason Denied'), value: 'reason_denied', align: 'center', sortable: false },
-            { text: this.$t('Return Reason'), value: 'return_reason', align: 'center', sortable: false },
-            { text: this.$t('Approval Record'), value: 'approval_record', align: 'center', sortable: false },
-            { text: this.$t('Date'), value: 'processed_at', align: 'center', sortable: false }
-            ],
+            
             dataFlow: '',
             selectedItemForAccept: null,
             activeUser: '',
@@ -893,6 +884,19 @@ export default {
         }
     },
     computed: {
+        approvalHeaders() {
+            return [
+            { text: this.$t('Type'), value: 'type', align: 'center', sortable: false },
+            { text: this.$t('Empno'), value: 'empno', align: 'center', width: '100px', sortable: false },
+            { text: this.$t('Name'), value: 'name', width: '150px', sortable: false },
+            { text: this.$t('Department'), value: 'dept', width: '150px', sortable: false },
+            { text: this.$t('Status'), value: 'status', align: 'center', sortable: false },
+            { text: this.$t('Reason Denied'), value: 'reason_denied', align: 'center', sortable: false },
+            { text: this.$t('Return Reason'), value: 'return_reason', align: 'center', sortable: false },
+            { text: this.$t('Approval Record'), value: 'approval_record', align: 'center', sortable: false },
+            { text: this.$t('Date'), value: 'processed_at', align: 'center', sortable: false }
+            ];
+        },
         currentApprovalData() {
             try {
                 if (!this.selectedItem?.approval) return [];
@@ -1374,6 +1378,28 @@ export default {
         },
     },
     methods: {
+        getStatusTranslationKey(status) {
+            // Mapping trạng thái sang key dịch thuật
+            const statusMap = {
+                'waiting': 'waiting',
+                'waiting_dept': 'Waiting for Department',
+                'waiting_div': 'Waiting for Division', 
+                'waiting_hr_rec_sf': 'Waiting for HR Recruitment',
+                'waiting_hr': 'Waiting for HR',
+                'waiting_ad': 'Waiting for Admin',
+                'waiting_gm': 'Waiting for General Manager',
+                'approved': 'approved',
+                'completed': 'completed',
+                'declined': 'declined',
+                'rejected': 'rejected',
+                'cancelled': 'cancelled',
+                'returned': 'returned',
+                'processing': 'processing',
+                'pending': 'pending'
+            };
+            
+            return statusMap[status] || status || 'waiting';
+        },
         openOtherReasonDialog(item) {
             try {
                 this.otherReasonText = this.getLocalizedOtherReason(item.isOther_reason) || '';
@@ -1403,6 +1429,7 @@ export default {
                 });
             }
         },
+        
         getLocalizedOtherReason(otherReason) {
             try {
                 // Nếu otherReason là string JSON
@@ -2161,8 +2188,6 @@ export default {
             return nameObj[locale] || nameObj.en || '-';
         },
         getDisplayQuantity(qtyReq, item) {
-            if (!qtyReq) return 0;
-            
             try {
                 // Kiểm tra deny_temp trước tiên VÀ status_amendent phải là 'completed'
                 if (item && 
@@ -2182,11 +2207,6 @@ export default {
                         console.error('Error parsing deny_temp for quantity display:', error);
                     }
                 }
-                
-                // Logic cũ cho trường hợp bình thường
-                // if (this.hasQuantityChange({qty_req: qtyReq, change_req: item?.change_req})) {
-                //     return parseInt(this.getChangeQuantity({qty_req: qtyReq, change_req: item?.change_req}));
-                // }
                 if (typeof qtyReq === 'string') {
                     if (qtyReq.startsWith('{')) {
                         const qtyData = JSON.parse(qtyReq);
@@ -2473,73 +2493,49 @@ export default {
         },
         canApproveItemForTodo(item)
         {
-            // if (!item || !this.activeUser) return false;
-            if ((item.status === 'completed' || item.status === 'declined') && 
-            (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined')) {
+          if (!item || !this.activeUser) return false;
+            if ((item.status === 'completed' || item.status === 'declined') &&
+                (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined')) {
                 return false;
             }
+
             const validStatuses = [
-            'waiting_dept', 
-            'waiting_div', 
-            'waiting_hr_rec_sf', 
-            'waiting_hr', 
-            'waiting_ad', 
-            'waiting_gm'
+                'waiting_dept',
+                'waiting_div',
+                'waiting_hr_rec_sf',
+                'waiting_hr',
+                'waiting_ad',
+                'waiting_gm'
             ];
-            
-            // Kiểm tra xem có ít nhất một trong hai trạng thái thuộc danh sách hợp lệ
-            if (!validStatuses.includes(item.status) && 
-            (!item.status_amendent || !validStatuses.includes(item.status_amendent))) {
+
+            // Nếu cả 2 trạng thái đều không thuộc danh sách hợp lệ -> không phải todo
+            if (!validStatuses.includes(item.status) &&
+                (!item.status_amendent || !validStatuses.includes(item.status_amendent))) {
                 return false;
             }
-            
+
             try {
-                const approval = JSON.parse(item.approval);
-                
-                // Nếu có status_amendent, sử dụng logic khác
-                if (item.status_amendent) {
-                    const statusToLevelCode = {
-                        'waiting_dept': 'dept_manager',
-                        'waiting_div': 'division_manager',
-                        'waiting_hr_rec_sf': 'hr_rec_sf',
-                        'waiting_hr': 'hr_manager',
-                        'waiting_ad': 'smp_manager',
-                        'waiting_gm': 'general_manager'
-                    };
-                    
-                    const currentLevelCode = statusToLevelCode[item.status_amendent];
-                    if (!currentLevelCode) return false;
-                    
-                    const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
-                    if (!flowData || !Array.isArray(flowData)) return false;
-                    
-                    const currentFlowLevel = flowData.find(level => level.lvl_code === currentLevelCode);
-                    if (!currentFlowLevel?.managers) return false;
-                    
-                    return currentFlowLevel.managers.some(manager => {
-                        if (manager.empno === this.activeUser.empno) return true;
-                        
-                        if (manager.deputies && Array.isArray(manager.deputies)) {
-                            return manager.deputies.some(deputy => 
-                            deputy.empno === this.activeUser.empno && 
-                            deputy.status === true
-                            );
-                        }
-                        return false;
-                    });
-                }
-                
-                // Logic cũ cho status thông thường
-                const currentLevel = approval.find(level => level.status === 'waiting');
-                if (!currentLevel) return false;
-                
-                if (currentLevel.approver && currentLevel.approver.empno === this.activeUser.empno) {
-                    return true;
-                }
-                
+                const approval = item.approval ? JSON.parse(item.approval) : [];
+
+                // Tìm level đang chờ trong approval (dùng chung cho cả status và amendment)
+                const waitingLevel = approval.find(level => level.status === 'waiting');
+                if (!waitingLevel) return false;
+
+                // Chọn trạng thái hiệu dụng: nếu có status_amendent đang chờ thì ưu tiên
+                const effectiveStatus = (item.status_amendent && validStatuses.includes(item.status_amendent))
+                    ? item.status_amendent
+                    : item.status;
+
+                // Lấy flow data (cache hoặc chung)
                 const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
-                if (!flowData || !Array.isArray(flowData)) return false;
-                
+
+                // Nếu chưa có flow data, bắt đầu nạp bất đồng bộ rồi trả false tạm — tránh hiển thị sai
+                if (!flowData || !Array.isArray(flowData)) {
+                    this.getFlowDataForItem(item).catch(() => {});
+                    return false;
+                }
+
+                // Map trạng thái sang lvl_code trong flow
                 const statusToLevelCode = {
                     'waiting_dept': 'dept_manager',
                     'waiting_div': 'division_manager',
@@ -2548,24 +2544,21 @@ export default {
                     'waiting_ad': 'smp_manager',
                     'waiting_gm': 'general_manager'
                 };
-                const currentLevelCode = statusToLevelCode[item.status];
+
+                const currentLevelCode = statusToLevelCode[effectiveStatus];
                 if (!currentLevelCode) return false;
-                
+
                 const currentFlowLevel = flowData.find(level => level.lvl_code === currentLevelCode);
-                if (!currentFlowLevel?.managers) return false;
-                
+                if (!currentFlowLevel || !currentFlowLevel.managers) return false;
+
+                // Kiểm tra xem activeUser có nằm trong managers hoặc deputies active không
                 return currentFlowLevel.managers.some(manager => {
                     if (manager.empno === this.activeUser.empno) return true;
-                    
-                    if (manager.deputies && Array.isArray(manager.deputies)) {
-                        return manager.deputies.some(deputy => 
-                        deputy.empno === this.activeUser.empno && 
-                        deputy.status === true
-                        );
+                    if (Array.isArray(manager.deputies)) {
+                        return manager.deputies.some(deputy => deputy.empno === this.activeUser.empno && deputy.status === true);
                     }
                     return false;
                 });
-                
             } catch (error) {
                 console.error('Error in canApproveItemForTodo:', error);
                 return false;
@@ -3192,12 +3185,12 @@ export default {
         },
         getApprovalLevelName(type) {
             const types = {
-                'dept': this.$t('Dept'),
-                'div': this.$t('Div'),
-                'hr_rec_sf': this.$t('Hr Rec SF'),
-                'hr': this.$t('Hr'),
-                'ad': this.$t('Ad'), 
-                'gm': this.$t('Gm')
+                'dept': this.$t('Department'),
+                'div': this.$t('Division'),
+                'hr_rec_sf': this.$t('HR Rec SF'),
+                'hr': this.$t('HR'),
+                'ad': this.$t('AD'), 
+                'gm': this.$t('GM')
             };
             return types[type] || type;
         },
@@ -3660,7 +3653,20 @@ export default {
             "In date":"In date",
             "Resign date":"Resign date",
             "Resign Listing Details":"Resign Listing Details",
-            "Cancelled":"Cancelled"    
+            "Cancelled":"Cancelled",
+            "Type": "Type",
+            "Department": "Department",
+            "Status": "Status",
+            "Reason Denied": "Reason Denied",
+            "Return Reason": "Return Reason", 
+            "Approval Record": "Approval Record",
+            "Date": "Date",
+            "Division": "Division",
+            "HR Rec SF": "HR Rec SF",
+            "HR": "HR",
+            "AD": "AD",
+            "GM": "GM",
+            "Cycle": "Cycle"
         },
         "vi": {
             "ID": "Mã đơn",
@@ -3723,7 +3729,35 @@ export default {
             "In date":"Ngày tuyển dụng",     
             "Resign date":"Ngày thôi việc",
             "Resign Listing Details":"Chi tiết danh sách nghỉ việc",
-            "Cancelled":"Đã hủy"
+            "Cancelled":"Đã hủy",
+            "Type": "Cấp phê duyệt",
+            "Department": "Bộ phận",
+            "Status": "Trạng thái",
+            "Reason Denied": "Lý do từ chối",
+            "Return Reason": "Lý do trả về",
+            "Approval Record": "Ghi chú phê duyệt",
+            "Date": "Ngày",
+            "Division": "Cấp sở",
+            "HR Rec SF": "Nhân viên tuyển dụng",
+            "HR": "Chủ quản HR",
+            "AD": "Chủ quản AD",
+            "GM": "Tổng giám đốc",
+            "waiting": "Đang chờ",
+            "Waiting for Department": "Chờ phòng ban",
+            "Waiting for Division": "Chờ bộ phận", 
+            "Waiting for HR Recruitment": "Chờ tuyển dụng HR",
+            "Waiting for HR": "Chờ nhân sự",
+            "Waiting for Admin": "Chờ quản trị",
+            "Waiting for General Manager": "Chờ tổng giám đốc",
+            "approved": "Đã phê duyệt",
+            "completed": "Hoàn thành",
+            "declined": "Từ chối",
+            "rejected": "Bị từ chối",
+            "cancelled": "Đã hủy",
+            "returned": "Trả lại",
+            "processing": "Đang xử lý",
+            "pending": "Chờ xử lý",
+            "Cycle": "Chu kỳ"
         },
         "cn": {
             "ID": "表單編號",
@@ -3786,7 +3820,37 @@ export default {
             "In date": "入职日期",
             "Resign date": "离职日期",
             "Resign Listing Details": "离职列表详情",
-            "Cancelled": "已取消"
+            "Cancelled": "已取消",
+            "Type": "审批级别",
+            "Department": "部籍",
+            "Status": "状态",
+            "Reason Denied": "拒绝原因",
+            "Return Reason": "退回原因",
+            "Approval Record": "审批记录",
+            "Date": "日期",
+            "Division": "處籍",
+            "HR Rec SF": "HR招募組",
+            "HR": "HR審核",
+            "AD": "AD審核",
+            "GM": "GM審核",
+            "waiting": "等待中",
+            "Waiting for Department": "等待部門審核",
+            "Waiting for Division": "等待處級審核",
+            "Waiting for HR Recruitment": "等待人事招聘組審核",
+            "Waiting for HR": "等待人事審核",
+            "Waiting for Admin": "等待行政審核",
+            "Waiting for General Manager": "等待總經理審核",
+            
+            "approved": "已核准",
+            "completed": "已完成",
+            "declined": "已駁回",
+            "rejected": "否決",
+            "cancelled": "已取消",
+            
+            "returned": "已退回",
+            "processing": "處理中",
+            "pending": "待處理",
+            "Cycle": "週期"
         }
     }  
 </i18n>     

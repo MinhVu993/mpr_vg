@@ -233,48 +233,48 @@
                                                 <v-textarea
                                                 :disabled="formDisabled"
                                                 v-model="form.recruitment.isOther_reason.vi"
+                                                @input="onOtherReasonInput('vi', $event)"
+                                                @click:clear="onOtherReasonClear('vi')"
                                                 outlined
+                                                dense
                                                 auto-grow
-                                                rows="2"
-                                                :rules="otherReasonValidation"
-                                                :error-messages="!form.recruitment.isOther_reason.vi ? $t('This field is required') : ''"
+                                                rows="1"
                                                 placeholder="Nhập lý do bằng tiếng Việt..."
-                                                background-color="grey lighten-5"
-                                                class="other-reason-textarea"
-                                                required
-                                                ></v-textarea>
+                                                hide-details
+                                                clearable
+                                                />
                                             </v-tab-item>
                                             
                                             <v-tab-item>
                                                 <v-textarea
                                                 :disabled="formDisabled"
                                                 v-model="form.recruitment.isOther_reason.en"
+                                                @input="onOtherReasonInput('en', $event)"
+                                                @click:clear="onOtherReasonClear('en')"
                                                 outlined
+                                                dense
                                                 auto-grow
-                                                rows="2"
-                                                :rules="otherReasonValidation"
-                                                :error-messages="!form.recruitment.isOther_reason.en ? $t('This field is required') : ''"
+                                                rows="1"
+                                                hide-details
                                                 placeholder="Enter reason in English..."
-                                                background-color="grey lighten-5"
-                                                class="other-reason-textarea"
-                                                required
-                                                ></v-textarea>
+                                                clearable
+                                                />
                                             </v-tab-item>
                                             
                                             <v-tab-item>
                                                 <v-textarea
                                                 :disabled="formDisabled"
                                                 v-model="form.recruitment.isOther_reason.cn"
+                                                @input="onOtherReasonInput('cn', $event)"
+                                                @click:clear="onOtherReasonClear('cn')"
                                                 outlined
+                                                dense
                                                 auto-grow
-                                                rows="2"
-                                                :rules="otherReasonValidation"
-                                                :error-messages="!form.recruitment.isOther_reason.cn ? $t('This field is required') : ''"
+                                                rows="1"
+                                                hide-details
                                                 placeholder="用中文输入原因..."
-                                                background-color="grey lighten-5"
-                                                class="other-reason-textarea"
-                                                required
-                                                ></v-textarea>
+                                                clearable
+                                                />
                                             </v-tab-item>
                                         </v-tabs-items>
                                     </v-card>
@@ -284,19 +284,19 @@
                     </v-col>
                     <v-col cols="12" md="5">
                         <v-file-input
-                        :disabled="formDisabled"
-                        v-model="form.attachments.dimissionList"
-                        :label="$t('Dimission list file')"
-                        outlined
-                        dense
-                        :error="form.recruitment.reason === 2"
-                        :required="form.recruitment.reason === 2"
-                        hide-details="auto"
-                        @change="previewFile('dimissionList', $event)"
-                        prepend-inner-icon="mdi-file-account"
-                        :clearable="true"
-                        :enablad="form.recruitment.reason === 2"
-                        accept=".doc,.docx,.pdf,.xls,.xlsx"
+                       :disabled="formDisabled"
+        v-model="form.attachments.dimissionList"
+        :label="$t('Dimission list file')"
+        outlined
+        dense
+        :error="form.recruitment.reason === 2 && !form.attachments.dimissionList"
+        :required="form.recruitment.reason === 2"
+        :rules="form.recruitment.reason === 2 ? [rules.required] : []"
+        hide-details="auto"
+        @change="previewFile('dimissionList', $event)"
+        prepend-inner-icon="mdi-file-account"
+        :clearable="true"
+        accept=".doc,.docx,.pdf,.xls,.xlsx"
                         ></v-file-input>
                         <div v-show=" filePreview.dimissionList && form.recruitment.reason === 2 " class="file-preview mt-2" >
                             <v-chip small close @click:close="clearFile('dimissionList')" class="mb-1" >
@@ -696,8 +696,8 @@
 </v-dialog>
 </template>
 <script>
-// import VfaAppFlow from "../../../@global-component/vfa-comp";
-import VfaAppFlow from 'D:/source/@global-component/vfa-comp';
+ import VfaAppFlow from "../../../@global-component/vfa-comp";
+// import VfaAppFlow from 'D:/source/@global-component/vfa-comp';
 export default {
     components: { VfaAppFlow },
     name: "RequestDialog",
@@ -719,7 +719,7 @@ export default {
     data() {
         return {
             otherReasonTab: 0,
-            api: "http://gmo021.cansportsvg.com/api/vg-mpr-temp/",
+            api: "http://gmo021.cansportsvg.com/api/vg-mpr/",
             storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
             dateKeyInMenu: false,
             dateRequestMenu: false,
@@ -810,7 +810,11 @@ export default {
                 recruitment: {
                     reason: "",
                     oldempno: "",
-                    isOther_reason: "",
+                    isOther_reason: {
+                        vi: "",
+                        en: "",
+                        cn: ""
+                    },
                     requestDate: (() => {
                         const d = new Date();
                         d.setDate(d.getDate() + 7);             // cộng thêm 7 ngày
@@ -929,6 +933,10 @@ export default {
             selectedLanguage:'cn',
             unitNames:[],
             localizedApprovalRecords: {},
+            otherReasonTimers: { vi: null, en: null, cn: null },
+            programmaticUpdating: { vi: false, en: false, cn: false },
+            lastEditedOtherReason: null,
+            otherReasonDebounceMs: 800,
         };
     },
     watch: {
@@ -958,7 +966,7 @@ export default {
                 this.selectedFlowSign = null;
             }
             // Reset position selection when suppType changes
-            if (newVal === 1 && this.form.pos === 1) {
+            if (newVal === 2 && this.form.pos === 1) {
                 this.form.pos = "";
             }
         },
@@ -1152,6 +1160,100 @@ export default {
         },
     },
     methods: {
+        async onOtherReasonInput(lang, value) {
+           if (this.programmaticUpdating[lang]) {
+        this.programmaticUpdating[lang] = false;
+        return;
+    }
+    this.form.recruitment.isOther_reason[lang] = value;
+
+    // If user cleared the field -> clear all three and cancel timers
+    if (!value || value.toString().trim() === "") {
+        clearTimeout(this.otherReasonTimers.vi);
+        clearTimeout(this.otherReasonTimers.en);
+        clearTimeout(this.otherReasonTimers.cn);
+
+        // mark programmatic updates so other handlers don't re-enter
+        this.programmaticUpdating.vi = true;
+        this.programmaticUpdating.en = true;
+        this.programmaticUpdating.cn = true;
+
+        this.form.recruitment.isOther_reason.vi = "";
+        this.form.recruitment.isOther_reason.en = "";
+        this.form.recruitment.isOther_reason.cn = "";
+        return;
+    }
+
+    const text = value.toString().trim();
+    if (!text) return;
+
+    // debounce per-language
+    clearTimeout(this.otherReasonTimers[lang]);
+    this.otherReasonTimers[lang] = setTimeout(async () => {
+        try {
+            if (lang === "vi") {
+                const resEn = await this.translateText(text, "en");
+                const resCn = await this.translateText(text, "cn");
+
+                // mark programmatic updates to prevent re-entrancy
+                this.programmaticUpdating.en = true;
+                this.form.recruitment.isOther_reason.en = resEn || "";
+
+                this.programmaticUpdating.cn = true;
+                this.form.recruitment.isOther_reason.cn = resCn || "";
+            } else if (lang === "en") {
+                const resVi = await this.translateText(text, "vi");
+                const resCn = await this.translateText(text, "cn");
+
+                this.programmaticUpdating.vi = true;
+                this.form.recruitment.isOther_reason.vi = resVi || "";
+
+                this.programmaticUpdating.cn = true;
+                this.form.recruitment.isOther_reason.cn = resCn || "";
+            } else if (lang === "cn") {
+                const resVi = await this.translateText(text, "vi");
+                const resEn = await this.translateText(text, "en");
+
+                this.programmaticUpdating.vi = true;
+                this.form.recruitment.isOther_reason.vi = resVi || "";
+
+                this.programmaticUpdating.en = true;
+                this.form.recruitment.isOther_reason.en = resEn || "";
+            }
+        } catch (e) {
+            console.error("Translate error:", e);
+        }
+    }, this.otherReasonDebounceMs);
+        },
+        
+        onOtherReasonClear(lang) {
+            // user clicked clear on one textarea -> clear all
+             clearTimeout(this.otherReasonTimers.vi);
+    clearTimeout(this.otherReasonTimers.en);
+    clearTimeout(this.otherReasonTimers.cn);
+
+    // prevent triggering translation handlers as programmatic change
+    this.programmaticUpdating.vi = true;
+    this.programmaticUpdating.en = true;
+    this.programmaticUpdating.cn = true;
+
+    this.form.recruitment.isOther_reason.vi = "";
+    this.form.recruitment.isOther_reason.en = "";
+    this.form.recruitment.isOther_reason.cn = "";
+
+    // ensure flags are cleared quickly so next user typing is processed
+    // small timeout avoids swallowing the first real user input after clear
+    setTimeout(() => {
+        this.programmaticUpdating.vi = false;
+        this.programmaticUpdating.en = false;
+        this.programmaticUpdating.cn = false;
+    }, 50);
+
+    // also reset timer refs
+    this.otherReasonTimers.vi = null;
+    this.otherReasonTimers.en = null;
+    this.otherReasonTimers.cn = null;
+        },
         async translateApprovalRecord(text, targetLang) {
             if (!text) return '';
             
@@ -1417,27 +1519,34 @@ export default {
                 code = "secret-c";
                 break;
                 default:
-                return;
+                return sourceText;
             }
             
-            const formData = new FormData();
-            formData.append("type", code);
-            formData.append("string", sourceText);
-            
-            const response = await this.$axios.post(
-            "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
-            formData
-            );
-            
-            if (response.status === 200) {
-                if (field === "specialization") {
-                    this.form.specialization = {
-                        ...this.form.specialization,
-                        [target]: response.data,
-                    };
-                } else {
-                    this.form[field] = response.data;
+            try {
+                const formData = new FormData();
+                formData.append("type", code);
+                formData.append("string", sourceText);
+                
+                const response = await this.$axios.post(
+                "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
+                formData
+                );
+                
+                if (response.status === 200) {
+                    if (field === "specialization") {
+                        this.form.specialization = {
+                            ...this.form.specialization,
+                            [target]: response.data,
+                        };
+                    } else if (field) {
+                        this.form[field] = response.data;
+                    }
+                    return response.data;
                 }
+                return sourceText;
+            } catch (err) {
+                console.error("translateText error:", err);
+                return sourceText;
             }
         },
         async setLocale(tg) {
@@ -2167,6 +2276,8 @@ export default {
             }
         },
         populateForm(data) {
+            console.log("Populating form with data:", data);
+            
             if (!data) return;
             // 1. Parse submitter info
             const submitter = JSON.parse(data.submitter);
@@ -2300,7 +2411,7 @@ export default {
             this.form.sub_position = data.sub_pos;
             this.form.educationLevel = data.edu;
             this.form.workExperience = data.w_exp;
-            this.form.pos = data.pos;
+            this.form.pos = data.pos != null ? Number(data.pos) : "";
             this.form.cancel_date = data.cancel_date || "";
             this.form.tranlator = data.tranlator;
             this.form.safetyLevels = data.wps;
@@ -3270,19 +3381,15 @@ export default {
             });
         },
         posItems() {
-            if (!this.pos || !Array.isArray(this.pos) || this.pos.length === 0) {
-                console.warn("No position types available");
-                return [];
-            }
             
-            // Filter pos items based on suppType
-           const positions = this.pos.filter((type) => {
-               if (this.form.suppType === 1) {
-                   // For suppType 1, exclude position with id 1 (Worker)
-                   return type.id !== 1;
-               }
-               return true;
-           });
+            const positions = this.pos.filter((type) => {
+                if (this.form.suppType === 1) {
+                    return true; // Include all positions
+                } else if (this.form.suppType === 2) {
+                    return type.id !== 1;
+                }
+                return true; // Default case, include all positions
+            });
             
             return positions.map((type) => {
                 try {
@@ -3375,7 +3482,7 @@ export default {
             return this.parsedSafetyLevels;
         },
         canApproveItem() {
-             // if (!this.editData || !this.activeUser) return false;
+            // if (!this.editData || !this.activeUser) return false;
             
             // const originalStatus = this.editData.status;
             // const amendmentStatus = this.editData.status_amendent;
@@ -3388,7 +3495,7 @@ export default {
             // try {
             //     const approvalData = this.editData.approval ? JSON.parse(this.editData.approval) : [];
             //     if (!this.dataFlow || !Array.isArray(this.dataFlow)) return false;
-                
+            
             //     const statusToLevel = {
             //         'waiting_dept': 0,
             //         'waiting_div': 1,
@@ -3397,9 +3504,9 @@ export default {
             //         'waiting_ad': 4,
             //         'waiting_gm': 5
             //     };
-                
+            
             //     let currentLevel;
-                
+            
             //     if (amendmentStatus && 
             //     amendmentStatus !== 'completed' && 
             //     amendmentStatus !== 'declined') {
@@ -3408,28 +3515,28 @@ export default {
             //         // Otherwise use original status
             //         currentLevel = statusToLevel[originalStatus];
             //     }
-                
+            
             //     if (currentLevel === undefined) return false;
-                
+            
             //     const currentFlow = this.dataFlow[currentLevel];
             //     if (!currentFlow?.managers) return false;
-                
+            
             //     // Check if current user is authorized approver
             //     return currentFlow.managers.some(manager => {
             //         if (manager.empno === this.activeUser.empno) return true;
-                    
+            
             //         return manager.deputies?.some(deputy => 
             //         deputy.empno === this.activeUser.empno && 
             //         deputy.status === true
             //         );
             //     });
-                
+            
             // } catch (error) {
             //     console.error("Error in canApproveItem:", error);
             //     return false;
             // }
-
-             if (!this.editData || !this.activeUser) return false;
+            
+            if (!this.editData || !this.activeUser) return false;
             
             const originalStatus = this.editData.status;
             const amendmentStatus = this.editData.status_amendent;

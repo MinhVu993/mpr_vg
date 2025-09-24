@@ -28,7 +28,6 @@
                 <v-tabs background-color="#00838F" color="yellow" dark v-model="statusFilter">
                     <v-tab>
                         {{ $t("All") }}
-                        <!-- <v-badge :content="statusCounts.all > 9 ? '9+' : statusCounts.all.toString()":value="statusCounts.all" color=""></v-badge> -->
                     </v-tab>
                     <v-tab v-show="hasTodoData">
                         {{ $t("To Do") }}
@@ -44,7 +43,6 @@
                     </v-tab>
                     <v-tab>
                         {{ $t("Approved") }}
-                        <!-- <v-badge :content="statusCounts.completed > 9 ? '9+' : statusCounts.completed.toString()" color="" :value="statusCounts.completed" ></v-badge> -->
                     </v-tab>
                     <v-tab>
                         {{ $t("Rejected") }}
@@ -158,7 +156,7 @@
                     </span>
                 </div>
             </v-card> -->
-             <v-chip 
+            <v-chip 
             v-if="getRecruitmentStatus(item).show"
             :color="getRecruitmentStatus(item).color"
             dark
@@ -175,46 +173,46 @@
                 </span>
             </div>
         </v-chip>
-        </template>
-        <template v-slot:[`item.submitter`]="{ item }">
-            <v-btn v-if="item.submitter" color="blue" small text>
-                <v-icon left>mdi-account</v-icon>
-                {{ item.submiterInfo.name }}
-            </v-btn>
-            <br />
-            <v-btn v-if="item.submitter" color="blue" small text>
-                <v-icon left>mdi-card-account-details-outline</v-icon>
-                {{ item.submiterInfo.empno }} - {{ item.submiterInfo.dept_sumt }}
-            </v-btn>
-        </template>
-        <template v-slot:[`item.qty_req`]="{ item }">
-            <div>
-                {{ getDisplayQuantity(item.qty_req, item) }}
-                <v-tooltip bottom v-if="hasQuantityChange(item) && !isAmendmentDeniedButOriginalValid(item) && item.status_amendent === 'completed'" color="warning">
-                    <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                            <v-icon small color="warning" class="mx-1">mdi-arrow-right-bold</v-icon>
-                            <span class="font-weight-bold">{{ getChangeQuantity(item) }}</span>
-                        </span>
-                    </template>
-                    <span>{{ getChangeReason(item) }}</span>
-                </v-tooltip>
-            </div>
-        </template>
-        <template v-slot:[`item.recruited`]="{ item }">
-            <!-- {{ item.recruited || 0 }} -->
-            <div 
-            style="cursor: pointer; color: blue;" 
-            @click="showCandidatesDialog(item.candidates)">
-            {{ item.recruited || 0 }}
+    </template>
+    <template v-slot:[`item.submitter`]="{ item }">
+        <v-btn v-if="item.submitter" color="blue" small text>
+            <v-icon left>mdi-account</v-icon>
+            {{ item.submiterInfo.name }}
+        </v-btn>
+        <br />
+        <v-btn v-if="item.submitter" color="blue" small text>
+            <v-icon left>mdi-card-account-details-outline</v-icon>
+            {{ item.submiterInfo.empno }} - {{ item.submiterInfo.dept_sumt }}
+        </v-btn>
+    </template>
+    <template v-slot:[`item.qty_req`]="{ item }">
+        <div>
+            {{ getDisplayQuantity(item.qty_req, item) }}
+            <v-tooltip bottom v-if="hasQuantityChange(item) && !isAmendmentDeniedButOriginalValid(item) && item.status_amendent === 'completed'" color="warning">
+                <template v-slot:activator="{ on, attrs }">
+                    <span v-bind="attrs" v-on="on">
+                        <v-icon small color="warning" class="mx-1">mdi-arrow-right-bold</v-icon>
+                        <span class="font-weight-bold">{{ getChangeQuantity(item) }}</span>
+                    </span>
+                </template>
+                <span>{{ getChangeReason(item) }}</span>
+            </v-tooltip>
         </div>
     </template>
-    <template v-slot:[`item.resign`]="{ item }">
+    <template v-slot:[`item.recruited`]="{ item }">
+        <!-- {{ item.recruited || 0 }} -->
         <div 
-        style="cursor: pointer; color: red;" 
-        @click="showResignDialog(item.resignList)">
-        {{ item.resign || 0 }}
+        style="cursor: pointer; color: blue;" 
+        @click="showCandidatesDialog(item.candidates)">
+        {{ item.recruited || 0 }}
     </div>
+</template>
+<template v-slot:[`item.resign`]="{ item }">
+    <div 
+    style="cursor: pointer; color: red;" 
+    @click="showResignDialog(item.resignList)">
+    {{ item.resign || 0 }}
+</div>
 </template>
 <template v-slot:[`item.status`]="{ item }">
     <div class="d-flex align-center flex-wrap">
@@ -765,7 +763,7 @@ export default {
     data() {
         return {
             search: '',
-            api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
+            api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
             storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
             loading: false,
             cancelDialog: false,
@@ -786,18 +784,7 @@ export default {
             selectedYears: [new Date().getFullYear().toString()],
             yearMenu: false,
             approvalDialog: false,
-            selectedApprovalData: [],
-            approvalHeaders: [
-            { text: this.$t('Level'), value: 'level', align: 'center' },
-            { text: this.$t('Type'), value: 'type' },
-            { text: this.$t('Empno'), value: 'empno' },
-            { text: this.$t('Name'), value: 'name' },
-            { text: this.$t('Department'), value: 'dept' },
-            { text: this.$t('Status'), value: 'status', align: 'center' },
-            { text: this.$t('Return Reason'), value: 'return_reason' },
-            { text: this.$t('Deny Reason'), value: 'reason_denied' },
-            { text: this.$t('Date'), value: 'processed_at', align: 'center' }
-            ],
+                selectedApprovalData: [],
             dataFlow: '',
             selectedItemForAccept: null,
             activeUser: '',
@@ -853,12 +840,23 @@ export default {
         }
     },
     computed: {
+        approvalHeaders() {
+            return [
+            { text: this.$t('Type'), value: 'type', align: 'center', sortable: false },
+            { text: this.$t('Empno'), value: 'empno', align: 'center', width: '100px', sortable: false },
+            { text: this.$t('Name'), value: 'name', width: '150px', sortable: false },
+            { text: this.$t('Department'), value: 'dept', width: '150px', sortable: false },
+            { text: this.$t('Status'), value: 'status', align: 'center', sortable: false },
+            { text: this.$t('Reason Denied'), value: 'reason_denied', align: 'center', sortable: false },
+            { text: this.$t('Return Reason'), value: 'return_reason', align: 'center', sortable: false },
+            { text: this.$t('Approval Record'), value: 'approval_record', align: 'center', sortable: false },
+            { text: this.$t('Date'), value: 'processed_at', align: 'center', sortable: false }
+            ];
+        },
         currentApprovalData() {
             try {
                 if (!this.selectedItem?.approval) return [];
                 const approvalData = JSON.parse(this.selectedItem.approval);
-                // console.log(approvalData);
-                
                 let currentApprovalRecord = {};
                 
                 if (this.selectedItem.approval_record) {
@@ -924,15 +922,15 @@ export default {
         groupedApprovalData() {
             try {
                 const grouped = {};
-                
                 this.selectedApprovalData.forEach(item => {
-                    if (item.cycleIndex && item.cycleIndex !== 'current') {
+                    if (item.cycleIndex && 
+                    item.cycleIndex !== 'current' && 
+                    typeof item.cycleIndex === 'number') { // Đảm bảo là số, không phải string
+                        
                         const cycleIndex = item.cycleIndex - 1;
                         if (!grouped[cycleIndex]) {
                             grouped[cycleIndex] = [];
                         }
-                        
-                        // Parse return_reason
                         let returnReasonText = '';
                         if (item.return_reason) {
                             try {
@@ -944,7 +942,6 @@ export default {
                             }
                         }
                         
-                        // Parse reason_denied
                         let reasonDeniedText = '';
                         if (item.reason_denied) {
                             try {
@@ -965,6 +962,7 @@ export default {
                     }
                 });
                 
+                // Sắp xếp từng nhóm theo level
                 Object.keys(grouped).forEach(cycleIndex => {
                     grouped[cycleIndex].sort((a, b) => a.level - b.level);
                 });
@@ -1332,6 +1330,27 @@ export default {
         },
     },
     methods: {
+        getStatusTranslationKey(status) {
+            const statusMap = {
+                'waiting': 'waiting',
+                'waiting_dept': 'Waiting for Department',
+                'waiting_div': 'Waiting for Division', 
+                'waiting_hr_rec_sf': 'Waiting for HR Recruitment',
+                'waiting_hr': 'Waiting for HR',
+                'waiting_ad': 'Waiting for Admin',
+                'waiting_gm': 'Waiting for General Manager',
+                'approved': 'approved',
+                'completed': 'completed',
+                'declined': 'declined',
+                'rejected': 'rejected',
+                'cancelled': 'cancelled',
+                'returned': 'returned',
+                'processing': 'processing',
+                'pending': 'pending'
+            };
+            
+            return statusMap[status] || status || 'waiting';
+        },
         openOtherReasonDialog(item) {
             try {
                 this.otherReasonText = this.getLocalizedOtherReason(item.isOther_reason) || '';
@@ -1612,7 +1631,6 @@ export default {
                 if (response.data.success) {
                     // Refresh data after update
                     await this.getAllData();
-                    console.log('Status updated to declined successfully');
                 } else {
                     console.error('Failed to update status:', response.data.message);
                 }
@@ -2493,12 +2511,12 @@ export default {
         },
         getApprovalLevelName(type) {
             const types = {
-                'dept': this.$t('Dept'),
-                'div': this.$t('Div'),
-                'hr_rec_sf': this.$t('Hr Rec SF'),
-                'hr': this.$t('Hr'),
-                'ad': this.$t('Ad'), 
-                'gm': this.$t('Gm')
+                'dept': this.$t('Department'),
+                'div': this.$t('Division'),
+                'hr_rec_sf': this.$t('HR Rec SF'),
+                'hr': this.$t('HR'),
+                'ad': this.$t('AD'), 
+                'gm': this.$t('GM')
             };
             return types[type] || type;
         },
@@ -3407,7 +3425,7 @@ export default {
         
         // Thiết lập tab mặc định sau khi dữ liệu đã được tải
         this.$nextTick(() => {
-            this.statusFilter = this.hasTodoData ? 1 : 0; // Trực tiếp thiết lập
+            this.statusFilter = this.hasTodoData ? 1 : 0; 
         });
         
     },
@@ -3548,7 +3566,20 @@ export default {
             "Resign Listing Details":"Resign Listing Details",
             "Cancelled":"Cancelled",
             "days": "days",
-            "remaining": "remaining"
+            "remaining": "remaining",
+            "Type": "Type",
+            "Department": "Department",
+            "Status": "Status",
+            "Reason Denied": "Reason Denied",
+            "Return Reason": "Return Reason", 
+            "Approval Record": "Approval Record",
+            "Date": "Date",
+            "Division": "Division",
+            "HR Rec SF": "HR Rec SF",
+            "HR": "HR",
+            "AD": "AD",
+            "GM": "GM",
+           "Cycle": "Cycle"
             
         },
         "vi": {
@@ -3608,7 +3639,42 @@ export default {
             "Resign Listing Details":"Chi tiết danh sách nghỉ việc",
             "Cancelled":"Đã hủy",
             "days": "ngày",
-            "remaining": "còn lại"
+            "remaining": "còn lại",
+            "Type": "Cấp phê duyệt",
+            "Department": "Bộ phận",
+            "Status": "Trạng thái",
+            "Reason Denied": "Lý do từ chối",
+            "Return Reason": "Lý do trả về",
+            "Approval Record": "Ghi chú phê duyệt",
+            "Date": "Ngày",
+            "Type": "Cấp phê duyệt",
+            "Department": "Bộ phận",
+            "Status": "Trạng thái",
+            "Reason Denied": "Lý do từ chối",
+            "Return Reason": "Lý do trả về",
+            "Approval Record": "Ghi chú phê duyệt",
+            "Date": "Ngày",
+            "Division": "Cấp sở",
+            "HR Rec SF": "Nhân viên tuyển dụng",
+            "HR": "Chủ quản HR",
+            "AD": "Chủ quản AD",
+            "GM": "Tổng giám đốc",
+            "waiting": "Đang chờ",
+            "Waiting for Department": "Chờ phòng ban",
+            "Waiting for Division": "Chờ bộ phận", 
+            "Waiting for HR Recruitment": "Chờ tuyển dụng HR",
+            "Waiting for HR": "Chờ nhân sự",
+            "Waiting for Admin": "Chờ quản trị",
+            "Waiting for General Manager": "Chờ tổng giám đốc",
+            "approved": "Đã phê duyệt",
+            "completed": "Hoàn thành",
+            "declined": "Từ chối",
+            "rejected": "Bị từ chối",
+            "cancelled": "Đã hủy",
+            "returned": "Trả lại",
+            "processing": "Đang xử lý",
+            "pending": "Chờ xử lý",
+            "Cycle": "Chu kỳ"
         },
         "cn": {
             "ID": "表單編號",
@@ -3667,7 +3733,44 @@ export default {
             "Resign Listing Details": "离职列表详情",
             "Cancelled": "已取消",
             "days": "天",
-            "remaining": "剩餘天數"
+            "remaining": "剩餘天數",
+            "Type": "审批级别",
+            "Department": "部门",
+            "Status": "状态",
+            "Reason Denied": "拒绝原因",
+            "Return Reason": "退回原因",
+            "Approval Record": "审批记录",
+            "Date": "日期",
+            "Type": "审批级别",
+            "Department": "部籍",
+            "Status": "状态",
+            "Reason Denied": "拒绝原因",
+            "Return Reason": "退回原因",
+            "Approval Record": "审批记录",
+            "Date": "日期",
+            "Division": "處籍",
+            "HR Rec SF": "HR招募組",
+            "HR": "HR審核",
+            "AD": "AD審核",
+            "GM": "GM審核",
+            "waiting": "等待中",
+            "Waiting for Department": "等待部門審核",
+            "Waiting for Division": "等待處級審核",
+            "Waiting for HR Recruitment": "等待人事招聘組審核",
+            "Waiting for HR": "等待人事審核",
+            "Waiting for Admin": "等待行政審核",
+            "Waiting for General Manager": "等待總經理審核",
+            
+            "approved": "已核准",
+            "completed": "已完成",
+            "declined": "已駁回",
+            "rejected": "否決",
+            "cancelled": "已取消",
+            
+            "returned": "已退回",
+            "processing": "處理中",
+            "pending": "待處理",
+              "Cycle": "週期"
         }
     }  
 </i18n>       
