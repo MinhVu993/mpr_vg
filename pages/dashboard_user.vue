@@ -459,7 +459,7 @@
                             </template>
                             <template v-slot:[`item.status`]="{ item }">
                                 <v-chip small :color="getApprovalStatusColor(item.status)" dark label>
-                                    {{ $t(item.status || 'waiting') }}
+                                    {{ (item.status || 'waiting') }}
                                 </v-chip>
                             </template>
                             <template v-slot:[`item.reason_denied`]="{ item }">
@@ -854,7 +854,7 @@ export default {
             ];
         },
         currentApprovalData() {
-            try {
+             try {
                 if (!this.selectedItem?.approval) return [];
                 const approvalData = JSON.parse(this.selectedItem.approval);
                 let currentApprovalRecord = {};
@@ -872,30 +872,19 @@ export default {
                 .filter(level => level.approver && level.approver.empno)
                 .map((level, index) => {
                     const recordKey = level.type;
-                    const approvalRecord = currentApprovalRecord[recordKey] || '';
+                    const rawApprovalRecord = currentApprovalRecord[recordKey] || '';
+                    const approvalRecord = this.getLocalizedText(rawApprovalRecord);
                     
                     // Parse return_reason
                     let returnReasonText = '';
                     if (level.return_reason) {
-                        try {
-                            const parsedReason = JSON.parse(level.return_reason);
-                            const currentLocale = this.$i18n.locale;
-                            returnReasonText = parsedReason[currentLocale] || parsedReason.vi || parsedReason.cn || '';
-                        } catch (e) {
-                            returnReasonText = level.return_reason;
-                        }
+                        returnReasonText = this.getLocalizedText(level.return_reason);
                     }
                     
                     // Parse reason_denied
                     let reasonDeniedText = '';
                     if (level.reason_denied) {
-                        try {
-                            const parsedDenied = JSON.parse(level.reason_denied);
-                            const currentLocale = this.$i18n.locale;
-                            reasonDeniedText = parsedDenied[currentLocale] || parsedDenied.vi || parsedDenied.cn || '';
-                        } catch (e) {
-                            reasonDeniedText = level.reason_denied;
-                        }
+                        reasonDeniedText = this.getLocalizedText(level.reason_denied);
                     }
                     
                     return {
@@ -920,7 +909,7 @@ export default {
             
         },
         groupedApprovalData() {
-            try {
+             try {
                 const grouped = {};
                 this.selectedApprovalData.forEach(item => {
                     if (item.cycleIndex && 
@@ -931,32 +920,15 @@ export default {
                         if (!grouped[cycleIndex]) {
                             grouped[cycleIndex] = [];
                         }
-                        let returnReasonText = '';
-                        if (item.return_reason) {
-                            try {
-                                const parsedReason = JSON.parse(item.return_reason);
-                                const currentLocale = this.$i18n.locale;
-                                returnReasonText = parsedReason[currentLocale] || parsedReason.vi || parsedReason.cn || '';
-                            } catch (e) {
-                                returnReasonText = item.return_reason;
-                            }
-                        }
-                        
-                        let reasonDeniedText = '';
-                        if (item.reason_denied) {
-                            try {
-                                const parsedDenied = JSON.parse(item.reason_denied);
-                                const currentLocale = this.$i18n.locale;
-                                reasonDeniedText = parsedDenied[currentLocale] || parsedDenied.vi || parsedDenied.cn || '';
-                            } catch (e) {
-                                reasonDeniedText = item.reason_denied;
-                            }
-                        }
+                        const returnReasonText = item.return_reason ? this.getLocalizedText(item.return_reason) : '';
+                        const reasonDeniedText = item.reason_denied ? this.getLocalizedText(item.reason_denied) : '';
+                        let approvalRecordText = item.approval_record ? this.getLocalizedText(item.approval_record) : '';
                         
                         grouped[cycleIndex].push({
                             ...item,
                             return_reason: returnReasonText,
                             reason_denied: reasonDeniedText,
+                            approval_record: approvalRecordText,
                             processed_at: item.processed_at ? this.formatDate(item.processed_at) : ''
                         });
                     }
@@ -1330,6 +1302,72 @@ export default {
         },
     },
     methods: {
+        getLocalizedText(raw) {
+            try {
+                if (!raw && raw !== 0) return '';
+                const locale = this.$i18n?.locale || (localStorage.getItem('preferred-locale') || 'en');
+                
+                // If already object or JSON with language keys
+                if (typeof raw === 'object') {
+                    return raw[locale] || raw.vi || raw.en || raw.cn || raw['zh-tw'] || String(Object.values(raw)[0] || '');
+                }
+                const s = String(raw).trim();
+                if (!s) return '';
+                
+                // If JSON string with language keys
+                if (s.startsWith('{')) {
+                    try {
+                        const obj = JSON.parse(s);
+                        return obj[locale] || obj.vi || obj.en || obj.cn || obj['zh-tw'] || '';
+                    } catch (e) {
+                        // fallthrough to plain string
+                    }
+                }
+                
+                // plain string -> check cache or request background translation
+                if (!this._translateCache) this._translateCache = new Map();
+                const cacheKey = `${s}::${locale}`;
+                if (this._translateCache.has(cacheKey)) return this._translateCache.get(cacheKey);
+                
+                // Heuristic: if text already likely in target language, avoid API
+                const targetLang = (locale === 'cn' ? 'zh-tw' : locale);
+                const hasCJK = /[\u4e00-\u9fff]/.test(s);
+                const hasVietnameseDiacritics = /[àáảãạăắằẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳỵỷỹý]/i.test(s);
+                const isAscii = /^[\x00-\x7F]*$/.test(s);
+                
+                if ((hasCJK && targetLang === 'zh-tw') || (hasVietnameseDiacritics && targetLang === 'vi') || (isAscii && targetLang === 'en')) {
+                    this._translateCache.set(cacheKey, s);
+                    return s;
+                }
+                
+                // Fire-and-forget translate request
+                (async () => {
+                    try {
+                        const translateApi = 'http://gmo021.cansportsvg.com:49200/api/translate';
+                        const payload = {
+                            text: s,
+                            targetLangs: [targetLang],
+                            model: 'qwen3-8b',
+                            source: 'hrm'
+                        };
+                        const res = await this.$axios.post(translateApi, payload);
+                        const translations = res?.data?.data?.translation || {};
+                        const translated = translations[targetLang] || '';
+                        this._translateCache.set(cacheKey, translated || s);
+                        this.$forceUpdate();
+                    } catch (e) {
+                        console.error('Translation API error', e);
+                        this._translateCache.set(cacheKey, s);
+                    }
+                })();
+                
+                // fallback: return original now
+                return s;
+            } catch (e) {
+                console.error('getLocalizedText error', e);
+                return String(raw || '');
+            }
+        },
         getStatusTranslationKey(status) {
             const statusMap = {
                 'waiting': 'waiting',
@@ -1380,79 +1418,83 @@ export default {
         },
         getLocalizedOtherReason(otherReason) {
             try {
-                // Nếu otherReason là string JSON
+                // Normalize to object if JSON string
                 let obj = otherReason;
                 if (typeof otherReason === 'string') {
-                    otherReason = otherReason.trim();
-                    if (!otherReason) return '';
-                    if (otherReason.startsWith('{')) {
-                        obj = JSON.parse(otherReason);
+                    const trimmed = otherReason.trim();
+                    if (!trimmed) return '';
+                    if (trimmed.startsWith('{')) {
+                        try {
+                            obj = JSON.parse(trimmed);
+                        } catch (e) {
+                            // not JSON, return raw string
+                            return trimmed;
+                        }
                     } else {
-                        return otherReason || '';
+                        return trimmed;
                     }
                 }
                 if (!obj || typeof obj !== 'object') return obj || '';
-                
-                const langs = ['vi', 'en', 'cn'];
+
+                const supported = ['vi', 'en', 'cn'];
                 const locale = (this.$i18n && this.$i18n.locale) ? this.$i18n.locale : (localStorage.getItem('preferred-locale') || 'en');
-                
-                // If already has value for current locale, return it
-                if (obj[locale] && obj[locale].trim()) return obj[locale];
-                
+
+                // if text already present for locale return it
+                if (obj[locale] && String(obj[locale]).trim()) return String(obj[locale]);
+
                 // find a source language with text
-                const sourceLang = langs.find(k => obj[k] && obj[k].trim());
-                const sourceText = (sourceLang && obj[sourceLang]) ? obj[sourceLang] : '';
+                const sourceLang = supported.find(k => obj[k] && String(obj[k]).trim());
+                const sourceText = (sourceLang && obj[sourceLang]) ? String(obj[sourceLang]).trim() : '';
                 if (!sourceText) return '';
-                
-                // cache
+
+                // prepare cache
                 if (!this._otherReasonCache) this._otherReasonCache = new Map();
                 const cacheKey = JSON.stringify(obj);
                 if (!this._otherReasonCache.has(cacheKey)) {
+                    // seed cache with original object values
                     this._otherReasonCache.set(cacheKey, Object.assign({}, obj));
                 }
-                const cached = this._otherReasonCache.get(cacheKey);
-                if (cached[locale] && cached[locale].trim()) return cached[locale];
-                
-                const translate = async (text, target) => {
-                    let code = "";
-                    switch (target) {
-                        case "vi": code = "secret-v"; break;
-                        case "en": code = "secret-e"; break;
-                        case "cn": code = "secret-c"; break;
-                        default: return "";
-                    }
-                    try {
-                        const formData = new FormData();
-                        formData.append("type", code);
-                        formData.append("string", text);
-                        const response = await this.$axios.post("http://gmo021.cansportsvg.com/public/gg-trans/curl.php", formData);
-                        if (response && response.status === 200) {
-                            return (typeof response.data === 'string') ? response.data : (response.data?.result || '');
-                        }
-                    } catch (e) {
-                        console.error("translate error:", e);
-                    }
-                    return "";
-                };
-                
+                const cached = this._otherReasonCache.get(cacheKey) || {};
+                if (cached[locale] && String(cached[locale]).trim()) return String(cached[locale]);
+
+                // background async translation using new API
                 (async () => {
                     try {
-                        const missing = langs.filter(k => !cached[k] || !cached[k].toString().trim());
-                        for (const tgt of missing) {
-                            if (tgt === sourceLang) continue;
-                            const tr = await translate(sourceText, tgt);
-                            if (tr) {
-                                const cur = this._otherReasonCache.get(cacheKey) || {};
-                                cur[tgt] = tr;
-                                this._otherReasonCache.set(cacheKey, cur);
-                            }
-                        }
+                        const translateApi = 'http://gmo021.cansportsvg.com:49200/api/translate';
+                        // Build list of target languages to request (map 'cn' -> 'zh-tw')
+                        const missing = supported
+                            .filter(k => !cached[k] || !String(cached[k]).trim())
+                            .filter(k => k !== sourceLang);
+                        if (missing.length === 0) return;
+
+                        const targetLangs = Array.from(new Set(missing.map(k => (k === 'cn' ? 'zh-tw' : k))));
+                        const payload = {
+                            text: sourceText,
+                            targetLangs,
+                            model: 'qwen3-8b',
+                            source: 'hrm'
+                        };
+
+                        const res = await this.$axios.post(translateApi, payload);
+                        const translations = res?.data?.data?.translation || {};
+
+                        const cur = this._otherReasonCache.get(cacheKey) || {};
+                        // map returned keys back to app keys (zh-tw -> cn)
+                        Object.keys(translations).forEach(key => {
+                            const appKey = (key === 'zh-tw') ? 'cn' : key;
+                            cur[appKey] = translations[key];
+                        });
+                        // ensure we keep existing originals
+                        this._otherReasonCache.set(cacheKey, Object.assign({}, cached, cur));
+                        // trigger update so template re-renders
                         this.$forceUpdate();
                     } catch (e) {
-                        console.error("background translate failed:", e);
+                        // swallow to avoid UI breakage
+                        console.error('Translation API error', e);
                     }
                 })();
-                
+
+                // return sourceText as fallback now
                 return sourceText;
             } catch (error) {
                 console.error('Error getting localized other reason:', error);

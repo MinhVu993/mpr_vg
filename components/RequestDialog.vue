@@ -8,704 +8,695 @@
                 <v-toolbar-title>{{ dialogTitle }}</v-toolbar-title>
                 <v-spacer></v-spacer>
                 <v-toolbar-items>
-                    <v-btn @click="setLocale('vi')" text>VI</v-btn>
-                    <v-btn @click="setLocale('en')" text>EN</v-btn>
-                    <v-btn @click="setLocale('cn')" text class="mr-5">中文</v-btn>
-                </v-toolbar-items>
-            </v-toolbar>
-            <!-- <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :key="flowKey" :appCode="form.suppType === 1 ? 'mpr_flow2' : 'mpr'" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow" class="mb-2" ></VfaAppFlow> -->
-            <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :locale="$i18n.locale" :key="flowKey" :appCode="getAppCode" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow" class="mb-2" ></VfaAppFlow>
-            
-            <v-app-bar v-if="showFlowSign" class="flow-sign-container mb-3" flat dense >
-                <v-icon color="info" class="mr-2">mdi-information-outline</v-icon>
-                <div class="flow-sign-text text-subtitle-2">
-                    {{ getCurrentFlowSign }}
-                </div>
-            </v-app-bar>
-            <v-row>
-                <v-col cols="12" md="2">
-                    <v-autocomplete class="ml-6 mb-3" :key="autocompleteKey"  v-if="isChange" v-model="reqId" :items="item_req_id" :label="$t('Req ID')" outlined dense :rules="[rules.required]" required hide-details @change="getDataByReqId" item-text="text" item-value="id" background-color="#fff9c4" ></v-autocomplete>
-                </v-col>
-            </v-row>
-            <v-card-text class="approval-history-section"  v-if="showAmendmentSection" >
-                <v-row style="background-color: #fff9c4;">
-                    <v-col cols="12" md="4">
-                        <v-combobox 
-                        :disabled="disAmendent"  
-                        v-model="form.changeReason" 
-                        :items="formattedChangeReasons"
-                        item-text="text"
-                        item-value="id"
-                        return-object
-                        :label="$t('Change Reason')" 
-                        outlined 
-                        dense 
-                        hide-details 
-                        clearable
-                        ></v-combobox>
-                    </v-col>
-                    <v-col cols="12" md="2">
-                        <v-text-field v-if="showChangeQuantityField" 
-                        :disabled="disAmendent"  
-                        v-model="form.changeQty" 
-                        :label="$t('Change quantity') + ` (${$t('Min')}: ${editData?.recruited || 0}, ${$t('Max')}: ${form.quantity || 0})`" 
-                        type="number" 
-                        :min="editData?.recruited || 0" 
-                        :max="form.quantity || 0"
-                        outlined 
-                        dense 
-                        :rules="[minQuantityRule, maxQuantityRule]"
-                        :error-messages="changeQtyError"
-                        persistent-hint
-                        hide-details="auto"
-                        :hint="getChangeQuantityHint"
-                        ></v-text-field>
-                    </v-col>
-                    <v-col cols="12" class="equal-height" v-show="showLanguageAndComputerSkills">
-                        <div class="mb-4">
-                            <div class="d-flex align-center mb-2">
-                                <v-icon left color="primary">mdi-translate</v-icon>
-                                <div class="text-subtitle-1 font-weight-medium">
-                                    {{ $t("Foreign Language Proficiency") }}
-                                </div>
-                            </div>
-                            <v-row class="ml-1">
-                                <v-col cols="12" md="4">
-                                    <v-radio-group v-model="form.either_change" row dense hide-details >
-                                        <div class="subtitle-2">{{ $t("Either:") }}</div>
-                                        <v-radio :disabled="disAmendent" v-for="(level, index) in getLanguageLevels('either')" :key="'either-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4"></v-radio>
-                                    </v-radio-group>
-                                </v-col>
-                                
-                                <v-col cols="12" md="4">
-                                    <v-radio-group v-model="form.english_change" row hide-details dense >
-                                        <div class="subtitle-2">{{ $t("English:") }}</div>
-                                        <v-radio :disabled="disAmendent" v-for="(level, index) in getLanguageLevels('en')" :key="'english-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4"></v-radio>
-                                    </v-radio-group>
-                                </v-col>
-                                <v-col cols="12" md="4">
-                                    <v-radio-group v-model="form.chinese_change" row hide-details dense >
-                                        <div class="subtitle-2">{{ $t("Chinese:") }}</div>
-                                        <v-radio :disabled="disAmendent" v-for="(level, index) in getLanguageLevels('cn')" :key="'chinese-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4"></v-radio>
-                                    </v-radio-group>
-                                </v-col>
-                                <v-col cols="12" md="4">
-                                    <v-checkbox :disabled="disAmendent" v-model="form.tranlator_change" :label="$t('Translator')" hide-details class="mr-4"></v-checkbox>
-                                </v-col>
-                            </v-row>
-                        </div>
-                        <div class="mb-4">
-                            <div class="d-flex align-center mb-2">
-                                <v-icon left color="primary">mdi-desktop-classic</v-icon>
-                                <div class="text-subtitle-1 font-weight-medium">
-                                    {{ $t("Computer Skills") }}
-                                </div>
-                            </div>
-                            
-                            <v-row class="ml-2">
-                                <v-col cols="12" class="d-flex flex-wrap py-0">
-                                    <v-checkbox :disabled="disAmendent" v-for="skill in ['Word', 'Excel', 'Access', 'PowerPoint', 'Internet', 'None', 'Other']" :key="skill" v-model="form.computerSkills_change" :value="skill" :label="$t(skill)" dense hide-details class="mr-4 mb-1 mt-2"></v-checkbox>
-                                </v-col>
-                                <v-textarea :disabled="disAmendent" v-if="form.computerSkills_change.includes('Other')" v-model="form.otherComputerSkills_change" :label="$t('Other Skills')" dense outlined class="mt-5" rows="1" hide-details auto-grow></v-textarea>
-                            </v-row>
-                        </div>
-                    </v-col>
-                    <v-col cols="12" >
-                        <v-textarea :disabled="disAmendent" v-model="form.remark_change" outlined :label="$t('Change remark')" rows="1" hide-details auto-grow></v-textarea>
-                    </v-col>
-                </v-row>
-            </v-card-text>
-            <v-card-text>
-                <v-row>
-                    <v-col cols="12" md="2" >
-                        <v-text-field disabled :value="displayReqId" :label="$t('Req ID')" outlined dense hide-details ></v-text-field>
-                    </v-col>
-                    <v-col cols="1">
-                        <v-autocomplete :disabled="formDisabled" v-model="user.div" :items="itemsDiv" :label="$t('Division') " outlined :required="true" :rules="[rules.required]" dense hide-details ></v-autocomplete>
-                    </v-col>
-                    
-                    <v-col cols="2" md="2">
-                        <v-autocomplete :disabled="formDisabled" v-model="user.dept" :items="itemsDept" :label="$t('Dept') " outlined dense :rules="[rules.required]" required hide-details clearable ></v-autocomplete>
-                    </v-col>
-                    <v-col cols="1" md="2">
-                        <v-autocomplete 
-                        :disabled="formDisabled" 
-                        v-model="user.unit" 
-                        :items="filteredUnitItems"
-                        item-text="display"
-                        item-value="dept_code"
-                        :label="$t('Unit')" 
-                        outlined 
-                        dense 
-                        :rules="[rules.required]" 
-                        required 
-                        hide-details 
-                        clearable
-                        :no-data-text="!user.div || !user.dept ? $t('Please select Division and Department first') : $t('No data available')"
-                        ></v-autocomplete>
-                    </v-col>
-                    
-                    <v-col cols="12" md="2">
-                        <v-autocomplete :disabled="formDisabled" v-model="form.suppType" :items="suppTypeItems" :label="$t('Supp.Type')" :rules="[rules.required]" required item-text="name" item-value="id" outlined dense hide-details clearable ></v-autocomplete>
-                    </v-col>
-                    <v-col cols="12" md="1">
-                        <v-autocomplete :disabled="formDisabled" v-model="form.pos" :items="posItems" :label="$t('Type Apply')" item-text="name" :rules="[rules.required]" required item-value="id" outlined dense hide-details clearable @change="handleTypeApplyChange" ></v-autocomplete>
-                    </v-col>
-                    <v-col cols="12" md="1" v-if="isHrManager && ![1,3].includes(Number(form.pos))">
-                        <v-autocomplete 
-                        background-color="#fff9c4" 
-                        color="#000000" 
-                        v-model="form.sub_position" 
-                        :items="sub_positionItems" 
-                        item-text="name" 
-                        :disabled="!!editData?.sub_pos" 
-                        item-value="id" 
-                        :label="$t('Sub Position')" 
-                        outlined 
-                        dense 
-                        hide-details 
-                        clearable
-                        ></v-autocomplete>
-                    </v-col>
-                    <v-col cols="3" md="2" >
-                        <!-- <v-text-field :disabled="formDisabled || !showLevelField" v-model="form.level" :label="$t('Level')" outlined dense hide-details ></v-text-field> -->
-                        <v-autocomplete
-                        :disabled="formDisabled || !showLevelField"
-                        v-model="form.level"
-                        :items="dutyItems"
-                        item-text="label"
-                        item-value="value"
-                        :label="$t('Level')"
-                        outlined
-                        dense
-                        hide-details
-                        clearable
-                        ></v-autocomplete>
-                    </v-col>
-                    
-                </v-row>
-                <v-row>
-                    <v-col cols="1" md="1">
-                        <v-text-field :disabled="formDisabled" v-model="form.quantity" :label="$t('Quantity request') " type="number" min="1" :rules="[rules.required]" outlined dense hide-details="auto" required @input="(val) => (form.quantity = val > 0 ? val : '')" ></v-text-field>
-                    </v-col>
-                    <v-col cols="2" md="2">
-                        <v-menu v-model="dateRequestMenu" :close-on-content-click="false" transition="scale-transition" offset-y>
-                            <template v-slot:activator="{ on, attrs }">
-                                <v-text-field
-                                :disabled="formDisabled"
-                                v-model="form.recruitment.requestDate"
-                                :label="$t('Req.date')"
-                                readonly
-                                outlined
-                                dense
-                                v-bind="attrs"
-                                v-on="on"
-                                hide-details
-                                prepend-inner-icon="mdi-calendar"
-                                ></v-text-field>
-                            </template>
-                            <v-date-picker
-                            v-model="form.recruitment.requestDate"
-                            @input="dateRequestMenu = false"
-                            :min="getEffectiveDate()"
-                            ></v-date-picker>
-                        </v-menu>
-                    </v-col>
-                    <v-col cols="3" md="4">
-                        <v-card outlined :class="{ 'error--text': formErrors.recruitment }" class="pa-2 custom-card-hover" >
-                            <v-row dense>
-                                <v-col cols="12" class="d-flex flex-wrap align-center">
-                                    <span class="font-weight-medium">{{ $t("Reason") }}</span>
-                                    <v-radio-group :disabled="formDisabled" v-model="form.recruitment.reason" row dense hide-details :rules="[rules.required]" required>
-                                        <v-radio v-for="reason in dataRecruitmentReason" 
-                                        :key="reason.id" 
-                                        :value="reason.id" 
-                                        :label="getReasonLabel(reason)" 
-                                        dense 
-                                        class="mr-2" 
-                                        @change="handleReasonChange(reason.id)">
-                                    </v-radio>
-                                </v-radio-group>
-                            </v-col>
-                            <v-col cols="12" v-if="form.recruitment.reason === 2"> <!-- For2-->
-                                <v-text-field :rules="[rules.required]" required :disabled="formDisabled" v-model="form.recruitment.oldempno" :label="$t('Old empno')" outlined dense hide-details></v-text-field>
-                            </v-col>
-                            <v-col cols="12" v-if="form.recruitment.reason === 3"> <!-- For other -->
-                                <v-card outlined class="pa-0">
-                                    <v-tabs v-model="otherReasonTab" background-color="#01a6be" dark dense>
-                                        <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> Tiếng Việt </v-tab>
-                                        <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> English </v-tab>
-                                        <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> 中文 </v-tab>
-                                    </v-tabs>
-                                    
-                                    <v-tabs-items v-model="otherReasonTab" class="mt-2">
-                                        <v-tab-item>
-                                            <v-textarea
-                                            :disabled="formDisabled"
-                                            v-model="form.recruitment.isOther_reason.vi"
-                                            @input="onOtherReasonInput('vi', $event)"
-                                            @click:clear="onOtherReasonClear('vi')"
-                                            outlined
-                                            dense
-                                            auto-grow
-                                            rows="1"
-                                            placeholder="Nhập lý do bằng tiếng Việt..."
-                                            hide-details
-                                            clearable
-                                            />
-                                        </v-tab-item>
-                                        
-                                        <v-tab-item>
-                                            <v-textarea
-                                            :disabled="formDisabled"
-                                            v-model="form.recruitment.isOther_reason.en"
-                                            @input="onOtherReasonInput('en', $event)"
-                                            @click:clear="onOtherReasonClear('en')"
-                                            outlined
-                                            dense
-                                            auto-grow
-                                            rows="1"
-                                            hide-details
-                                            placeholder="Enter reason in English..."
-                                            clearable
-                                            />
-                                        </v-tab-item>
-                                        
-                                        <v-tab-item>
-                                            <v-textarea
-                                            :disabled="formDisabled"
-                                            v-model="form.recruitment.isOther_reason.cn"
-                                            @input="onOtherReasonInput('cn', $event)"
-                                            @click:clear="onOtherReasonClear('cn')"
-                                            outlined
-                                            dense
-                                            auto-grow
-                                            rows="1"
-                                            hide-details
-                                            placeholder="用中文输入原因..."
-                                            clearable
-                                            />
-                                        </v-tab-item>
-                                    </v-tabs-items>
-                                </v-card>
-                            </v-col>
-                        </v-row>
-                    </v-card>
-                </v-col>
-                <v-col cols="12" md="5">
-                    <v-file-input
-                    :disabled="formDisabled"
-                    v-model="form.attachments.dimissionList"
-                    :label="$t('Dimission list file')"
-                    outlined
-                    dense
-                    :error="form.recruitment.reason === 2"
-                    :required="form.recruitment.reason === 2"
-                    hide-details="auto"
-                    @change="previewFile('dimissionList', $event)"
-                    prepend-inner-icon="mdi-file-account"
-                    :clearable="true"
-                    :enablad="form.recruitment.reason === 2"
-                    accept=".doc,.docx,.pdf,.xls,.xlsx"
-                    ></v-file-input>
-                    <div v-show=" filePreview.dimissionList && form.recruitment.reason === 2 " class="file-preview mt-2" >
-                        <v-chip small close @click:close="clearFile('dimissionList')" class="mb-1" >
-                            <v-icon left small>{{ getFileIcon( form.attachments.dimissionList?.type || getFileTypeFromName(form.attachments.dimissionList) ) }}</v-icon>
-                            {{ getFileName("dimissionList") }}
-                        </v-chip>
-                        <div class="d-flex align-center justify-space-between">
-                            <span class="caption grey--text">{{
-                                form.attachments.dimissionList_size || ""
-                            }}</span>
-                            <v-btn  x-small text color="primary" @click="openFile('dimissionList')" > <v-icon small left>mdi-eye</v-icon> {{ $t("View") }} </v-btn>
-                            <v-btn  :disabled="formDisabled" x-small text color="error" @click="clearFile('dimissionList')" > <v-icon small left>mdi-delete</v-icon> {{ $t("Delete") }} </v-btn>
-                        </div>
+                    <!-- <v-btn @click="handleLanguageChange('vi')" text>VI</v-btn>
+                    <v-btn @click="handleLanguageChange('cn')" text>中文</v-btn>
+                    <v-btn @click="handleLanguageChange('en')" text class="mr-5" >EN</v-btn > -->
+                        <v-btn @click="setLocale('vi')" text>VI</v-btn>
+                        <v-btn @click="setLocale('en')" text>EN</v-btn>
+                        <v-btn @click="setLocale('cn')" text class="mr-5">中文</v-btn>
+                    </v-toolbar-items>
+                </v-toolbar>
+                <!-- <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :key="flowKey" :appCode="form.suppType === 1 ? 'mpr_flow2' : 'mpr'" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow" class="mb-2" ></VfaAppFlow> -->
+                <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :locale="$i18n.locale" :key="flowKey" :appCode="getAppCode" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow" class="mb-2" ></VfaAppFlow>
+                
+                <v-app-bar v-if="showFlowSign" class="flow-sign-container mb-3" flat dense >
+                    <v-icon color="info" class="mr-2">mdi-information-outline</v-icon>
+                    <div class="flow-sign-text text-subtitle-2">
+                        {{ getCurrentFlowSign }}
                     </div>
-                </v-col>
-            </v-row>
-            <v-row>
-                <v-col cols="12" sm="6" md="2">
-                    <v-autocomplete :disabled="formDisabled" v-model="form.educationLevel" :items="educationLevelItems" :rules="[rules.required]" required :label="$t('Education Level')" item-text="name" item-value="id" outlined dense hide-details clearable ></v-autocomplete>
-                </v-col>
-                <v-col cols="12" sm="6" md="8">
-                    <v-textarea :disabled="formDisabled" auto-grow v-model="localizedSpecialization" :rules="[rules.required]" required
-                    :placeholder="$t('Professional qualifications')" :label="$t('Professional qualifications')"
-                    outlined dense rows="1" hide-details @input="handleSpecializationInput"></v-textarea>
-                </v-col>
-                <v-col cols="12" sm="6" md="2">
-                    <v-autocomplete :disabled="formDisabled" v-model="form.workExperience" :items="workExpItems" :rules="[rules.required]" required :label="$t('Work Experience')" item-text="name" item-value="id" outlined dense hide-details clearable ></v-autocomplete>
-                </v-col>
-            </v-row>
-            <div class="mt-2">
+                </v-app-bar>
                 <v-row>
-                    <v-col cols="12" :md="getJobDescColWidth">
-                        <v-textarea :disabled="formDisabled" auto-grow v-model="form.jobDesc" outlined :label="$t('Basic Job Description')" :rules="[rules.required]" dense required rows="1" hide-details ></v-textarea>
+                    <v-col cols="12" md="2">
+                        <v-autocomplete class="ml-6 mb-3" :key="autocompleteKey"  v-if="isChange" v-model="reqId" :items="item_req_id" :label="$t('Req ID')" outlined dense :rules="[rules.required]" required hide-details @change="getDataByReqId" item-text="text" item-value="id" background-color="#fff9c4" ></v-autocomplete>
                     </v-col>
-                    <v-col cols="12" md="2" v-if="form.pos !== 1">
+                </v-row>
+                <v-card-text class="approval-history-section"  v-if="showAmendmentSection" >
+                    <v-row style="background-color: #fff9c4;">
+                        <v-col cols="12" md="4">
+                            <v-combobox 
+                            :disabled="disAmendent"  
+                            v-model="form.changeReason" 
+                            :items="formattedChangeReasons"
+                            item-text="text"
+                            item-value="id"
+                            return-object
+                            :label="$t('Change Reason')" 
+                            outlined 
+                            dense 
+                            hide-details 
+                            clearable
+                            ></v-combobox>
+                        </v-col>
+                        <v-col cols="12" md="2">
+                            <v-text-field v-if="showChangeQuantityField" 
+                            :disabled="disAmendent"  
+                            v-model="form.changeQty" 
+                            :label="$t('Change quantity') + ` (${$t('Min')}: ${editData?.recruited || 0}, ${$t('Max')}: ${form.quantity || 0})`" 
+                            type="number" 
+                            :min="editData?.recruited || 0" 
+                            :max="form.quantity || 0"
+                            outlined 
+                            dense 
+                            :rules="[minQuantityRule, maxQuantityRule]"
+                            :error-messages="changeQtyError"
+                            persistent-hint
+                            hide-details="auto"
+                            :hint="getChangeQuantityHint"
+                            ></v-text-field>
+                        </v-col>
+                        <v-col cols="12" class="equal-height" v-show="showLanguageAndComputerSkills">
+                            <div class="mb-4">
+                                <div class="d-flex align-center mb-2">
+                                    <v-icon left color="primary">mdi-translate</v-icon>
+                                    <div class="text-subtitle-1 font-weight-medium">
+                                        {{ $t("Foreign Language Proficiency") }}
+                                    </div>
+                                </div>
+                                <v-row class="ml-1">
+                                    <v-col cols="12" md="4">
+                                        <v-radio-group v-model="form.either_change" row dense hide-details >
+                                            <div class="subtitle-2">{{ $t("Either:") }}</div>
+                                            <v-radio :disabled="disAmendent" v-for="(level, index) in getLanguageLevels('either')" :key="'either-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4"></v-radio>
+                                        </v-radio-group>
+                                    </v-col>
+                                    
+                                    <v-col cols="12" md="4">
+                                        <v-radio-group v-model="form.english_change" row hide-details dense >
+                                            <div class="subtitle-2">{{ $t("English:") }}</div>
+                                            <v-radio :disabled="disAmendent" v-for="(level, index) in getLanguageLevels('en')" :key="'english-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4"></v-radio>
+                                        </v-radio-group>
+                                    </v-col>
+                                    <v-col cols="12" md="4">
+                                        <v-radio-group v-model="form.chinese_change" row hide-details dense >
+                                            <div class="subtitle-2">{{ $t("Chinese:") }}</div>
+                                            <v-radio :disabled="disAmendent" v-for="(level, index) in getLanguageLevels('cn')" :key="'chinese-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4"></v-radio>
+                                        </v-radio-group>
+                                    </v-col>
+                                    <v-col cols="12" md="4">
+                                        <v-checkbox :disabled="disAmendent" v-model="form.tranlator_change" :label="$t('Translator')" hide-details class="mr-4"></v-checkbox>
+                                    </v-col>
+                                </v-row>
+                            </div>
+                            <div class="mb-4">
+                                <div class="d-flex align-center mb-2">
+                                    <v-icon left color="primary">mdi-desktop-classic</v-icon>
+                                    <div class="text-subtitle-1 font-weight-medium">
+                                        {{ $t("Computer Skills") }}
+                                    </div>
+                                </div>
+                                
+                                <v-row class="ml-2">
+                                    <v-col cols="12" class="d-flex flex-wrap py-0">
+                                        <v-checkbox :disabled="disAmendent" v-for="skill in ['Word', 'Excel', 'Access', 'PowerPoint', 'Internet', 'None', 'Other']" :key="skill" v-model="form.computerSkills_change" :value="skill" :label="$t(skill)" dense hide-details class="mr-4 mb-1 mt-2"></v-checkbox>
+                                    </v-col>
+                                    <v-textarea :disabled="disAmendent" v-if="form.computerSkills_change.includes('Other')" v-model="form.otherComputerSkills_change" :label="$t('Other Skills')" dense outlined class="mt-5" rows="1" hide-details auto-grow></v-textarea>
+                                </v-row>
+                            </div>
+                        </v-col>
+                        <v-col cols="12" >
+                            <v-textarea :disabled="disAmendent" v-model="form.remark_change" outlined :label="$t('Change remark')" rows="1" hide-details auto-grow></v-textarea>
+                        </v-col>
+                    </v-row>
+                </v-card-text>
+                <v-card-text>
+                    <v-row>
+                        <v-col cols="12" md="2" >
+                            <v-text-field disabled :value="displayReqId" :label="$t('Req ID')" outlined dense hide-details ></v-text-field>
+                        </v-col>
+                        <v-col cols="1">
+                            <v-autocomplete :disabled="formDisabled" v-model="user.div" :items="itemsDiv" :label="$t('Division') " outlined :required="true" :rules="[rules.required]" dense hide-details ></v-autocomplete>
+                        </v-col>
+                        
+                        <v-col cols="2">
+                            <v-autocomplete :disabled="formDisabled" v-model="user.dept" :items="itemsDept" :label="$t('Dept') " outlined dense :rules="[rules.required]" required hide-details clearable ></v-autocomplete>
+                        </v-col>
+                        <v-col cols="1" md="2">
+                            <v-autocomplete 
+                            :disabled="formDisabled" 
+                            v-model="user.unit" 
+                            :items="filteredUnitItems"
+                            item-text="display"
+                            item-value="dept_code"
+                            :label="$t('Unit')" 
+                            outlined 
+                            dense 
+                            :rules="[rules.required]" 
+                            required 
+                            hide-details 
+                            clearable
+                            :no-data-text="!user.div || !user.dept ? $t('Please select Division and Department first') : $t('No data available')"
+                            ></v-autocomplete>
+                        </v-col>
+                        
+                        <v-col cols="12" md="2">
+                            <v-autocomplete :disabled="formDisabled" v-model="form.suppType" :items="suppTypeItems" :label="$t('Supp.Type')" :rules="[rules.required]" required item-text="name" item-value="id" outlined dense hide-details clearable ></v-autocomplete>
+                        </v-col>
+                        <v-col cols="12" md="1">
+                            <v-autocomplete :disabled="formDisabled" v-model="form.pos" :items="posItems" :label="$t('Type Apply')" item-text="name" :rules="[rules.required]" required item-value="id" outlined dense hide-details clearable @change="handleTypeApplyChange" ></v-autocomplete>
+                        </v-col>
+                        <v-col cols="12" md="1" v-if="isHrManager && ![1,3].includes(Number(form.pos))">
+                            <v-autocomplete 
+                            background-color="#fff9c4" 
+                            color="#000000" 
+                            v-model="form.sub_position" 
+                            :items="sub_positionItems" 
+                            item-text="name" 
+                            :disabled="!!editData?.sub_pos" 
+                            item-value="id" 
+                            :label="$t('Sub Position')" 
+                            outlined 
+                            dense 
+                            hide-details 
+                            clearable
+                            ></v-autocomplete>
+                        </v-col>
+                        <v-col cols="2" md="1" v-if="showLevelField">
+                            <v-text-field :disabled="formDisabled || !showLevelField" v-model="form.level" :label="$t('Level')" outlined dense hide-details ></v-text-field>
+                        </v-col>
+                        <v-col cols="1" md="1">
+                            <v-text-field :disabled="formDisabled" v-model="form.quantity" :label="$t('Quantity request') " type="number" min="1" :rules="[rules.required]" outlined dense hide-details="auto" required @input="(val) => (form.quantity = val > 0 ? val : '')" ></v-text-field>
+                        </v-col>
+                    </v-row>
+                    <v-row>
+                        <v-col cols="2" md="2">
+                            <v-menu v-model="dateRequestMenu" :close-on-content-click="false" transition="scale-transition" offset-y>
+                                <template v-slot:activator="{ on, attrs }">
+                                    <v-text-field
+                                    :disabled="formDisabled"
+                                    v-model="form.recruitment.requestDate"
+                                    :label="$t('Req.date')"
+                                    readonly
+                                    outlined
+                                    dense
+                                    v-bind="attrs"
+                                    v-on="on"
+                                    hide-details
+                                    prepend-inner-icon="mdi-calendar"
+                                    ></v-text-field>
+                                </template>
+                                <v-date-picker
+                                v-model="form.recruitment.requestDate"
+                                @input="dateRequestMenu = false"
+                                :min="getEffectiveDate()"
+                                ></v-date-picker>
+                            </v-menu>
+                        </v-col>
+                        <v-col cols="4" md="5">
+                            <v-card outlined :class="{ 'error--text': formErrors.recruitment }" class="pa-2 custom-card-hover" >
+                                <v-row dense>
+                                    <v-col cols="12" class="d-flex flex-wrap align-center">
+                                        <span class="font-weight-medium">{{ $t("Reason") }}</span>
+                                        <v-radio-group :disabled="formDisabled" v-model="form.recruitment.reason" row dense hide-details :rules="[rules.required]" required>
+                                            <v-radio v-for="reason in dataRecruitmentReason" 
+                                            :key="reason.id" 
+                                            :value="reason.id" 
+                                            :label="getReasonLabel(reason)" 
+                                            dense 
+                                            class="mr-2" 
+                                            @change="handleReasonChange(reason.id)">
+                                        </v-radio>
+                                    </v-radio-group>
+                                </v-col>
+                                <v-col cols="12" v-if="form.recruitment.reason === 2"> <!-- For2-->
+                                    <v-text-field :rules="[rules.required]" required :disabled="formDisabled" v-model="form.recruitment.oldempno" :label="$t('Old empno')" outlined dense hide-details></v-text-field>
+                                </v-col>
+                                <v-col cols="12" v-if="form.recruitment.reason === 3"> <!-- For other -->
+                                    <v-card outlined class="pa-0">
+                                        <v-tabs v-model="otherReasonTab" background-color="#01a6be" dark show-arrows>
+                                            <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> Tiếng Việt </v-tab>
+                                            <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> English </v-tab>
+                                            <v-tab class="px-4"> <v-icon left small>mdi-translate</v-icon> 中文 </v-tab>
+                                        </v-tabs>
+                                        
+                                        <v-tabs-items v-model="otherReasonTab" class="mt-2">
+                                            <v-tab-item>
+                                                <v-textarea
+                                                :disabled="formDisabled"
+                                                v-model="form.recruitment.isOther_reason.vi"
+                                                @input="onOtherReasonInput('vi', $event)"
+                                                @click:clear="onOtherReasonClear('vi')"
+                                                outlined
+                                                dense
+                                                auto-grow
+                                                rows="1"
+                                                placeholder="Nhập lý do bằng tiếng Việt..."
+                                                hide-details
+                                                clearable
+                                                />
+                                            </v-tab-item>
+                                            
+                                            <v-tab-item>
+                                                <v-textarea
+                                                :disabled="formDisabled"
+                                                v-model="form.recruitment.isOther_reason.en"
+                                                @input="onOtherReasonInput('en', $event)"
+                                                @click:clear="onOtherReasonClear('en')"
+                                                outlined
+                                                dense
+                                                auto-grow
+                                                rows="1"
+                                                hide-details
+                                                placeholder="Enter reason in English..."
+                                                clearable
+                                                />
+                                            </v-tab-item>
+                                            
+                                            <v-tab-item>
+                                                <v-textarea
+                                                :disabled="formDisabled"
+                                                v-model="form.recruitment.isOther_reason.cn"
+                                                @input="onOtherReasonInput('cn', $event)"
+                                                @click:clear="onOtherReasonClear('cn')"
+                                                outlined
+                                                dense
+                                                auto-grow
+                                                rows="1"
+                                                hide-details
+                                                placeholder="用中文输入原因..."
+                                                clearable
+                                                />
+                                            </v-tab-item>
+                                        </v-tabs-items>
+                                    </v-card>
+                                </v-col>
+                            </v-row>
+                        </v-card>
+                    </v-col>
+                    <v-col cols="12" md="5">
                         <v-file-input
                         :disabled="formDisabled"
-                        v-model="form.attachments.jobDesc"
-                        :label="$t('Job description file')"
+                        v-model="form.attachments.dimissionList"
+                        :label="$t('Dimission list file')"
                         outlined
                         dense
-                        :error="form.pos === 1"
-                        :error-messages="
-                        form.pos === 1 ? $t('Job description file is required') : '' "
-                        :required="form.pos === 1"
-                        hide-details
-                        @change="previewFile('jobDesc', $event)"
-                        v-show="form.pos !== 1"
+                        :error="form.recruitment.reason === 2 && !form.attachments.dimissionList"
+                        :required="form.recruitment.reason === 2"
+                        :rules="form.recruitment.reason === 2 ? [rules.required] : []"
+                        hide-details="auto"
+                        @change="previewFile('dimissionList', $event)"
+                        prepend-inner-icon="mdi-file-account"
                         :clearable="true"
-                        accept=".doc,.docx,.pdf"
+                        accept=".doc,.docx,.pdf,.xls,.xlsx"
                         ></v-file-input>
-                        <div v-if="filePreview.jobDesc" class="file-preview mt-2" >
-                            <v-chip small close @click:close="clearFile('jobDesc')" class="mb-1" >
-                                <v-icon left small>{{ getFileIcon( form.attachments.jobDesc?.type || getFileTypeFromName(form.attachments.jobDesc) ) }}</v-icon>
-                                {{ getFileName("jobDesc") }}
+                        <div v-show=" filePreview.dimissionList && form.recruitment.reason === 2 " class="file-preview mt-2" >
+                            <v-chip small close @click:close="clearFile('dimissionList')" class="mb-1" >
+                                <v-icon left small>{{ getFileIcon( form.attachments.dimissionList?.type || getFileTypeFromName(form.attachments.dimissionList) ) }}</v-icon>
+                                {{ getFileName("dimissionList") }}
                             </v-chip>
                             <div class="d-flex align-center justify-space-between">
                                 <span class="caption grey--text">{{
-                                    form.attachments.jobDesc_size || ""
+                                    form.attachments.dimissionList_size || ""
                                 }}</span>
-                                <v-btn  x-small text color="primary" @click="openFile('jobDesc')" >
-                                    <v-icon small left>mdi-eye</v-icon>
-                                    {{ $t("View") }}
-                                </v-btn>
-                                <v-btn :disabled="formDisabled" x-small text color="error" @click="clearFile('jobDesc')" >
-                                    <v-icon small left>mdi-delete</v-icon>
-                                    {{ $t("Delete") }}
-                                </v-btn>
+                                <v-btn  x-small text color="primary" @click="openFile('dimissionList')" > <v-icon small left>mdi-eye</v-icon> {{ $t("View") }} </v-btn>
+                                <v-btn  :disabled="formDisabled" x-small text color="error" @click="clearFile('dimissionList')" > <v-icon small left>mdi-delete</v-icon> {{ $t("Delete") }} </v-btn>
                             </div>
                         </div>
                     </v-col>
                 </v-row>
-            </div>
-            <div class="mt-2">
                 <v-row>
-                    <v-col cols="12" class="equal-height">
-                        <div class="mb-4" v-show="form.pos !== 1">
-                            <div class="d-flex align-center mb-2">
-                                <v-icon left color="primary">mdi-translate</v-icon>
-                                <div class="text-subtitle-1 font-weight-medium">
-                                    {{ $t("Foreign Language Proficiency") }}
+                    <v-col cols="12" sm="6" md="2">
+                        <v-autocomplete :disabled="formDisabled" v-model="form.educationLevel" :items="educationLevelItems" :rules="[rules.required]" required :label="$t('Education Level')" item-text="name" item-value="id" outlined dense hide-details clearable ></v-autocomplete>
+                    </v-col>
+                    <v-col cols="12" sm="6" md="8">
+                        <v-textarea :disabled="formDisabled" auto-grow v-model="localizedSpecialization" :rules="[rules.required]" required
+                        :placeholder="$t('Professional qualifications')" :label="$t('Professional qualifications')"
+                        outlined dense rows="1" hide-details @input="handleSpecializationInput"></v-textarea>
+                    </v-col>
+                    <v-col cols="12" sm="6" md="2">
+                        <v-autocomplete :disabled="formDisabled" v-model="form.workExperience" :items="workExpItems" :rules="[rules.required]" required :label="$t('Work Experience')" item-text="name" item-value="id" outlined dense hide-details clearable ></v-autocomplete>
+                    </v-col>
+                </v-row>
+                <div class="mt-2">
+                    <v-row>
+                        <v-col cols="12" :md="getJobDescColWidth">
+                            <v-textarea :disabled="formDisabled" auto-grow v-model="form.jobDesc" outlined :label="$t('Basic Job Description')" :rules="[rules.required]" required rows="1" hide-details ></v-textarea>
+                        </v-col>
+                        <v-col cols="12" md="2" v-if="form.pos !== 1">
+                            <v-file-input
+                            :disabled="formDisabled"
+                            v-model="form.attachments.jobDesc"
+                            :label="$t('Job description file')"
+                            outlined
+                            dense
+                            :error="form.pos === 1"
+                            :error-messages="
+                            form.pos === 1 ? $t('Job description file is required') : '' "
+                            :required="form.pos === 1"
+                            hide-details
+                            @change="previewFile('jobDesc', $event)"
+                            v-show="form.pos !== 1"
+                            :clearable="true"
+                            accept=".doc,.docx,.pdf"
+                            ></v-file-input>
+                            <div v-if="filePreview.jobDesc" class="file-preview mt-2" >
+                                <v-chip small close @click:close="clearFile('jobDesc')" class="mb-1" >
+                                    <v-icon left small>{{ getFileIcon( form.attachments.jobDesc?.type || getFileTypeFromName(form.attachments.jobDesc) ) }}</v-icon>
+                                    {{ getFileName("jobDesc") }}
+                                </v-chip>
+                                <div class="d-flex align-center justify-space-between">
+                                    <span class="caption grey--text">{{
+                                        form.attachments.jobDesc_size || ""
+                                    }}</span>
+                                    <v-btn  x-small text color="primary" @click="openFile('jobDesc')" >
+                                        <v-icon small left>mdi-eye</v-icon>
+                                        {{ $t("View") }}
+                                    </v-btn>
+                                    <v-btn :disabled="formDisabled" x-small text color="error" @click="clearFile('jobDesc')" >
+                                        <v-icon small left>mdi-delete</v-icon>
+                                        {{ $t("Delete") }}
+                                    </v-btn>
                                 </div>
                             </div>
-                            <v-row class="ml-1">
-                                <v-col cols="12" md="4">
-                                    <v-radio-group :disabled="formDisabled" v-model="form.either" row dense hide-details :rules="[rules.required]" required>
-                                        <div class="subtitle-2">{{ $t("Either:") }}</div>
-                                        <v-radio v-for="(level, index) in getLanguageLevels('either')" :key="'either-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4" ></v-radio>
-                                    </v-radio-group>
-                                </v-col>
-                                
-                                <v-col cols="12" md="4" :rules="[rules.required]" required>
-                                    <v-radio-group :disabled="formDisabled" v-model="form.english" row hide-details dense >
-                                        <div class="subtitle-2">{{ $t("English:") }}</div>
-                                        <v-radio v-for="(level, index) in getLanguageLevels('en')" :key="'english-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4" ></v-radio>
-                                    </v-radio-group>
-                                </v-col>
-                                <v-col cols="12" md="4" :rules="[rules.required]" required>
-                                    <v-radio-group :disabled="formDisabled" v-model="form.chinese" row hide-details dense >
-                                        <div class="subtitle-2">{{ $t("Chinese:") }}</div>
-                                        <v-radio v-for="(level, index) in getLanguageLevels('cn')" :key="'chinese-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4" ></v-radio>
-                                    </v-radio-group>
-                                </v-col>
-                                <v-col cols="12" md="4">
-                                    <v-checkbox :disabled="formDisabled" v-model="form.tranlator" :label="$t('Translator')" hide-details class="mr-4" ></v-checkbox>
-                                </v-col>
-                            </v-row>
-                        </div>
-                        <div class="mb-4" v-show="form.pos !== 1">
-                            <div class="d-flex align-center mb-2">
-                                <v-icon left color="primary">mdi-desktop-classic</v-icon>
-                                <div class="text-subtitle-1 font-weight-medium">
-                                    {{ $t("Computer Skills") }}
+                        </v-col>
+                    </v-row>
+                </div>
+                <div class="mt-2">
+                    <v-row>
+                        <v-col cols="12" class="equal-height">
+                            <div class="mb-4" v-show="form.pos !== 1">
+                                <div class="d-flex align-center mb-2">
+                                    <v-icon left color="primary">mdi-translate</v-icon>
+                                    <div class="text-subtitle-1 font-weight-medium">
+                                        {{ $t("Foreign Language Proficiency") }}
+                                    </div>
                                 </div>
+                                <v-row class="ml-1">
+                                    <v-col cols="12" md="4">
+                                        <v-radio-group :disabled="formDisabled" v-model="form.either" row dense hide-details :rules="[rules.required]" required>
+                                            <div class="subtitle-2">{{ $t("Either:") }}</div>
+                                            <v-radio v-for="(level, index) in getLanguageLevels('either')" :key="'either-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4" ></v-radio>
+                                        </v-radio-group>
+                                    </v-col>
+                                    
+                                    <v-col cols="12" md="4" :rules="[rules.required]" required>
+                                        <v-radio-group :disabled="formDisabled" v-model="form.english" row hide-details dense >
+                                            <div class="subtitle-2">{{ $t("English:") }}</div>
+                                            <v-radio v-for="(level, index) in getLanguageLevels('en')" :key="'english-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4" ></v-radio>
+                                        </v-radio-group>
+                                    </v-col>
+                                    <v-col cols="12" md="4" :rules="[rules.required]" required>
+                                        <v-radio-group :disabled="formDisabled" v-model="form.chinese" row hide-details dense >
+                                            <div class="subtitle-2">{{ $t("Chinese:") }}</div>
+                                            <v-radio v-for="(level, index) in getLanguageLevels('cn')" :key="'chinese-' + index" :value="level.value" :label="getLocalizedLabel(level)" hide-details class="mr-4" ></v-radio>
+                                        </v-radio-group>
+                                    </v-col>
+                                    <v-col cols="12" md="4">
+                                        <v-checkbox :disabled="formDisabled" v-model="form.tranlator" :label="$t('Translator')" hide-details class="mr-4" ></v-checkbox>
+                                    </v-col>
+                                </v-row>
+                            </div>
+                            <div class="mb-4" v-show="form.pos !== 1">
+                                <div class="d-flex align-center mb-2">
+                                    <v-icon left color="primary">mdi-desktop-classic</v-icon>
+                                    <div class="text-subtitle-1 font-weight-medium">
+                                        {{ $t("Computer Skills") }}
+                                    </div>
+                                </div>
+                                
+                                <v-row class="ml-2">
+                                    <v-col cols="12" class="d-flex flex-wrap py-0">
+                                        <v-checkbox v-for="skill in [ 'Word', 'Excel', 'Access', 'PowerPoint', 'Internet', 'None', 'Other', ]" :key="skill" :disabled="formDisabled" v-model="form.computerSkills" :value="skill" :label="$t(skill)" dense hide-details class="mr-4 mb-1 mt-2" ></v-checkbox>
+                                    </v-col>
+                                    <v-textarea v-if="form.computerSkills.includes('Other')" :disabled="formDisabled" v-model="form.otherComputerSkills" :label="$t('Other Skills')" dense outlined class="mt-5" rows="1" hide-details auto-grow ></v-textarea>
+                                </v-row>
+                            </div>
+                            <div class="mt-6">
+                                <div class="d-flex align-center mb-2">
+                                    <v-icon left color="primary">mdi-shield-account</v-icon>
+                                    <div class="text-subtitle-1 font-weight-medium">
+                                        {{ $t("Workplace Safety") }}
+                                    </div>
+                                </div>
+                                <v-radio-group :disabled="formDisabled" v-model="form.safetyLevels" row dense class="ml-4" :rules="[rules.required]" required hide-details >
+                                    <v-radio v-for="(level, index) in safetyLevels" :key="'safety-' + index" :value="level.id" :label="level.name" class="mr-4" hide-details ></v-radio>
+                                </v-radio-group>
+                                <v-col cols="12">
+                                    <v-textarea :disabled="formDisabled" v-model="form.remark" outlined :label="$t('Remark')" rows="1" hide-details auto-grow ></v-textarea>
+                                </v-col>
+                            </div>
+                        </v-col>
+                        <v-card-text class="approval-history-section">
+                            <div class="d-flex align-center mb-2">
+                                <v-icon color="primary" class="mr-2">mdi-history</v-icon>
+                                <span class="text-subtitle-1 font-weight-medium">{{ $t("Approval History") }}</span>
                             </div>
                             
-                            <v-row class="ml-2">
-                                <v-col cols="12" class="d-flex flex-wrap py-0">
-                                    <v-checkbox v-for="skill in [ 'Word', 'Excel', 'Access', 'PowerPoint', 'Internet', 'None', 'Other', ]" :key="skill" :disabled="formDisabled" v-model="form.computerSkills" :value="skill" :label="$t(skill)" dense hide-details class="mr-4 mb-1 mt-2" ></v-checkbox>
-                                </v-col>
-                                <v-textarea v-if="form.computerSkills.includes('Other')" :disabled="formDisabled" v-model="form.otherComputerSkills" :label="$t('Other Skills')" dense outlined class="mt-5" rows="1" hide-details auto-grow ></v-textarea>
-                            </v-row>
-                        </div>
-                        <div class="mt-6">
-                            <div class="d-flex align-center mb-2">
-                                <v-icon left color="primary">mdi-shield-account</v-icon>
-                                <div class="text-subtitle-1 font-weight-medium">
-                                    {{ $t("Workplace Safety") }}
-                                </div>
-                            </div>
-                            <v-radio-group :disabled="formDisabled" v-model="form.safetyLevels" row dense class="ml-4" :rules="[rules.required]" required hide-details >
-                                <v-radio v-for="(level, index) in safetyLevels" :key="'safety-' + index" :value="level.id" :label="level.name" class="mr-4" hide-details ></v-radio>
-                            </v-radio-group>
-                            <v-col cols="12">
-                                <v-textarea :disabled="formDisabled" v-model="form.remark" outlined :label="$t('Remark')" rows="1" hide-details auto-grow dense></v-textarea>
-                            </v-col>
-                        </div>
-                    </v-col>
-                    <v-card-text class="approval-history-section">
-                        <div class="d-flex align-center mb-2">
-                            <v-icon color="primary" class="mr-2">mdi-history</v-icon>
-                            <span class="text-subtitle-1 font-weight-medium">{{ $t("Approval History") }}</span>
-                        </div>
-                        <v-expansion-panels flat>
-                            <v-expansion-panel>
-                                <v-expansion-panel-header>
-                                    <div class="d-flex align-center">
-                                        {{ $t("Current Approval History") }}
-                                    </div>
-                                </v-expansion-panel-header>
-                                <v-expansion-panel-content>
-                                    <v-stepper v-model="approvalStepper" class="approval-stepper" flat>
-                                        <v-stepper-header>
-                                            <v-stepper-step v-if="editData" :complete="true" :editable="true" color="primary" :step="0" :key="'submitter-step'" class="submitter-step" style="pointer-events: none;" >
-                                                <div>
-                                                    <div class="caption font-weight-bold">
-                                                        {{ $t('Submitter') }}
-                                                    </div>
-                                                    <div class="caption">
-                                                        {{
-                                                            (() => {
-                                                                try {
-                                                                    let s = editData?.submitter;
-                                                                    if (typeof s === 'string') {
-                                                                        s = JSON.parse(s);
+                            <v-expansion-panels flat>
+                                <v-expansion-panel>
+                                    <v-expansion-panel-header>
+                                        <div class="d-flex align-center">
+                                            {{ $t("Current Approval History") }}
+                                        </div>
+                                    </v-expansion-panel-header>
+                                    <v-expansion-panel-content>
+                                        <v-stepper v-model="approvalStepper" class="approval-stepper" flat>
+                                            <v-stepper-header>
+                                                <v-stepper-step v-if="editData" :complete="true" :editable="true" color="primary" :step="0" :key="'submitter-step'" class="submitter-step" style="pointer-events: none;" >
+                                                    <div>
+                                                        <div class="caption font-weight-bold">
+                                                            {{ $t('Submitter') }}
+                                                        </div>
+                                                        <div class="caption">
+                                                            {{
+                                                                (() => {
+                                                                    try {
+                                                                        let s = editData?.submitter;
+                                                                        if (typeof s === 'string') {
+                                                                            s = JSON.parse(s);
+                                                                        }
+                                                                        return s ? `${s.empno || ''} - ${s.name || ''} - ${s.dept_sumt || ''}` : '';
+                                                                    } catch (e) {
+                                                                        console.error('Error parsing submitter data:', e);
+                                                                        return '';
                                                                     }
-                                                                    return s ? `${s.empno || ''} - ${s.name || ''} - ${s.dept_sumt || ''}` : '';
-                                                                } catch (e) {
-                                                                    console.error('Error parsing submitter data:', e);
-                                                                    return '';
-                                                                }
-                                                            })()
-                                                        }}
-                                                    </div>
-                                                    <div class="caption">
-                                                        {{ editData.created_at || '' }}
-                                                    </div>
-                                                </div>
-                                            </v-stepper-step>
-                                            <template v-for="(step, idx) in approvalStepperSteps">
-                                                <v-stepper-step
-                                                :complete="step.status === 'approved'"
-                                                :editable="false"
-                                                :rules="step.shouldShowError ? [() => false] : []"
-                                                :color="getApprovalStatusColor(step.status)"
-                                                step
-                                                :error-icon="step.shouldShowError ? 'mdi-cancel' : ''"
-                                                complete-icon="mdi-check"
-                                                :key="idx"
-                                                v-if="isLevel1Approved"
-                                                >
-                                                <template>
-                                                    <div class="caption">{{ step.levelName }}</div>
-                                                    <div class="caption">
-                                                        {{ step.approver?.empno }} - {{ step.approver?.name }} - {{ getApprovalStatusText(step.status) }}
-                                                    </div>
-                                                    <div class="caption">{{ step.processed_at }}</div>
-                                                    <div class="approval-record-container caption">
-                                                        <div v-if="step.reason_denied" class="record-item error--text">
-                                                            <v-icon small color="error" class="mr-1">mdi-close</v-icon>
-                                                            <span class="font-italic">{{ step.reason_denied }}</span>
+                                                                })()
+                                                            }}
                                                         </div>
-                                                        <div v-if="step.return_reason" class="record-item warning--text">
-                                                            <v-icon small color="#FFA500" class="mr-1">mdi-undo-variant</v-icon>
-                                                            <span class="font-italic">{{ step.return_reason }}</span>
-                                                        </div>
-                                                        <div v-if="step.approval_record" class="record-item success--text">
-                                                            <v-icon small color="success" class="mr-1">mdi-check</v-icon>
-                                                            <span class="font-italic">{{ step.approval_record }}</span>
+                                                        <div class="caption">
+                                                            {{ editData.created_at || '' }}
                                                         </div>
                                                     </div>
-                                                </template>
-                                            </v-stepper-step>
-                                            <v-divider v-if="idx < approvalStepperSteps.length - 1" :key="`div-${idx}`"></v-divider>
-                                        </template>
-                                    </v-stepper-header>
-                                </v-stepper>
-                            </v-expansion-panel-content>
-                        </v-expansion-panel>
-                    </v-expansion-panels>
-                </v-card-text>
-                
-                <v-row class="dialog-actions">
-                    <v-col cols="12" class="d-flex justify-end align-center">
-                        <template v-if="isEdit && canApproveItem">
-                            <v-btn color="#01a6be" class="mr-3 white--text" @click="openAcceptDialog" >
-                                <v-icon left>mdi-check</v-icon> {{ $t("Accept") }}
+                                                </v-stepper-step>
+                                                <template v-for="(step, idx) in approvalStepperSteps">
+                                                    <v-stepper-step
+                                                    :complete="step.status === 'approved'"
+                                                    :editable="false"
+                                                    :rules="step.shouldShowError ? [() => false] : []"
+                                                    :color="getApprovalStatusColor(step.status)"
+                                                    step
+                                                    :error-icon="step.shouldShowError ? 'mdi-cancel' : ''"
+                                                    complete-icon="mdi-check"
+                                                    :key="idx"
+                                                    v-if="isLevel1Approved"
+                                                    >
+                                                    <template>
+                                                        <div class="caption">{{ step.levelName }}</div>
+                                                        <div class="caption">
+                                                            {{ step.approver?.empno }} - {{ step.approver?.name }} - {{ getApprovalStatusText(step.status) }}
+                                                        </div>
+                                                        <div class="caption">{{ step.processed_at }}</div>
+                                                        <div class="approval-record-container caption">
+                                                            <div v-if="step.reason_denied" class="record-item error--text">
+                                                                <v-icon small color="error" class="mr-1">mdi-close</v-icon>
+                                                                <span class="font-italic">{{ step.reason_denied }}</span>
+                                                            </div>
+                                                            <div v-if="step.return_reason" class="record-item warning--text">
+                                                                <v-icon small color="#FFA500" class="mr-1">mdi-undo-variant</v-icon>
+                                                                <span class="font-italic">{{ step.return_reason }}</span>
+                                                            </div>
+                                                            <div v-if="step.approval_record" class="record-item success--text">
+                                                                <v-icon small color="success" class="mr-1">mdi-check</v-icon>
+                                                                <span class="font-italic">{{ step.approval_record }}</span>
+                                                            </div>
+                                                        </div>
+                                                    </template>
+                                                </v-stepper-step>
+                                                <v-divider v-if="idx < approvalStepperSteps.length - 1" :key="`div-${idx}`"></v-divider>
+                                            </template>
+                                        </v-stepper-header>
+                                    </v-stepper>
+                                </v-expansion-panel-content>
+                            </v-expansion-panel>
+                        </v-expansion-panels>
+                    </v-card-text>
+                    
+                    <v-row class="dialog-actions">
+                        <v-col cols="12" class="d-flex justify-end align-center">
+                            <template v-if="isEdit && canApproveItem">
+                                <v-btn color="#01a6be" class="mr-3 white--text" @click="openAcceptDialog" >
+                                    <v-icon left>mdi-check</v-icon> {{ $t("Accept") }}
+                                </v-btn>
+                                <v-btn v-if="editData && editData.status !== 'declined'" color="#FFA500" class="mr-3 white--text" @click="openReturnDialog" >
+                                    <v-icon left>mdi-undo</v-icon> {{ $t("Return") }}
+                                </v-btn>
+                                <v-btn color="red darken-2" class="mr-6 white--text" @click="openDenyDialog" >
+                                    <v-icon left>mdi-close</v-icon> {{ $t("Deny") }}
+                                </v-btn>
+                            </template>
+                            <v-btn color="grey" class="mr-3 white--text" @click="dialog = false" >
+                                <v-icon left>mdi-close-circle</v-icon> {{ $t("Cancel") }}
                             </v-btn>
-                            <v-btn v-if="editData && editData.status !== 'declined'" color="#FFA500" class="mr-3 white--text" @click="openReturnDialog" >
-                                <v-icon left>mdi-undo</v-icon> {{ $t("Return") }}
+                            <v-btn v-show="showSaveButton" color="success" :disabled="disableSaveButton " @click="confirmSubmitDialog = true" > <v-icon left>mdi-send</v-icon> {{ $t("Submit") }}
                             </v-btn>
-                            <v-btn color="red darken-2" class="mr-6 white--text" @click="openDenyDialog" >
-                                <v-icon left>mdi-close</v-icon> {{ $t("Deny") }}
-                            </v-btn>
-                        </template>
-                        <v-btn color="grey" class="mr-3 white--text" @click="dialog = false" >
-                            <v-icon left>mdi-close-circle</v-icon> {{ $t("Cancel") }}
-                        </v-btn>
-                        <v-btn v-show="showSaveButton" color="success" :disabled="disableSaveButton " @click="confirmSubmitDialog = true" > <v-icon left>mdi-send</v-icon> {{ $t("Submit") }}
-                        </v-btn>
-                    </v-col>
+                        </v-col>
+                    </v-row>
                 </v-row>
-            </v-row>
-        </div>
-    </v-card-text>
-</v-card>
-<v-dialog v-model="confirmAcceptDialog" max-width="500px">
-    <v-card>
-        <v-card-title style="background-color: #01a6be; color: white;">
-            <v-icon left dark>mdi-check</v-icon>
-            {{ $t("Confirm Action") }}
-            <v-spacer></v-spacer>
-            <v-btn-toggle v-model="selectedLanguage" group class="mr-4" dark>
-                <v-btn x-small value="vi">VI</v-btn>
-                <v-btn x-small value="cn">中文</v-btn>
-            </v-btn-toggle>
-            <v-btn icon dark @click="confirmAcceptDialog = false"> <v-icon>mdi-close</v-icon> </v-btn>
-        </v-card-title>
-        <v-card-text class="pt-4">
-            <v-textarea 
-            v-model="form.approval_record" 
-            outlined 
-            :label="$t('Approval record')" 
-            rows="3" 
-            hide-details 
-            auto-grow 
-            :placeholder="$t('Please provide approval comments')"
-            ></v-textarea>
+            </div>
         </v-card-text>
-        <v-card-actions>
-            <v-btn color="grey darken-1" text @click="confirmAcceptDialog = false" >
-                {{ $t("Cancel") }}
-            </v-btn>
-            <v-spacer></v-spacer>
-            <v-btn color="#01a6be" dark @click="confirmAccept" >
-                {{ $t("Confirm") }}
-            </v-btn>
-        </v-card-actions>
     </v-card>
-</v-dialog>
-<!-- Deny Dialog with Reason -->
-<v-dialog v-model="confirmDenyDialog" max-width="500px">
-    <v-card>
-        <v-card-title class="error white--text">
-            <v-icon left dark>mdi-alert</v-icon>
-            {{ $t("Deny Request") }}
-            <v-spacer></v-spacer>
-            <v-btn-toggle v-model="selectedLanguage" group class="mr-4" dark>
-                <v-btn x-small value="vi">VI</v-btn>
-                <v-btn x-small value="cn">中文</v-btn>
-            </v-btn-toggle>
-            <v-btn icon dark @click="confirmDenyDialog = false">
-                <v-icon>mdi-close</v-icon>
-            </v-btn>
-        </v-card-title>
-        <v-card-text class="pt-4">
-            <v-textarea 
-            v-if="selectedLanguage === 'vi'"
-            v-model="denyReason.vi" 
-            :label="$t('Return reason VietNamese')" 
-            :placeholder="$t('Please provide a VietNamese reason')" 
-            outlined 
-            rows="1" 
-            hide-details
-            class="mb-2"
-            ></v-textarea>
-            <v-textarea
-            v-if="selectedLanguage === 'cn'" 
-            v-model="denyReason.cn"
-            :label="$t('Return reason Chinese')"
-            :placeholder="$t('Please provide a Chinese reason')"
-            outlined
-            hide-details
-            rows="1"
-            ></v-textarea>
-        </v-card-text>
-        <v-card-actions>
-            <v-btn color="grey darken-1" text @click="confirmDenyDialog = false">
-                {{ $t("Cancel") }}
-            </v-btn>
-            <v-spacer></v-spacer>
-            <v-btn color="error" @click="confirmDeny" :disabled="!isDenyReasonValid">
-                {{ $t("Confirm Denial") }}
-            </v-btn>
-        </v-card-actions>
-    </v-card>
-</v-dialog>
-<!-- Return Dialog -->
-<v-dialog v-model="confirmReturnDialog" max-width="500px" transition="dialog" >
-    <v-card elevation="2" class="rounded">
-        <v-card-title class="warning white--text">
-            <v-icon left dark>mdi-alert</v-icon>
-            {{ $t("Return Request") }}
-            <v-spacer></v-spacer>
-            <v-btn-toggle v-model="selectedLanguage" group class="mr-4" dark>
-                <v-btn x-small value="vi">VI</v-btn>
-                <v-btn x-small value="cn">中文</v-btn>
-            </v-btn-toggle>
-            <v-btn icon dark @click="confirmReturnDialog = false"> <v-icon>mdi-close</v-icon> </v-btn>
-        </v-card-title>
-        <v-card-text class="pt-4">
-            <v-textarea 
-            v-if="selectedLanguage === 'vi'"
-            v-model="returnReason.vi" 
-            :label="$t('Return reason VietNamese')" 
-            :placeholder="$t('Please provide a VietNamese reason')" 
-            outlined 
-            rows="1" 
-            hide-details 
-            maxlength="500" 
-            class="mb-2"
-            ></v-textarea>
-            
-            <v-textarea
-            v-if="selectedLanguage === 'cn'" 
-            v-model="returnReason.cn"
-            :label="$t('Return reason Chinese')"
-            :placeholder="$t('Please provide a Chinese reason')"
-            outlined
-            rows="1"
-            hide-details
-            maxlength="500"
-            class="mb-2"
-            ></v-textarea>
-        </v-card-text>
-        <v-card-actions>
-            <v-btn color="grey darken-1" text @click="confirmReturnDialog = false" > {{ $t("Cancel") }} </v-btn>
-            <v-spacer></v-spacer>
-            <v-btn color="warning" @click="confirmReturn" :disabled="!isReturnReasonValid" > {{ $t("Confirm Return") }} </v-btn>
-        </v-card-actions>
-    </v-card>
-</v-dialog>
-<!-- Submit Confirmation Dialog -->
-<v-dialog v-model="confirmSubmitDialog" max-width="500px">
-    <v-card>
-        <v-card-title  style="background-color: #01a6be; color: white;">
-            <v-icon left dark>mdi-send</v-icon>
-            {{ $t("Confirm Action") }}
-            <v-spacer></v-spacer>
-            <v-btn icon dark @click="confirmSubmitDialog = false">
-                <v-icon>mdi-close</v-icon>
-            </v-btn>
-        </v-card-title>
-        <v-card-text class="pt-4">
-            {{ $t("Are you sure you want to submit this request?") }}
-        </v-card-text>
-        <v-card-actions>
-            <v-btn color="grey darken-1" text @click="confirmSubmitDialog = false" > {{ $t("Cancel") }} </v-btn>
-            <v-spacer></v-spacer>
-            <v-btn color="success" @click="confirmSubmit">
-                {{ $t("Confirm") }}
-            </v-btn>
-        </v-card-actions>
-    </v-card>
-</v-dialog>
+    <v-dialog v-model="confirmAcceptDialog" max-width="500px">
+        <v-card>
+            <v-card-title style="background-color: #01a6be; color: white;">
+                <v-icon left dark>mdi-check</v-icon>
+                {{ $t("Confirm Action") }}
+                <v-spacer></v-spacer>
+                <v-btn-toggle v-model="selectedLanguage" group class="mr-4" dark>
+                    <v-btn x-small value="vi">VI</v-btn>
+                    <v-btn x-small value="cn">中文</v-btn>
+                </v-btn-toggle>
+                <v-btn icon dark @click="confirmAcceptDialog = false"> <v-icon>mdi-close</v-icon> </v-btn>
+            </v-card-title>
+            <v-card-text class="pt-4">
+                <v-textarea 
+                v-model="form.approval_record" 
+                outlined 
+                :label="$t('Approval record')" 
+                rows="3" 
+                hide-details 
+                auto-grow 
+                :placeholder="$t('Please provide approval comments')"
+                ></v-textarea>
+            </v-card-text>
+            <v-card-actions>
+                <v-btn color="grey darken-1" text @click="confirmAcceptDialog = false" >
+                    {{ $t("Cancel") }}
+                </v-btn>
+                <v-spacer></v-spacer>
+                <v-btn color="#01a6be" dark @click="confirmAccept" >
+                    {{ $t("Confirm") }}
+                </v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
+    <!-- Deny Dialog with Reason -->
+    <v-dialog v-model="confirmDenyDialog" max-width="500px">
+        <v-card>
+            <v-card-title class="error white--text">
+                <v-icon left dark>mdi-alert</v-icon>
+                {{ $t("Deny Request") }}
+                <v-spacer></v-spacer>
+                <v-btn-toggle v-model="selectedLanguage" group class="mr-4" dark>
+                    <v-btn x-small value="vi">VI</v-btn>
+                    <v-btn x-small value="cn">中文</v-btn>
+                </v-btn-toggle>
+                <v-btn icon dark @click="confirmDenyDialog = false">
+                    <v-icon>mdi-close</v-icon>
+                </v-btn>
+            </v-card-title>
+            <v-card-text class="pt-4">
+                <v-textarea 
+                v-if="selectedLanguage === 'vi'"
+                v-model="denyReason.vi" 
+                :label="$t('Return reason VietNamese')" 
+                :placeholder="$t('Please provide a VietNamese reason')" 
+                outlined 
+                rows="1" 
+                hide-details
+                class="mb-2"
+                ></v-textarea>
+                <v-textarea
+                v-if="selectedLanguage === 'cn'" 
+                v-model="denyReason.cn"
+                :label="$t('Return reason Chinese')"
+                :placeholder="$t('Please provide a Chinese reason')"
+                outlined
+                hide-details
+                rows="1"
+                ></v-textarea>
+            </v-card-text>
+            <v-card-actions>
+                <v-btn color="grey darken-1" text @click="confirmDenyDialog = false">
+                    {{ $t("Cancel") }}
+                </v-btn>
+                <v-spacer></v-spacer>
+                <v-btn color="error" @click="confirmDeny" :disabled="!isDenyReasonValid">
+                    {{ $t("Confirm Denial") }}
+                </v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
+    <!-- Return Dialog -->
+    <v-dialog v-model="confirmReturnDialog" max-width="500px" transition="dialog" >
+        <v-card elevation="2" class="rounded">
+            <v-card-title class="warning white--text">
+                <v-icon left dark>mdi-alert</v-icon>
+                {{ $t("Return Request") }}
+                <v-spacer></v-spacer>
+                <v-btn-toggle v-model="selectedLanguage" group class="mr-4" dark>
+                    <v-btn x-small value="vi">VI</v-btn>
+                    <v-btn x-small value="cn">中文</v-btn>
+                </v-btn-toggle>
+                <v-btn icon dark @click="confirmReturnDialog = false"> <v-icon>mdi-close</v-icon> </v-btn>
+            </v-card-title>
+            <v-card-text class="pt-4">
+                <v-textarea 
+                v-if="selectedLanguage === 'vi'"
+                v-model="returnReason.vi" 
+                :label="$t('Return reason VietNamese')" 
+                :placeholder="$t('Please provide a VietNamese reason')" 
+                outlined 
+                rows="1" 
+                hide-details 
+                maxlength="500" 
+                class="mb-2"
+                ></v-textarea>
+                
+                <v-textarea
+                v-if="selectedLanguage === 'cn'" 
+                v-model="returnReason.cn"
+                :label="$t('Return reason Chinese')"
+                :placeholder="$t('Please provide a Chinese reason')"
+                outlined
+                rows="1"
+                hide-details
+                maxlength="500"
+                class="mb-2"
+                ></v-textarea>
+            </v-card-text>
+            <v-card-actions>
+                <v-btn color="grey darken-1" text @click="confirmReturnDialog = false" > {{ $t("Cancel") }} </v-btn>
+                <v-spacer></v-spacer>
+                <v-btn color="warning" @click="confirmReturn" :disabled="!isReturnReasonValid" > {{ $t("Confirm Return") }} </v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
+    <!-- Submit Confirmation Dialog -->
+    <v-dialog v-model="confirmSubmitDialog" max-width="500px">
+        <v-card>
+            <v-card-title  style="background-color: #01a6be; color: white;">
+                <v-icon left dark>mdi-send</v-icon>
+                {{ $t("Confirm Action") }}
+                <v-spacer></v-spacer>
+                <v-btn icon dark @click="confirmSubmitDialog = false">
+                    <v-icon>mdi-close</v-icon>
+                </v-btn>
+            </v-card-title>
+            <v-card-text class="pt-4">
+                {{ $t("Are you sure you want to submit this request?") }}
+            </v-card-text>
+            <v-card-actions>
+                <v-btn color="grey darken-1" text @click="confirmSubmitDialog = false" > {{ $t("Cancel") }} </v-btn>
+                <v-spacer></v-spacer>
+                <v-btn color="success" @click="confirmSubmit">
+                    {{ $t("Confirm") }}
+                </v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
 </v-dialog>
 </template>
 <script>
-// import VfaAppFlow from "../../../@global-component/vfa-comp";
+//  import VfaAppFlow from "../../../@global-component/vfa-comp";
 import VfaAppFlow from 'D:/source/@global-component/vfa-comp';
 export default {
     components: { VfaAppFlow },
@@ -728,7 +719,7 @@ export default {
     data() {
         return {
             otherReasonTab: 0,
-            api: "http://gmo021.cansportsvg.com/api/vg-mpr-temp/",
+            api: "http://gmo021.cansportsvg.com/api/vg-mpr/",
             storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
             dateKeyInMenu: false,
             dateRequestMenu: false,
@@ -942,12 +933,10 @@ export default {
             selectedLanguage:'cn',
             unitNames:[],
             localizedApprovalRecords: {},
-            duty: [],
             otherReasonTimers: { vi: null, en: null, cn: null },
             programmaticUpdating: { vi: false, en: false, cn: false },
             lastEditedOtherReason: null,
             otherReasonDebounceMs: 800,
-            // otherReasonValidation: [(v) => !!v || "Required field"],
         };
     },
     watch: {
@@ -1269,18 +1258,25 @@ export default {
             if (!text) return '';
             
             try {
-                const formData = new FormData();
-                formData.append("type", targetLang === 'vi' ? 'secret-v' : 
-                targetLang === 'cn' ? 'secret-c' : 'secret-e');
-                formData.append("string", text);
+                // map internal code 'cn' -> API 'zh-tw'
+                const langMap = { vi: 'vi', en: 'en', cn: 'zh-tw' };
+                const tgt = langMap[targetLang] || targetLang;
+                
+                const payload = {
+                    text: text,
+                    targetLangs: [tgt],
+                    model: "qwen3-8b",
+                    source: "hrm"
+                };
                 
                 const response = await this.$axios.post(
-                "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
-                formData
+                "http://gmo021.cansportsvg.com:49200/api/translate",
+                payload,
+                { headers: { "Content-Type": "application/json" } }
                 );
                 
-                if (response.status === 200) {
-                    return response.data;
+                if (response.status === 200 && response.data && response.data.data && response.data.data.translation) {
+                    return response.data.data.translation[tgt] || text;
                 }
                 return text;
             } catch (e) {
@@ -1298,9 +1294,9 @@ export default {
         },
         
         setCachedTranslation(originalText, locale, translation) {
-            // if (!this.localizedApprovalRecords[originalText]) {
-            //     this.localizedApprovalRecords[originalText] = {};
-            // }
+            if (!this.localizedApprovalRecords[originalText]) {
+                this.localizedApprovalRecords[originalText] = {};
+            }
             this.localizedApprovalRecords[originalText][locale] = translation;
         },
         getLocalizedFromMultiLang(value) {
@@ -1518,41 +1514,46 @@ export default {
             }
         },
         async translateText(sourceText, target, field) {
-            let code = "";
+            let targetKey = "";
             switch (target) {
                 case "vi":
-                code = "secret-v";
+                targetKey = "vi";
                 break;
                 case "en":
-                code = "secret-e";
+                targetKey = "en";
                 break;
                 case "cn":
-                code = "secret-c";
+                targetKey = "zh-tw";
                 break;
                 default:
                 return sourceText;
             }
             
             try {
-                const formData = new FormData();
-                formData.append("type", code);
-                formData.append("string", sourceText);
+                const payload = {
+                    text: sourceText,
+                    targetLangs: [targetKey],
+                    model: "qwen3-8b",
+                    source: "hrm"
+                };
                 
                 const response = await this.$axios.post(
-                "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
-                formData
+                "http://gmo021.cansportsvg.com:49200/api/translate",
+                payload,
+                { headers: { "Content-Type": "application/json" } }
                 );
                 
-                if (response.status === 200) {
+                if (response.status === 200 && response.data && response.data.data && response.data.data.translation) {
+                    const translated = response.data.data.translation[targetKey] || sourceText;
                     if (field === "specialization") {
                         this.form.specialization = {
                             ...this.form.specialization,
-                            [target]: response.data,
+                            [target]: translated,
                         };
                     } else if (field) {
-                        this.form[field] = response.data;
+                        this.form[field] = translated;
                     }
-                    return response.data;
+                    return translated;
                 }
                 return sourceText;
             } catch (err) {
@@ -1649,7 +1650,6 @@ export default {
                 this.eduReq = response.data.dataEduReq;
                 this.lang = response.data.dataLang;
                 this.unitNames = response.data.dataDeptHrm;
-                this.duty = response.data.dataDutyHrm;
                 response.data.dataWps;
                 if (this.lang && this.lang.lang) {
                     try {
@@ -2148,6 +2148,8 @@ export default {
             }
         },
         handleTypeApplyChange(value) {
+            this.showLevelField = value === 3; 
+            
             if (value !== 3) {
                 this.form.level = "";
             }
@@ -2286,6 +2288,8 @@ export default {
             }
         },
         populateForm(data) {
+            console.log("Populating form with data:", data);
+            
             if (!data) return;
             // 1. Parse submitter info
             const submitter = JSON.parse(data.submitter);
@@ -2419,7 +2423,7 @@ export default {
             this.form.sub_position = data.sub_pos;
             this.form.educationLevel = data.edu;
             this.form.workExperience = data.w_exp;
-            this.form.pos = data.pos;
+            this.form.pos = data.pos != null ? Number(data.pos) : "";
             this.form.cancel_date = data.cancel_date || "";
             this.form.tranlator = data.tranlator;
             this.form.safetyLevels = data.wps;
@@ -2452,39 +2456,9 @@ export default {
                     level: qtyData.level || ""
                 };
                 
-                // Resolve level value so it matches dutyItems.item-value (duty_no)
-                const resolveLevelValue = (lvl) => {
-                    if (!lvl) return "";
-                    // already a duty_no string
-                    if (typeof lvl === "string" && lvl.trim()) return lvl.trim();
-                    // numeric id -> try to find duty by id
-                    if (typeof lvl === "number") {
-                        const found = this.duty && this.duty.find(d => Number(d.id) === Number(lvl));
-                        return found ? found.duty_no : String(lvl);
-                    }
-                    // object -> try common properties
-                    if (typeof lvl === "object") {
-                        if (lvl.duty_no) return lvl.duty_no;
-                        if (lvl.value) return lvl.value;
-                        if (lvl.id) {
-                            const foundById = this.duty && this.duty.find(d => Number(d.id) === Number(lvl.id));
-                            return foundById ? foundById.duty_no : String(lvl.id);
-                        }
-                        // fallback to JSON string (unlikely)
-                        return JSON.stringify(lvl);
-                    }
-                    return String(lvl);
-                };
-                
-                const resolvedLevel = resolveLevelValue(this.form.staffCount.level);
-                this.form.staffCount.level = resolvedLevel;
-                
-                if (resolvedLevel) {
-                    // Prefer matching duty_no from this.duty to ensure v-autocomplete selects correctly
-                    const matchedDuty = this.duty && this.duty.find(d => d.duty_no === resolvedLevel || String(d.id) === String(resolvedLevel));
-                    this.form.level = matchedDuty ? matchedDuty.duty_no : resolvedLevel;
-                } else {
-                    this.form.level = "";
+                // LUÔN gán level nếu có trong dữ liệu
+                if (qtyData.level) {
+                    this.form.level = qtyData.level;
                 }
                 
                 // Set form quantity based on position type
@@ -2492,9 +2466,9 @@ export default {
                     this.form.quantity = this.form.staffCount.workers;
                 } else if (this.form.pos === 2) {
                     this.form.quantity = this.form.staffCount.staff;
-                } else if (this.form.pos === 3) {
+                } else if (this.form.pos === 3) {  // SỬA: Thêm case cho pos === 3
                     this.form.quantity = this.form.staffCount.leader;
-                    // ensure form.level already resolved above
+                    this.form.level = this.form.staffCount.level;
                 } else if (this.form.pos === 4) {
                     this.form.quantity = this.form.staffCount.engineers;
                 } else if (this.form.pos === 5) {
@@ -2785,34 +2759,30 @@ export default {
             }
             
             try {
-                // Nếu người dùng nhập tiếng Trung, tự động dịch sang tiếng Việt
+                // Use new translate API to fill missing language
+                const langMap = { vi: 'vi', cn: 'zh-tw' };
+                
                 if (this.denyReason.cn && !this.denyReason.vi) {
-                    const formData = new FormData();
-                    formData.append("type", "secret-v"); // Dịch sang tiếng Việt
-                    formData.append("string", this.denyReason.cn);
-                    
-                    const response = await this.$axios.post(
-                    "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
-                    formData
-                    );
-                    
-                    if (response.status === 200) {
-                        this.denyReason.vi = response.data;
+                    const payload = {
+                        text: this.denyReason.cn,
+                        targetLangs: ['vi'],
+                        model: "qwen3-8b",
+                        source: "hrm"
+                    };
+                    const res = await this.$axios.post("http://gmo021.cansportsvg.com:49200/api/translate", payload, { headers: { "Content-Type": "application/json" } });
+                    if (res.status === 200 && res.data && res.data.data && res.data.data.translation) {
+                        this.denyReason.vi = res.data.data.translation['vi'] || this.denyReason.cn;
                     }
-                }
-                // Nếu người dùng nhập tiếng Việt, tự động dịch sang tiếng Trung
-                else if (this.denyReason.vi && !this.denyReason.cn) {
-                    const formData = new FormData();
-                    formData.append("type", "secret-c"); // Dịch sang tiếng Trung
-                    formData.append("string", this.denyReason.vi);
-                    
-                    const response = await this.$axios.post(
-                    "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
-                    formData
-                    );
-                    
-                    if (response.status === 200) {
-                        this.denyReason.cn = response.data;
+                } else if (this.denyReason.vi && !this.denyReason.cn) {
+                    const payload = {
+                        text: this.denyReason.vi,
+                        targetLangs: ['zh-tw'],
+                        model: "qwen3-8b",
+                        source: "hrm"
+                    };
+                    const res = await this.$axios.post("http://gmo021.cansportsvg.com:49200/api/translate", payload, { headers: { "Content-Type": "application/json" } });
+                    if (res.status === 200 && res.data && res.data.data && res.data.data.translation) {
+                        this.denyReason.cn = res.data.data.translation['zh-tw'] || this.denyReason.vi;
                     }
                 }
                 
@@ -2856,36 +2826,30 @@ export default {
             
             try {
                 if (this.returnReason.cn && !this.returnReason.vi) {
-                    const formData = new FormData();
-                    formData.append("type", "secret-v"); 
-                    formData.append("string", this.returnReason.cn);
-                    
-                    const response = await this.$axios.post(
-                    "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
-                    formData
-                    );
-                    
-                    if (response.status === 200) {
-                        this.returnReason.vi = response.data;
+                    const payload = {
+                        text: this.returnReason.cn,
+                        targetLangs: ['vi'],
+                        model: "qwen3-8b",
+                        source: "hrm"
+                    };
+                    const res = await this.$axios.post("http://gmo021.cansportsvg.com:49200/api/translate", payload, { headers: { "Content-Type": "application/json" } });
+                    if (res.status === 200 && res.data && res.data.data && res.data.data.translation) {
+                        this.returnReason.vi = res.data.data.translation['vi'] || this.returnReason.cn;
                     }
-                }
-                // Nếu người dùng nhập tiếng Việt, tự động dịch sang tiếng Trung
-                else if (this.returnReason.vi && !this.returnReason.cn) {
-                    const formData = new FormData();
-                    formData.append("type", "secret-c"); // Dịch sang tiếng Trung
-                    formData.append("string", this.returnReason.vi);
-                    
-                    const response = await this.$axios.post(
-                    "http://gmo021.cansportsvg.com/public/gg-trans/curl.php",
-                    formData
-                    );
-                    
-                    if (response.status === 200) {
-                        this.returnReason.cn = response.data;
+                } else if (this.returnReason.vi && !this.returnReason.cn) {
+                    const payload = {
+                        text: this.returnReason.vi,
+                        targetLangs: ['zh-tw'],
+                        model: "qwen3-8b",
+                        source: "hrm"
+                    };
+                    const res = await this.$axios.post("http://gmo021.cansportsvg.com:49200/api/translate", payload, { headers: { "Content-Type": "application/json" } });
+                    if (res.status === 200 && res.data && res.data.data && res.data.data.translation) {
+                        this.returnReason.cn = res.data.data.translation['zh-tw'] || this.returnReason.vi;
                     }
                 }
                 
-                // Gửi request với cả 2 ngôn ngữ
+                // Send return request with both languages
                 const response = await this.$axios.post(this.api + "returnRequest", {
                     id: this.editData.id,
                     reason: JSON.stringify(this.returnReason),
@@ -3070,91 +3034,18 @@ export default {
         },
     },
     computed: {
-        dutyItems() {
-            if (!Array.isArray(this.duty)) return [];
-            const supp1List = [
-            "B08","B13","B14","B15",  // Đã xóa B09 và C02
-            "J201","J202","J203","J204","J205","J206","J207","J208","J209","J210",
-            "J211","J212","J213","J214","J215",
-            "J301","J302","J303","J304","J305","J306","J307","J308","J309","J310",
-            "J311","J312","J313","J314","J315",
-            "J401","J402","J403","J404","J405","J406","J407","J408","J409","J410",
-            "J411","J412","J413","J414","J415",
-            "J501","J502","J503","J504","J505","J506","J507","J508","J509","J510",
-            "J511","J512","J513","J514","J515",
-            "J601","J602","J603","J604","J605","J606","J607","J608","J609","J610",
-            "J611","J612","J613","J614","J615"
-            ];
-            
-            const items = this.duty.map(d => {
-                let name = d.duty_no;
-                try {
-                    const parsed = typeof d.duty_name === 'string' ? JSON.parse(d.duty_name) : d.duty_name;
-                    name = parsed[this.$i18n.locale] || parsed.en || parsed.vi || parsed.cn || d.duty_no;
-                    
-                    // Xử lý tên nếu bắt đầu bằng "VG"
-                    if (name.startsWith('VG')) {
-                        // Tách chuỗi theo khoảng trắng và bỏ 2 phần tử đầu
-                        const parts = name.split(' ');
-                        if (parts.length > 2) {
-                            name = parts.slice(2).join(' ');
-                        }
-                    }
-                } catch (e) {
-                    name = d.duty_no;
-                }
-                
-                return {
-                    id: d.id,
-                    value: d.duty_no,
-                    label: `${name}`
-                };
-            });
-            
-            // Lọc bỏ các item trùng lặp label
-            const uniqueItems = items.reduce((acc, current) => {
-                const isDuplicate = acc.find(item => item.label === current.label);
-                if (!isDuplicate) {
-                    acc.push(current);
-                }
-                return acc;
-            }, []);
-            
-            // Lọc theo suppType và loại bỏ B09, C02
-            if (this.form.suppType == 1) {
-                return uniqueItems.filter(it => 
-                supp1List.includes(it.value) && 
-                !["B09", "C02"].includes(it.value)
-                );
-            }
-            if (this.form.suppType == 2) {
-                return uniqueItems.filter(it => 
-                !supp1List.includes(it.value) && 
-                !["B09", "C02"].includes(it.value)
-                );
-            }
-            return uniqueItems.filter(it => !["B09", "C02"].includes(it.value));
-        },
         otherReasonValidation() {
             const vi = this.form.recruitment.isOther_reason.vi;
             const en = this.form.recruitment.isOther_reason.en; 
             const cn = this.form.recruitment.isOther_reason.cn;
             
-            return [
-            // field required validator
-            (value) => !!value || this.$t('This field is required'),
-            // cross-field validator: if any language filled then require all three
-            (value) => {
-                const vi = (this.form.recruitment.isOther_reason?.vi || '').toString().trim();
-                const en = (this.form.recruitment.isOther_reason?.en || '').toString().trim();
-                const cn = (this.form.recruitment.isOther_reason?.cn || '').toString().trim();
-                // if none filled -> OK
-                if (!vi && !en && !cn) return true;
-                // if all filled -> OK
-                if (vi && en && cn) return true;
-                return this.$t('All language fields are required');
-            }
-            ];
+            return {
+                required: (value) => !!value || this.$t('This field is required'),
+                allFields: () => {
+                    if (!vi && !en && !cn) return true; // Chưa nhập gì thì OK
+                    return (!!vi && !!en && !!cn) || this.$t('All language fields are required');
+                }
+            };
         },
         showLevelField() {
             return this.form.pos === 3;
@@ -3492,18 +3383,14 @@ export default {
             });
         },
         posItems() {
-            if (!this.pos || !Array.isArray(this.pos) || this.pos.length === 0) {
-                console.warn("No position types available");
-                return [];
-            }
             
-            // Filter pos items based on suppType
             const positions = this.pos.filter((type) => {
-                if (this.form.suppType === 2) {
-                    // suppType 2: only show id = 3
-                    return type.id === 3;
+                if (this.form.suppType === 1) {
+                    return true; // Include all positions
+                } else if (this.form.suppType === 2) {
+                    return type.id !== 1;
                 }
-                return true;
+                return true; // Default case, include all positions
             });
             
             return positions.map((type) => {
@@ -3597,6 +3484,60 @@ export default {
             return this.parsedSafetyLevels;
         },
         canApproveItem() {
+            // if (!this.editData || !this.activeUser) return false;
+            
+            // const originalStatus = this.editData.status;
+            // const amendmentStatus = this.editData.status_amendent;
+            
+            // if ((originalStatus === 'completed' || originalStatus === 'declined') &&
+            // (!amendmentStatus || amendmentStatus === 'completed' || amendmentStatus === 'declined')) {
+            //     return false;
+            // }
+            
+            // try {
+            //     const approvalData = this.editData.approval ? JSON.parse(this.editData.approval) : [];
+            //     if (!this.dataFlow || !Array.isArray(this.dataFlow)) return false;
+            
+            //     const statusToLevel = {
+            //         'waiting_dept': 0,
+            //         'waiting_div': 1,
+            //         'waiting_hr_rec_sf': 2,
+            //         'waiting_hr': 3,
+            //         'waiting_ad': 4,
+            //         'waiting_gm': 5
+            //     };
+            
+            //     let currentLevel;
+            
+            //     if (amendmentStatus && 
+            //     amendmentStatus !== 'completed' && 
+            //     amendmentStatus !== 'declined') {
+            //         currentLevel = statusToLevel[amendmentStatus];
+            //     } else {
+            //         // Otherwise use original status
+            //         currentLevel = statusToLevel[originalStatus];
+            //     }
+            
+            //     if (currentLevel === undefined) return false;
+            
+            //     const currentFlow = this.dataFlow[currentLevel];
+            //     if (!currentFlow?.managers) return false;
+            
+            //     // Check if current user is authorized approver
+            //     return currentFlow.managers.some(manager => {
+            //         if (manager.empno === this.activeUser.empno) return true;
+            
+            //         return manager.deputies?.some(deputy => 
+            //         deputy.empno === this.activeUser.empno && 
+            //         deputy.status === true
+            //         );
+            //     });
+            
+            // } catch (error) {
+            //     console.error("Error in canApproveItem:", error);
+            //     return false;
+            // }
+            
             if (!this.editData || !this.activeUser) return false;
             
             const originalStatus = this.editData.status;
@@ -3685,17 +3626,17 @@ export default {
         getJobDescColWidth() {
             let width = 10;
             
-            if (
-            this.form.pos === 1 &&
-            this.form.recruitment.reason !== 2
-            ) {
-                width = 12;
-            } else if (
-            this.form.pos === 1 ||
-            this.form.recruitment.reason !== 2
-            ) {
-                width = 10;
-            }
+            // if (
+            // this.form.pos === 1 &&
+            // this.form.recruitment.reason !== 2
+            // ) {
+            //     width = 12;
+            // } else if (
+            // this.form.pos === 1 ||
+            // this.form.recruitment.reason !== 2
+            // ) {
+            //     width = 10;
+            // }
             return width;
         },
         hasEitherSelected() {
@@ -3817,14 +3758,15 @@ export default {
                         const cached = this.getCachedTranslation(text, this.$i18n.locale);
                         if (cached) {
                             translatedRecords[key] = cached;
-                        }
-                        else {
+                        } else {
                             // If not in cache, queue translation
                             this.translateApprovalRecord(text, this.$i18n.locale).then(translated => {
                                 this.setCachedTranslation(text, this.$i18n.locale, translated);
                                 translatedRecords[key] = translated;
+                                // Force update to reflect changes
                                 this.$forceUpdate();
                             });
+                            // Use original text while waiting for translation
                             translatedRecords[key] = text;
                         }
                     }
@@ -4077,7 +4019,7 @@ export default {
             "Unit": "Đơn vị",
             "Type Apply": "Chức vụ",
             "Level": "Cấp bậc",
-            "Quantity request": "Số lượng",
+            "Quantity request": "Số lượng yêu cẩu",
             "Change Quantity": "Số lượng thay đổi",
             "Change Reason": "Lý do thay đổi",
             "Req.date": "Ngày yêu cầu công nhân - nhân viên đến",
