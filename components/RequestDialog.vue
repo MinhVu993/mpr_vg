@@ -229,11 +229,11 @@
                                         </v-tabs>
                                         
                                         <v-tabs-items v-model="otherReasonTab" class="mt-2">
-                                            <v-tab-item>
+                                             <v-tab-item>
                                                 <v-textarea
                                                 :disabled="formDisabled"
                                                 v-model="form.recruitment.isOther_reason.vi"
-                                                @input="onOtherReasonInput('vi', $event)"
+                                                @input="val => onOtherReasonInput('vi', val)"
                                                 @click:clear="onOtherReasonClear('vi')"
                                                 outlined
                                                 dense
@@ -249,7 +249,7 @@
                                                 <v-textarea
                                                 :disabled="formDisabled"
                                                 v-model="form.recruitment.isOther_reason.en"
-                                                @input="onOtherReasonInput('en', $event)"
+                                                @input="val => onOtherReasonInput('en', val)"
                                                 @click:clear="onOtherReasonClear('en')"
                                                 outlined
                                                 dense
@@ -265,7 +265,7 @@
                                                 <v-textarea
                                                 :disabled="formDisabled"
                                                 v-model="form.recruitment.isOther_reason.cn"
-                                                @input="onOtherReasonInput('cn', $event)"
+                                                @input="val => onOtherReasonInput('cn', val)"
                                                 @click:clear="onOtherReasonClear('cn')"
                                                 outlined
                                                 dense
@@ -1160,70 +1160,95 @@ export default {
         },
     },
     methods: {
-        async onOtherReasonInput(lang, value) {
+         async onOtherReasonInput(lang, value) {
+            // Debug: kiểm tra input tới handler
+            console.debug('onOtherReasonInput called', { lang, value, programmatic: this.programmaticUpdating[lang] });
+
             if (this.programmaticUpdating[lang]) {
+                // nếu là update chương trình -> cho qua (reset flag)
                 this.programmaticUpdating[lang] = false;
+                console.debug('Ignored programmatic update for', lang);
                 return;
             }
+
+            // lưu giá trị ngay lập tức (v-model cũng làm điều này nhưng giữ cho nhất quán)
             this.form.recruitment.isOther_reason[lang] = value;
-            
-            // If user cleared the field -> clear all three and cancel timers
+
+            // nếu rỗng -> clear tất cả và hủy timers
             if (!value || value.toString().trim() === "") {
                 clearTimeout(this.otherReasonTimers.vi);
                 clearTimeout(this.otherReasonTimers.en);
                 clearTimeout(this.otherReasonTimers.cn);
-                
-                // mark programmatic updates so other handlers don't re-enter
+
                 this.programmaticUpdating.vi = true;
                 this.programmaticUpdating.en = true;
                 this.programmaticUpdating.cn = true;
-                
+
                 this.form.recruitment.isOther_reason.vi = "";
                 this.form.recruitment.isOther_reason.en = "";
                 this.form.recruitment.isOther_reason.cn = "";
+
+                // reset flags nhanh sau clear để không chặn user tiếp theo
+                setTimeout(() => {
+                    this.programmaticUpdating.vi = false;
+                    this.programmaticUpdating.en = false;
+                    this.programmaticUpdating.cn = false;
+                }, 50);
                 return;
             }
-            
+
             const text = value.toString().trim();
             if (!text) return;
-            
+
             // debounce per-language
             clearTimeout(this.otherReasonTimers[lang]);
             this.otherReasonTimers[lang] = setTimeout(async () => {
                 try {
                     if (lang === "vi") {
-                        const resEn = await this.translateText(text, "en");
-                        const resCn = await this.translateText(text, "cn");
-                        
-                        // mark programmatic updates to prevent re-entrancy
-                        this.programmaticUpdating.en = true;
-                        this.form.recruitment.isOther_reason.en = resEn || "";
-                        
-                        this.programmaticUpdating.cn = true;
-                        this.form.recruitment.isOther_reason.cn = resCn || "";
+                        const [resEn, resCn] = await Promise.allSettled([
+                            this.translateText(text, "en"),
+                            this.translateText(text, "cn")
+                        ]);
+                        // xử lý kết quả an toàn
+                        if (resEn.status === 'fulfilled' && resEn.value) {
+                            this.programmaticUpdating.en = true;
+                            this.form.recruitment.isOther_reason.en = resEn.value;
+                        }
+                        if (resCn.status === 'fulfilled' && resCn.value) {
+                            this.programmaticUpdating.cn = true;
+                            this.form.recruitment.isOther_reason.cn = resCn.value;
+                        }
                     } else if (lang === "en") {
-                        const resVi = await this.translateText(text, "vi");
-                        const resCn = await this.translateText(text, "cn");
-                        
-                        this.programmaticUpdating.vi = true;
-                        this.form.recruitment.isOther_reason.vi = resVi || "";
-                        
-                        this.programmaticUpdating.cn = true;
-                        this.form.recruitment.isOther_reason.cn = resCn || "";
+                        const [resVi, resCn] = await Promise.allSettled([
+                            this.translateText(text, "vi"),
+                            this.translateText(text, "cn")
+                        ]);
+                        if (resVi.status === 'fulfilled' && resVi.value) {
+                            this.programmaticUpdating.vi = true;
+                            this.form.recruitment.isOther_reason.vi = resVi.value;
+                        }
+                        if (resCn.status === 'fulfilled' && resCn.value) {
+                            this.programmaticUpdating.cn = true;
+                            this.form.recruitment.isOther_reason.cn = resCn.value;
+                        }
                     } else if (lang === "cn") {
-                        const resVi = await this.translateText(text, "vi");
-                        const resEn = await this.translateText(text, "en");
-                        
-                        this.programmaticUpdating.vi = true;
-                        this.form.recruitment.isOther_reason.vi = resVi || "";
-                        
-                        this.programmaticUpdating.en = true;
-                        this.form.recruitment.isOther_reason.en = resEn || "";
+                        const [resVi, resEn] = await Promise.allSettled([
+                            this.translateText(text, "vi"),
+                            this.translateText(text, "en")
+                        ]);
+                        if (resVi.status === 'fulfilled' && resVi.value) {
+                            this.programmaticUpdating.vi = true;
+                            this.form.recruitment.isOther_reason.vi = resVi.value;
+                        }
+                        if (resEn.status === 'fulfilled' && resEn.value) {
+                            this.programmaticUpdating.en = true;
+                            this.form.recruitment.isOther_reason.en = resEn.value;
+                        }
                     }
                 } catch (e) {
-                    console.error("Translate error:", e);
+                    console.error("Translate error (onOtherReasonInput):", e);
                 }
-            }, this.otherReasonDebounceMs);
+            }, this.otherReasonDebounceMs || 800);
         },
         
         onOtherReasonClear(lang) {
@@ -1241,15 +1266,12 @@ export default {
             this.form.recruitment.isOther_reason.en = "";
             this.form.recruitment.isOther_reason.cn = "";
             
-            // ensure flags are cleared quickly so next user typing is processed
-            // small timeout avoids swallowing the first real user input after clear
             setTimeout(() => {
                 this.programmaticUpdating.vi = false;
                 this.programmaticUpdating.en = false;
                 this.programmaticUpdating.cn = false;
             }, 50);
             
-            // also reset timer refs
             this.otherReasonTimers.vi = null;
             this.otherReasonTimers.en = null;
             this.otherReasonTimers.cn = null;
@@ -1258,7 +1280,6 @@ export default {
             if (!text) return '';
             
             try {
-                // map internal code 'cn' -> API 'zh-tw'
                 const langMap = { vi: 'vi', en: 'en', cn: 'zh-tw' };
                 const tgt = langMap[targetLang] || targetLang;
                 
@@ -2288,8 +2309,6 @@ export default {
             }
         },
         populateForm(data) {
-            console.log("Populating form with data:", data);
-            
             if (!data) return;
             // 1. Parse submitter info
             const submitter = JSON.parse(data.submitter);
@@ -3952,7 +3971,6 @@ export default {
             "Return Request": "Return Request",
             "Return to level": "Return to Level",
             "Return reason": "Return Reason",
-            "Please provide a reason for returning this request": "Please provide a reason for returning this request",
             "Confirm Return": "Confirm Return",
             "Unit Level": "Unit Level",
             "Department Level": "Department Level",
@@ -4004,7 +4022,12 @@ export default {
             "Min": "Min",
             "Max": "Max",
             "This field is required": "This field is required",
-            "Delete": "Delete"
+            "Delete": "Delete",
+            "Please provide a Chinese reason": "Please provide a Chinese reason",
+            "Approval record": "Approval record",
+            "Please provide approval comments": "Please provide approval comments",
+            "Return reason Chinese": "Return reason Chinese",
+            "Please select Division and Department first": "Please select Division and Department first"
         },
         "vi": {
             "Create new request": "Tạo yêu cầu mới",
@@ -4067,7 +4090,6 @@ export default {
             "Return Request": "Trả về yêu cầu",
             "Return to level": "Trả về cấp bậc",
             "Return reason": "Lý do trả về",
-            "Please provide a reason for returning this request": "Vui lòng cung cấp lý do trả về yêu cầu này",
             "Confirm Return": "Xác nhận trả về",
             "Unit Level": "Cấp đơn vị",
             "Department Level": "Cấp bộ phận",
@@ -4127,7 +4149,12 @@ export default {
             "Min": "Tối thiểu",
             "Max": "Tối đa",
             "This field is required": "Trường này là bắt buộc",
-            "Delete": "Xóa"
+            "Delete": "Xóa",
+            "Please provide a Chinese reason": "Vui lòng cung cấp lý do bằng tiếng Hoa",
+            "Approval record": "Lịch sử phê duyệt",
+            "Please provide approval comments": "Vui lòng cung cấp nhận xét phê duyệt",
+            "Return reason Chinese": "Lý do trả về bằng tiếng Hoa",
+            "Please select Division and Department first": "Vui lòng chọn Sở và Bộ phận trước"
         },
         "cn": {
             "Create new request": "创建新请求",
@@ -4191,7 +4218,6 @@ export default {
             "Return Request": "退回请求",
             "Return to level": "退回至级别",
             "Return reason": "退回原因",
-            "Please provide a reason for returning this request": "请提供退回此请求的原因",
             "Confirm Return": "确认退回",
             "Unit Level": "单位级别",
             "Department Level": "部门级别",
@@ -4250,7 +4276,12 @@ export default {
             "Max": "最多",
             "This field is required": "此字段为必填项",
             "Change remark": "其他意見",
-            "Delete": "删除"
+            "Delete": "删除",
+            "Please provide a Chinese reason": "请提供中文理由",
+            "Approval record": "审批记录",
+            "Please provide approval comments": "请提供审批意见",
+            "Return reason Chinese": "退回理由中文",
+            "Please select Division and Department first": "请先选择处级和部门"
         }
     }
 </i18n>

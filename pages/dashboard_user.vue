@@ -75,7 +75,7 @@
                     </v-card>
                 </v-menu>
             </v-tabs>
-            <v-data-table :headers="originalHeaders" :items="filteredData" :search="search" class="elevation-1"  
+            <v-data-table :headers="originalHeaders" :items="filteredData" :search="search" class="elevation-1"  :loading="loading"
             :footer-props="{
                 showFirstLastPage: true,
                 firstIcon: 'mdi-arrow-collapse-left',
@@ -84,6 +84,12 @@
                 nextIcon: 'mdi-plus',
                 'items-per-page-text': $t('Rows per page'),
             }">
+             <template v-slot:loading>
+                <div class="text-center pa-4">
+                    <img src="loading_1.gif" alt="Loading..." style="width: 50px; height: 50px;" />
+                    <p class="mt-2">{{ $t('loadingData') }}</p>
+                </div>
+            </template>
             <template #[`header.submitter`]>
                 <DsFilter :name="$t('Submitted by')" :in-items="filterItems.submitter"
                 @changed="updateFilter('submitter', $event)" />
@@ -438,6 +444,15 @@
             <v-icon dark left>mdi-history</v-icon>
             {{ $t('Approval History') }}
             <v-spacer></v-spacer>
+            <v-btn @click="setLocale('vi')" text small dark class="mr-2">
+                Vi
+            </v-btn>
+            <v-btn @click="setLocale('en')" text small dark class="mr-2">
+                EN
+            </v-btn>
+            <v-btn @click="setLocale('cn')" text small dark class="mr-5">
+                中文
+            </v-btn>
             <v-btn icon dark @click="approvalDialog = false">
                 <v-icon>mdi-close</v-icon>
             </v-btn>
@@ -455,15 +470,21 @@
                     <v-expansion-panel-content>
                         <v-data-table :headers="approvalHeaders" :items="currentApprovalData" hide-default-footer class="elevation-1" >
                             <template v-slot:[`item.type`]="{ item }">
-                                {{ getApprovalLevelName(item.type) }}
+                                {{ item.type }}
                             </template>
                             <template v-slot:[`item.status`]="{ item }">
                                 <v-chip small :color="getApprovalStatusColor(item.status)" dark label>
-                                    {{ (item.status || 'waiting') }}
+                                    {{ $t(item.status || 'waiting') }}
                                 </v-chip>
                             </template>
                             <template v-slot:[`item.reason_denied`]="{ item }">
-                                <span v-if="item.status === 'rejected' && item.reason_denied">{{ item.reason_denied }}</span>
+                                {{ getLocalizedText(item.reason_denied_raw || item.reason_denied || '') }}
+                            </template>
+                            <template v-slot:[`item.return_reason`]="{ item }">
+                                {{ getLocalizedText(item.return_reason_raw || item.return_reason || '') }}
+                            </template>
+                            <template v-slot:[`item.approval_record`]="{ item }">
+                                {{ getLocalizedText(item.approval_record_raw || item.approval_record || '') }}
                             </template>
                         </v-data-table>
                     </v-expansion-panel-content>
@@ -483,11 +504,17 @@
                             </template>
                             <template v-slot:[`item.status`]="{ item }">
                                 <v-chip small :color="getApprovalStatusColor(item.status)" dark label>
-                                    {{ $t(item.status) }}
+                                    {{ $t(item.status || 'waiting') }}
                                 </v-chip>
                             </template>
                             <template v-slot:[`item.reason_denied`]="{ item }">
-                                <span v-if="item.status === 'rejected' && item.reason_denied">{{ item.reason_denied }}</span>
+                                {{ getLocalizedText(item.reason_denied_raw || item.reason_denied || '') }}
+                            </template>
+                            <template v-slot:[`item.return_reason`]="{ item }">
+                                {{ getLocalizedText(item.return_reason_raw || item.return_reason || '') }}
+                            </template>
+                            <template v-slot:[`item.approval_record`]="{ item }">
+                                {{ getLocalizedText(item.approval_record_raw || item.approval_record || '') }}
                             </template>
                         </v-data-table>
                     </v-expansion-panel-content>
@@ -556,7 +583,7 @@
         </v-btn>
         <v-spacer></v-spacer>
         <v-btn color="success" @click="updateCancelDate" :loading="loading">
-            {{ $t('Update') }}
+            {{ $t('Updated') }}
         </v-btn>
     </v-card-actions>
 </v-card>
@@ -784,7 +811,7 @@ export default {
             selectedYears: [new Date().getFullYear().toString()],
             yearMenu: false,
             approvalDialog: false,
-                selectedApprovalData: [],
+            selectedApprovalData: [],
             dataFlow: '',
             selectedItemForAccept: null,
             activeUser: '',
@@ -848,13 +875,13 @@ export default {
             { text: this.$t('Department'), value: 'dept', width: '150px', sortable: false },
             { text: this.$t('Status'), value: 'status', align: 'center', sortable: false },
             { text: this.$t('Reason Denied'), value: 'reason_denied', align: 'center', sortable: false },
-            { text: this.$t('Return Reason'), value: 'return_reason', align: 'center', sortable: false },
+            { text: this.$t('Return reason'), value: 'return_reason', align: 'center', sortable: false },
             { text: this.$t('Approval Record'), value: 'approval_record', align: 'center', sortable: false },
             { text: this.$t('Date'), value: 'processed_at', align: 'center', sortable: false }
             ];
         },
         currentApprovalData() {
-             try {
+            try {
                 if (!this.selectedItem?.approval) return [];
                 const approvalData = JSON.parse(this.selectedItem.approval);
                 let currentApprovalRecord = {};
@@ -872,20 +899,12 @@ export default {
                 .filter(level => level.approver && level.approver.empno)
                 .map((level, index) => {
                     const recordKey = level.type;
-                    const rawApprovalRecord = currentApprovalRecord[recordKey] || '';
-                    const approvalRecord = this.getLocalizedText(rawApprovalRecord);
+                    const rawApprovalRecord = currentApprovalRecord[recordKey] || ''; // keep raw
+                    // NOTE: do not call getLocalizedText here — keep raw so template can translate on render
                     
-                    // Parse return_reason
-                    let returnReasonText = '';
-                    if (level.return_reason) {
-                        returnReasonText = this.getLocalizedText(level.return_reason);
-                    }
-                    
-                    // Parse reason_denied
-                    let reasonDeniedText = '';
-                    if (level.reason_denied) {
-                        reasonDeniedText = this.getLocalizedText(level.reason_denied);
-                    }
+                    // Parse return_reason and reason_denied as raw
+                    const rawReturnReason = level.return_reason || '';
+                    const rawReasonDenied = level.reason_denied || '';
                     
                     return {
                         level: index + 1,
@@ -895,9 +914,9 @@ export default {
                         name: level.approver.name,
                         dept: level.approver.dept,
                         status: level.status || '',
-                        reason_denied: reasonDeniedText,
-                        return_reason: returnReasonText,
-                        approval_record: approvalRecord,
+                        reason_denied_raw: rawReasonDenied,
+                        return_reason_raw: rawReturnReason,
+                        approval_record_raw: rawApprovalRecord,
                         processed_at: level.processed_at ? this.formatDate(level.processed_at) : '',
                         cycleIndex: 'current'
                     };
@@ -909,34 +928,51 @@ export default {
             
         },
         groupedApprovalData() {
-             try {
+            try {
                 const grouped = {};
-                this.selectedApprovalData.forEach(item => {
-                    if (item.cycleIndex && 
-                    item.cycleIndex !== 'current' && 
-                    typeof item.cycleIndex === 'number') { // Đảm bảo là số, không phải string
-                        
-                        const cycleIndex = item.cycleIndex - 1;
-                        if (!grouped[cycleIndex]) {
-                            grouped[cycleIndex] = [];
-                        }
-                        const returnReasonText = item.return_reason ? this.getLocalizedText(item.return_reason) : '';
-                        const reasonDeniedText = item.reason_denied ? this.getLocalizedText(item.reason_denied) : '';
-                        let approvalRecordText = item.approval_record ? this.getLocalizedText(item.approval_record) : '';
-                        
-                        grouped[cycleIndex].push({
-                            ...item,
-                            return_reason: returnReasonText,
-                            reason_denied: reasonDeniedText,
-                            approval_record: approvalRecordText,
-                            processed_at: item.processed_at ? this.formatDate(item.processed_at) : ''
-                        });
+                const normalize = (v) => {
+                    if (v === null || v === undefined) return '';
+                    if (typeof v === 'object') {
+                        const vals = Object.values(v).map(x => (x === null || x === undefined) ? '' : String(x).trim());
+                        return vals.some(x => x !== '') ? v : '';
                     }
+                    const s = String(v).trim();
+                    if (!s) return '';
+                    if (s.startsWith('{') && s.endsWith('}')) {
+                        try {
+                            const obj = JSON.parse(s);
+                            const vals = Object.values(obj).map(x => (x === null || x === undefined) ? '' : String(x).trim());
+                            return vals.some(x => x !== '') ? obj : '';
+                        } catch (e) {
+                            // not JSON, return raw string
+                        }
+                    }
+                    return s;
+                };
+                
+                (this.selectedApprovalData || []).forEach(item => {
+                    const idx = Number(item.cycleIndex);
+                    // skip current cycle / invalid indices
+                    if (!idx || item.cycleIndex === 'current') return;
+                    
+                    const cycleIndex = idx - 1;
+                    if (!grouped[cycleIndex]) grouped[cycleIndex] = [];
+                    
+                    grouped[cycleIndex].push({
+                        ...item,
+                        level: Number(item.level) || 0,
+                        cycleIndex: idx, // ensure numeric
+                        // preserve "raw" value (either parsed object or string or '')
+                        reason_denied_raw: normalize(item.reason_denied),
+                        return_reason_raw: normalize(item.return_reason),
+                        approval_record_raw: normalize(item.approval_record),
+                        processed_at: item.processed_at ? this.formatDate(item.processed_at) : ''
+                    });
                 });
                 
-                // Sắp xếp từng nhóm theo level
-                Object.keys(grouped).forEach(cycleIndex => {
-                    grouped[cycleIndex].sort((a, b) => a.level - b.level);
+                // sort levels inside each cycle
+                Object.keys(grouped).forEach(key => {
+                    grouped[key].sort((a, b) => (Number(a.level) || 0) - (Number(b.level) || 0));
                 });
                 
                 return Object.values(grouped);
@@ -1302,66 +1338,115 @@ export default {
         },
     },
     methods: {
+        setLocale(locale) {
+            this.$i18n.locale = locale;
+            // localStorage.setItem('preferred-locale', locale);
+            this.$forceUpdate();
+        },
         getLocalizedText(raw) {
             try {
-                if (!raw && raw !== 0) return '';
-                const locale = this.$i18n?.locale || (localStorage.getItem('preferred-locale') || 'en');
+                if (raw === null || raw === undefined) return '';
                 
-                // If already object or JSON with language keys
-                if (typeof raw === 'object') {
-                    return raw[locale] || raw.vi || raw.en || raw.cn || raw['zh-tw'] || String(Object.values(raw)[0] || '');
-                }
-                const s = String(raw).trim();
-                if (!s) return '';
-                
-                // If JSON string with language keys
-                if (s.startsWith('{')) {
-                    try {
-                        const obj = JSON.parse(s);
-                        return obj[locale] || obj.vi || obj.en || obj.cn || obj['zh-tw'] || '';
-                    } catch (e) {
-                        // fallthrough to plain string
-                    }
-                }
-                
-                // plain string -> check cache or request background translation
-                if (!this._translateCache) this._translateCache = new Map();
-                const cacheKey = `${s}::${locale}`;
-                if (this._translateCache.has(cacheKey)) return this._translateCache.get(cacheKey);
-                
-                // Heuristic: if text already likely in target language, avoid API
+                const locale = (this.$i18n && this.$i18n.locale) ? this.$i18n.locale : (localStorage.getItem('preferred-locale') || 'en');
                 const targetLang = (locale === 'cn' ? 'zh-tw' : locale);
-                const hasCJK = /[\u4e00-\u9fff]/.test(s);
-                const hasVietnameseDiacritics = /[àáảãạăắằẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳỵỷỹý]/i.test(s);
-                const isAscii = /^[\x00-\x7F]*$/.test(s);
+                if (!this._translateCache) this._translateCache = new Map();
                 
-                if ((hasCJK && targetLang === 'zh-tw') || (hasVietnameseDiacritics && targetLang === 'vi') || (isAscii && targetLang === 'en')) {
-                    this._translateCache.set(cacheKey, s);
-                    return s;
-                }
-                
-                // Fire-and-forget translate request
-                (async () => {
+                const translateAsync = async (sourceText, cacheKey) => {
                     try {
                         const translateApi = 'http://gmo021.cansportsvg.com:49200/api/translate';
                         const payload = {
-                            text: s,
+                            text: sourceText,
                             targetLangs: [targetLang],
                             model: 'qwen3-8b',
                             source: 'hrm'
                         };
                         const res = await this.$axios.post(translateApi, payload);
                         const translations = res?.data?.data?.translation || {};
-                        const translated = translations[targetLang] || '';
-                        this._translateCache.set(cacheKey, translated || s);
+                        const translated = translations[targetLang] || translations[locale] || '';
+                        this._translateCache.set(cacheKey, translated || sourceText);
                         this.$forceUpdate();
                     } catch (e) {
                         console.error('Translation API error', e);
-                        this._translateCache.set(cacheKey, s);
+                        this._translateCache.set(cacheKey, sourceText);
                     }
-                })();
+                };
                 
-                // fallback: return original now
+                // If raw is object (already parsed)
+                if (typeof raw === 'object') {
+                    // API response shape { translation: { en: "..." } }
+                    if (raw.translation && typeof raw.translation === 'object') {
+                        const txt = raw.translation[targetLang] || raw.translation[locale] || raw.translation.vi || raw.translation.en || String(Object.values(raw.translation)[0] || '');
+                        return txt || '';
+                    }
+                    
+                    // locale present directly
+                    if (raw[locale] && String(raw[locale]).trim()) return String(raw[locale]);
+                    // fallback immediate picks any existing language
+                    if (raw.en && String(raw.en).trim() && locale === 'en') return String(raw.en);
+                    if (raw.vi && String(raw.vi).trim() && locale === 'vi') return String(raw.vi);
+                    if (raw.cn && String(raw.cn).trim() && locale === 'cn') return String(raw.cn);
+                    
+                    // If missing target locale, find source text and translate async
+                    const supportedOrder = ['vi', 'en', 'cn'];
+                    const sourceLang = supportedOrder.find(k => raw[k] && String(raw[k]).trim());
+                    const sourceText = sourceLang ? String(raw[sourceLang]).trim() : String(Object.values(raw).find(v => v && String(v).trim()) || '');
+                    if (!sourceText) return '';
+                    
+                    const cacheKey = `obj::${JSON.stringify(raw)}::${locale}`;
+                    if (this._translateCache.has(cacheKey)) return this._translateCache.get(cacheKey);
+                    // seed cache with sourceText to show immediately and fetch translation in background
+                    this._translateCache.set(cacheKey, sourceText);
+                    translateAsync(sourceText, cacheKey);
+                    return sourceText;
+                }
+                
+                // raw is string
+                const s = String(raw).trim();
+                if (!s) return '';
+                
+                // If string encodes JSON object like {"vi":"...", "cn":"..."}
+                if (s.startsWith('{')) {
+                    try {
+                        const obj = JSON.parse(s);
+                        // if API translation structure
+                        if (obj && obj.translation && typeof obj.translation === 'object') {
+                            const txt = obj.translation[targetLang] || obj.translation[locale] || obj.translation.vi || obj.translation.en || String(Object.values(obj.translation)[0] || '');
+                            return txt || '';
+                        }
+                        // if object contains locale keys
+                        if (obj[locale] && String(obj[locale]).trim()) return String(obj[locale]);
+                        
+                        const supportedOrder = ['vi', 'en', 'cn'];
+                        const sourceLang = supportedOrder.find(k => obj[k] && String(obj[k]).trim());
+                        const sourceText = sourceLang ? String(obj[sourceLang]).trim() : String(Object.values(obj).find(v => v && String(v).trim()) || '');
+                        if (!sourceText) return '';
+                        
+                        const cacheKey = `json::${s}::${locale}`;
+                        if (this._translateCache.has(cacheKey)) return this._translateCache.get(cacheKey);
+                        this._translateCache.set(cacheKey, sourceText);
+                        translateAsync(sourceText, cacheKey);
+                        return sourceText;
+                    } catch (e) {
+                        // not JSON, continue to potential translation below
+                    }
+                }
+                
+                // plain string: check cache or call translate if needed
+                const cacheKey = `str::${s}::${locale}`;
+                if (this._translateCache.has(cacheKey)) return this._translateCache.get(cacheKey);
+                
+                // heuristics: if text already in desired language, return
+                const hasCJK = /[\u4e00-\u9fff]/.test(s);
+                const hasVietnameseDiacritics = /[àáảãạăắằẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳỵỷỹý]/i.test(s);
+                const isAscii = /^[\x00-\x7F]*$/.test(s);
+                if ((hasCJK && targetLang === 'zh-tw') || (hasVietnameseDiacritics && targetLang === 'vi') || (isAscii && targetLang === 'en')) {
+                    this._translateCache.set(cacheKey, s);
+                    return s;
+                }
+                
+                // seed & async translate
+                this._translateCache.set(cacheKey, s);
+                translateAsync(s, cacheKey);
                 return s;
             } catch (e) {
                 console.error('getLocalizedText error', e);
@@ -1435,18 +1520,18 @@ export default {
                     }
                 }
                 if (!obj || typeof obj !== 'object') return obj || '';
-
+                
                 const supported = ['vi', 'en', 'cn'];
                 const locale = (this.$i18n && this.$i18n.locale) ? this.$i18n.locale : (localStorage.getItem('preferred-locale') || 'en');
-
+                
                 // if text already present for locale return it
                 if (obj[locale] && String(obj[locale]).trim()) return String(obj[locale]);
-
+                
                 // find a source language with text
                 const sourceLang = supported.find(k => obj[k] && String(obj[k]).trim());
                 const sourceText = (sourceLang && obj[sourceLang]) ? String(obj[sourceLang]).trim() : '';
                 if (!sourceText) return '';
-
+                
                 // prepare cache
                 if (!this._otherReasonCache) this._otherReasonCache = new Map();
                 const cacheKey = JSON.stringify(obj);
@@ -1456,17 +1541,17 @@ export default {
                 }
                 const cached = this._otherReasonCache.get(cacheKey) || {};
                 if (cached[locale] && String(cached[locale]).trim()) return String(cached[locale]);
-
+                
                 // background async translation using new API
                 (async () => {
                     try {
                         const translateApi = 'http://gmo021.cansportsvg.com:49200/api/translate';
                         // Build list of target languages to request (map 'cn' -> 'zh-tw')
                         const missing = supported
-                            .filter(k => !cached[k] || !String(cached[k]).trim())
-                            .filter(k => k !== sourceLang);
+                        .filter(k => !cached[k] || !String(cached[k]).trim())
+                        .filter(k => k !== sourceLang);
                         if (missing.length === 0) return;
-
+                        
                         const targetLangs = Array.from(new Set(missing.map(k => (k === 'cn' ? 'zh-tw' : k))));
                         const payload = {
                             text: sourceText,
@@ -1474,10 +1559,10 @@ export default {
                             model: 'qwen3-8b',
                             source: 'hrm'
                         };
-
+                        
                         const res = await this.$axios.post(translateApi, payload);
                         const translations = res?.data?.data?.translation || {};
-
+                        
                         const cur = this._otherReasonCache.get(cacheKey) || {};
                         // map returned keys back to app keys (zh-tw -> cn)
                         Object.keys(translations).forEach(key => {
@@ -1493,7 +1578,7 @@ export default {
                         console.error('Translation API error', e);
                     }
                 })();
-
+                
                 // return sourceText as fallback now
                 return sourceText;
             } catch (error) {
@@ -1900,6 +1985,7 @@ export default {
                 role: 'user',
             }
             try {
+                this.loading = true;
                 const res = await this.$axios.post(this.api + 'getAllDataMpr', params);
                 if (res.status === 200) {
                     this.dataMpr = res.data.dataMpr;
@@ -1911,12 +1997,16 @@ export default {
             } catch (error) {
                 console.error('Fetch error:', error);
             }
+            finally {
+                this.loading = false;
+            }
         },
         async fetchData() {
             let params = {
                 loc:this.activeUser.location,
             }
             try {
+                this.loading = true;
                 const res = await this.$axios.post(this.api + 'getDataModel', params);
                 if (res.status === 200) {
                     this.dataRecruitmentReason = res.data.dataRecReason;
@@ -1930,6 +2020,9 @@ export default {
                 }
             } catch (error) {
                 console.error('Fetch error:', error);
+            }
+            finally {
+                this.loading = false;
             }
         },
         formatWorkExperience(exp) {
@@ -3464,6 +3557,10 @@ export default {
         await this.fetchFlowData();
         await this.fetchData();
         await this.getAllData();
+        const savedLocale = localStorage.getItem('preferred-locale');
+        if (savedLocale) {
+            this.$i18n.locale = savedLocale;
+        }
         
         // Thiết lập tab mặc định sau khi dữ liệu đã được tải
         this.$nextTick(() => {
@@ -3613,7 +3710,7 @@ export default {
             "Department": "Department",
             "Status": "Status",
             "Reason Denied": "Reason Denied",
-            "Return Reason": "Return Reason", 
+            "Return reason": "Return reason", 
             "Approval Record": "Approval Record",
             "Date": "Date",
             "Division": "Division",
@@ -3621,8 +3718,31 @@ export default {
             "HR": "HR",
             "AD": "AD",
             "GM": "GM",
-           "Cycle": "Cycle"
-            
+            "Cycle": "Cycle",
+            "N/A": "N/A",
+            "Deputies": "Deputies",
+            "Manager": "Manager",
+            "Please provide a reason for returning this request":"Please provide a reason for returning this request",
+            "No required":"No required",
+            "Confirm Denial":"Confirm Denial",
+            "Return Request":"Return Request",
+            "Confirm Action":"Confirm Action",
+            "Cancel":"Cancel",
+            "Are you sure you want to accept this request?":"Are you sure you want to accept this request?",
+            "Reason Deny":"Reason Deny",
+            "Deny Request":"Deny Request",
+            "Please provide a reason for denying this request":"Please provide a reason for denying this request",
+            "Confirm Return":"Confirm Return",
+            "Cancel reason":"Cancel reason",
+            "Rejection Details":"Rejection Details",
+            "Confirm":"Confirm",
+            "Export to Excel":"Export to Excel",
+            "Updated":"Updated",
+            "Unknown reason":"Unknown reason",
+            "Rows per page:":"Rows per page:",
+            "Loading approver info...":"Loading approver info...",
+            "Current":"Current",
+            "loadingData":"Loading data...please wait"
         },
         "vi": {
             "ID": "Mã đơn",
@@ -3686,14 +3806,13 @@ export default {
             "Department": "Bộ phận",
             "Status": "Trạng thái",
             "Reason Denied": "Lý do từ chối",
-            "Return Reason": "Lý do trả về",
+            "Return reason": "Lý do trả về",
             "Approval Record": "Ghi chú phê duyệt",
             "Date": "Ngày",
             "Type": "Cấp phê duyệt",
             "Department": "Bộ phận",
             "Status": "Trạng thái",
             "Reason Denied": "Lý do từ chối",
-            "Return Reason": "Lý do trả về",
             "Approval Record": "Ghi chú phê duyệt",
             "Date": "Ngày",
             "Division": "Cấp sở",
@@ -3716,7 +3835,32 @@ export default {
             "returned": "Trả lại",
             "processing": "Đang xử lý",
             "pending": "Chờ xử lý",
-            "Cycle": "Chu kỳ"
+            "Cycle": "Chu kỳ",
+            "N/A": "N/A",
+            "Deputies": "Người thay thế",
+            "Manager": "Người quản lý",
+            "Please provide a reason for returning this request":"Vui lòng cung cấp lý do trả lại yêu cầu này",
+            "No required":"Không yêu cầu",
+            "Confirm Denial":"Xác nhận từ chối",
+            "Return Request":"Trả lại yêu cầu",
+            "Confirm Action":"Xác nhận",
+            "Cancel":"Hủy",
+            "Are you sure you want to accept this request?":"Bạn có chắc chắn muốn chấp nhận yêu cầu này không?",
+            "Reason Deny":"Lý do từ chối",
+            "Deny Request":"Từ chối yêu cầu",
+            "Please provide a reason for denying this request":"Vui lòng cung cấp lý do từ chối yêu cầu này",
+            "Confirm Return":"Xác nhận trả lại",
+            "Cancel request":"Hủy yêu cầu",
+            "Cancel reason":"Lý do hủy",
+            "Rejection Details":"Chi tiết từ chối",
+            "Confirm":"Xác nhận",
+            "Export to Excel": "Xuất  Excel",
+            "Updated":"Cập nhật",
+            "Unknown reason":"Lý do không xác định",
+            "Rows per page": "Số hàng mỗi trang",
+            "Loading approver info...":"Đang tải thông tin người phê duyệt...",
+            "Current":"Hiện tại",
+            "loadingData":"Đang tải dữ liệu...vui lòng chờ"
         },
         "cn": {
             "ID": "表單編號",
@@ -3780,14 +3924,13 @@ export default {
             "Department": "部门",
             "Status": "状态",
             "Reason Denied": "拒绝原因",
-            "Return Reason": "退回原因",
+            "Return reason": "退回原因",
             "Approval Record": "审批记录",
             "Date": "日期",
             "Type": "审批级别",
             "Department": "部籍",
             "Status": "状态",
             "Reason Denied": "拒绝原因",
-            "Return Reason": "退回原因",
             "Approval Record": "审批记录",
             "Date": "日期",
             "Division": "處籍",
@@ -3812,7 +3955,32 @@ export default {
             "returned": "已退回",
             "processing": "處理中",
             "pending": "待處理",
-              "Cycle": "週期"
+            "Cycle": "週期",
+            "N/A": "N/A",
+            "Deputies": "代理人",
+            "Manager": "經理",
+            "Please provide a reason for returning this request":"請提供退回此申請的原因",
+            "No required":"不需要",
+            "Confirm Denial":"確認拒絕",
+            "Return Request":"退回申請",
+            "Confirm Action":"確認操作",
+            "Cancel":"取消",
+            "Are you sure you want to accept this request?":"您確定要接受此申請嗎？",
+            "Reason Deny":"拒絕原因",
+            "Deny Request":"拒絕申請",
+            "Please provide a reason for denying this request":"請提供拒絕此申請的原因",
+            "Confirm Return":"確認退回",
+            "Cancel request":"取消申請",
+            "Cancel reason":"取消原因",
+            "Rejection Details":"拒絕詳情",
+            "Confirm":"確認",
+            "Export to Excel": "導出到Excel",
+            "Updated":"更新",
+            "Unknown reason":"未知原因",
+            "Rows per page": "每頁列數",
+            "Loading approver info...":"正在加載審批人信息...",
+            "Current":"當前",
+            "loadingData":"正在加載數據...請稍候"
         }
     }  
 </i18n>       
