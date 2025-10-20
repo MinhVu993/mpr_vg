@@ -84,7 +84,7 @@
                 nextIcon: 'mdi-plus',
                 'items-per-page-text': $t('Rows per page'),
             }">
-             <template v-slot:loading>
+            <template v-slot:loading>
                 <div class="text-center pa-4">
                     <img src="loading_1.gif" alt="Loading..." style="width: 50px; height: 50px;" />
                     <p class="mt-2">{{ $t('loadingData') }}</p>
@@ -1076,6 +1076,7 @@ export default {
                 const officerLevel = qtyReq.level || null;
                 
                 const formattedReason = this.formatReason(reasonExp);
+                const keyInDate = this.formatDate(item.key_in_date || item.date_req);
                 
                 // Find matching unit name from unitNames array
                 const unitCode = submitter.unit;
@@ -1117,7 +1118,8 @@ export default {
                         `Workers: ${qtyReq.workers || 0}, Staff: ${qtyReq.staff || 0}, Staff_lang: ${qtyReq.staff_lang || 0}, Engineers: ${qtyReq.engineers || 0}, Leader: ${qtyReq.leader || 0}, Tranlator: ${qtyReq.tranlator || 0}`:qtyReq.toString()
                     },
                     positions,
-                    officerLevel
+                    officerLevel,
+                    key_in_date: keyInDate
                 };
             });
         },
@@ -1193,6 +1195,10 @@ export default {
                             case 'recruited_status':
                             const status = this.getRecruitmentStatus(item);
                             return status.show && values.includes(status.text);
+                            case 'key_in_date':
+                            // so sánh với formatDate của key_in_date (fallback sang date_req)
+                            return values.includes(this.formatDate(item.key_in_date || item.date_req));
+                            
                             default:
                             return true;
                         }
@@ -1293,6 +1299,7 @@ export default {
                 .filter(Boolean)
                 )
                 ],
+                key_in_date: [...new Set(this.formattedData.map(item => this.formatDate(item.key_in_date || item.date_req)))].filter(Boolean),
             }
         },
         approvalFlowDependency() {

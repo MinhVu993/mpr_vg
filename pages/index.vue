@@ -1119,6 +1119,7 @@ export default {
                 const officerLevel = qtyReq.level || null;
                 
                 const formattedReason = this.formatReason(reasonExp);
+                const keyInDate = this.formatDate(item.key_in_date || item.date_req);
                 
                 // Find matching unit name from unitNames array
                 const unitCode = submitter.unit;
@@ -1160,7 +1161,8 @@ export default {
                         `Workers: ${qtyReq.workers || 0}, Staff: ${qtyReq.staff || 0}, Engineers: ${qtyReq.engineers || 0}, Leader: ${qtyReq.leader || 0}, Tranlator: ${qtyReq.tranlator || 0}`:qtyReq.toString()
                     },
                     positions,
-                    officerLevel
+                    officerLevel,
+                    key_in_date: keyInDate
                 };
             });
         },
@@ -1273,6 +1275,10 @@ export default {
                             const status = this.getRecruitmentStatus(item);
                             return status.show && values.includes(status.text);
                             
+                            case 'key_in_date':
+                            // so sánh với formatDate của key_in_date (fallback sang date_req)
+                            return values.includes(this.formatDate(item.key_in_date ));
+                            
                             default:
                             return true;
                         }
@@ -1382,6 +1388,7 @@ export default {
                 .filter(Boolean)
                 )
                 ],
+                key_in_date: [...new Set(this.formattedData.map(item => this.formatDate(item.key_in_date || item.date_req)))].filter(Boolean),
             }
         },
     },
@@ -2079,7 +2086,7 @@ export default {
                 role: this.activeUser.role,
             }
             try {
-                 this.loading = true;
+                this.loading = true;
                 const res = await this.$axios.post(this.api + 'getAllDataMpr', params);
                 if (res.status === 200) {
                     this.dataMpr = res.data.dataMpr;
@@ -2092,16 +2099,16 @@ export default {
             } catch (error) {
                 console.error('Fetch error:', error);
             }
-                finally {
-                    this.loading = false;
-                }
+            finally {
+                this.loading = false;
+            }
         },
         async fetchData() {
             let params = {
                 loc:this.activeUser.location,
             }
             try {
-                  this.loading = true;
+                this.loading = true;
                 const res = await this.$axios.post(this.api + 'getDataModel', params);
                 if (res.status === 200) {
                     this.dataRecruitmentReason = res.data.dataRecReason;
@@ -2118,7 +2125,7 @@ export default {
             } catch (error) {
                 console.error('Fetch error:', error);
             }
-             finally {
+            finally {
                 this.loading = false;
             }
         },

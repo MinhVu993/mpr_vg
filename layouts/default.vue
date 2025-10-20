@@ -73,7 +73,6 @@
         <small>&copy; {{ new Date().getFullYear() }} Developed by VG - Project
             team</small>
             <v-spacer></v-spacer>
-            
         </v-footer>
     </v-app>
     <AuthComp ref="authComp" app="mpr" @setUser="setUser" />
