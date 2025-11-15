@@ -89,6 +89,8 @@ export default {
     data() {
         return {
             apiGlobalUser: "http://gmo021.cansportsvg.com/api/global-user/",
+            storageUrl: 'http://gmo021.cansportsvg.com/api/',
+            tokenApi: 'vg-recuitingReport/getphoto/epm/',
             loaded: false,
             clipped: false,
             drawer: false,
@@ -114,15 +116,15 @@ export default {
             {
                 icon: "mdi-view-dashboard",
                 title: "Main page - User",
-                to: "/dashboard_user", 
-                target: "_blank",  
+                to: "/dashboard_user",
+                target: "_blank",
                 
             },
             {
                 icon: "mdi-information-variant",
                 title: "User manual",
                 href: "http://gmo021.cansportsvg.com/shared/user-manual/mpr/mpr.pdf",
-                target: "_blank",                    
+                target: "_blank",
             },
             {
                 icon: "mdi-home-export-outline",
@@ -141,7 +143,6 @@ export default {
                 ...baseItems
                 ];
             }
-            
             return baseItems;
         }
     },
@@ -161,14 +162,14 @@ export default {
                 name: user.name,
                 username: user.username,
                 dept: user.dept,
-                unit_name : user.name,
+                unit_name: user.name,
                 hight_dept: user.high_dept,
                 location: user.location,
                 email: user.email,
                 role: role,
             });
             
-            if(roleItem && authArr.includes(roleItem.role)) {
+            if (roleItem && authArr.includes(roleItem.role)) {
                 this.$router.push({
                     path: "/",
                 })
@@ -183,7 +184,7 @@ export default {
         
         locale(tg) {
             this.$i18n.setLocale(tg);
-            $nuxt.$emit("change-locale", tg);
+            this.$root.$emit('change-locale', tg);
             this.$vuetify.lang.current = tg;
         },
         async checkAppAccess(empno) {
@@ -207,6 +208,14 @@ export default {
                 console.error(err);
             }
         },
+        locale(tg) {
+            this.$i18n.setLocale(tg);
+            // đảm bảo emit là string
+            const payload = typeof tg === 'string' ? tg : String(tg);
+            this.$root.$emit('change-locale', payload);
+            this.$vuetify.lang.current = tg;
+        }
+        
     },
     provide() {
         return {
@@ -221,12 +230,50 @@ export default {
             this.isCompaniesLoaded = true;
         }
     },
+    beforeDestroy() {
+        // Cleanup listener khi component bị hủy
+        this.$root.$off('change-locale');
+    },
     mounted() {
+        
+        this.$root.$on('change-locale', (locale) => {
+            this.$i18n.setLocale(locale);
+            this.$vuetify.lang.current = locale;
+        });
         if (this.$session.has("mpr")) {
             this.activeUser = this.$session.get("mpr");
             if (this.activeUser) {
                 this.loaded = true;
                 this.checkAppAccess(this.activeUser.empno);
+                
+                
+                // // Dify chatbot integration
+                // const mpr = this.$session.get('mpr') || {};
+                // const photoUrl = mpr.empno ? `${this.storageUrl}${this.tokenApi}${mpr.empno}` : null;
+                
+                // window.difyChatbotConfig = {
+                //     token: 'RXiPyzrCVrJlGqWA',
+                //     baseUrl: 'http://10.13.34.176',
+                //     dynamicScript: true,
+                //     inputs: {
+                //         username: mpr.name || 'Guest',
+                //         lang: mpr.language || 'en',
+                //     },
+                //     systemVariables: {},
+                //     userVariables: {
+                //         empno: mpr.empno || '',
+                //         name: mpr.name || '',
+                //         avatar_url: photoUrl, 
+                //     },
+                // };
+                // // Load script
+                // const script = document.createElement('script');
+                // script.src = 'http://10.13.34.176/embed.min.js';
+                // script.id = 'RXiPyzrCVrJlGqWA';
+                // script.defer = true;
+                
+                // document.body.appendChild(script);
+                
             } else {
                 this.loaded = false;
             }
@@ -238,3 +285,14 @@ export default {
     },
 };
 </script>
+
+<style>
+/* #dify-chatbot-bubble-button {
+    background-color: #1C64F2 !important;
+}
+
+#dify-chatbot-bubble-window {
+    width: 24rem !important;
+    height: 40rem !important;
+} */
+</style>

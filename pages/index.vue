@@ -20,9 +20,13 @@
                         <v-icon left>mdi-plus</v-icon>
                         {{ $t("New request") }}
                     </v-btn>
-                    <v-btn @click="openChangeRequest" :title="$t('Amendment request')" color="primary" small light nuxt>
+                    <v-btn @click="openChangeRequest" :title="$t('Amendment request')" color="primary" small light nuxt class="mr-3">
                         <v-icon left>mdi-key-change</v-icon>
                         {{ $t("Amendment request") }}
+                    </v-btn>
+                    <v-btn class="mr-2" color="error" dense small @click="dlogSetting = true" :title="$t('Settings')">
+                        <v-icon left small>mdi-cog</v-icon>
+                        {{ $t("Year-End Settings") }}
                     </v-btn>
                 </v-toolbar>
                 <v-tabs background-color="#00838F" color="yellow" dark v-model="statusFilter"  center-active>
@@ -48,7 +52,7 @@
                     </v-tab>
                     <v-tab>
                         {{ $t("Rejected") }}
-                        <v-badge :content="statusCounts().decline.toString()" color=""  :value="statusCounts().decline" ></v-badge>
+                        <!-- <v-badge :content="statusCounts().decline.toString()" color=""  :value="statusCounts().decline" ></v-badge> -->
                     </v-tab>
                     <v-spacer></v-spacer>
                     <v-menu v-model="yearMenu" :close-on-content-click="false" transition="scale-transition" offset-y
@@ -75,6 +79,7 @@
                         </v-card-actions>
                     </v-card>
                 </v-menu>
+                
             </v-tabs>
             <v-data-table :headers="originalHeaders" :items="filteredData" :search="search" class="elevation-1"  :loading="loading" :items-per-page="10"
             :footer-props="{
@@ -157,80 +162,64 @@
                 {{ getSubPositionName(item.sub_pos, true) }}
             </template>
             <template v-slot:[`item.recruited_status`]="{ item }">
-                <!-- <v-card v-if="getRecruitmentStatus(item).show" 
-                dark 
-                :style="{ backgroundColor: getRecruitmentStatus(item).color }"
-                outlined 
-                class="pa-1" 
+                <v-chip 
+                v-if="getRecruitmentStatus(item).show"
                 :color="getRecruitmentStatus(item).color"
+                dark
+                dense
+                small
+                label
                 >
-                <div class="d-flex align-center flex-column">
-                    <span class="text-body-2 font-weight-medium">
+                <div >
+                    <span >
                         {{ getRecruitmentStatus(item).text }}
                     </span>
-                    <span class="text-caption text-center">
+                    <span>
                         {{ getRecruitmentStatus(item).detail }}
                     </span>
                 </div>
-            </v-card> -->
-            <v-chip 
-            v-if="getRecruitmentStatus(item).show"
-            :color="getRecruitmentStatus(item).color"
-            dark
-            dense
-            small
-            label
-            >
-            <div >
-                <span >
-                    {{ getRecruitmentStatus(item).text }}
-                </span>
-                <span>
-                    {{ getRecruitmentStatus(item).detail }}
-                </span>
+            </v-chip>
+            
+        </template>
+        <template v-slot:[`item.submitter`]="{ item }">
+            <v-btn v-if="item.submitter" color="blue" small text>
+                <v-icon left>mdi-account</v-icon>
+                {{ item.submiterInfo.name }}
+            </v-btn>
+            <br />
+            <v-btn v-if="item.submitter" color="blue" small text>
+                <v-icon left>mdi-card-account-details-outline</v-icon>
+                {{ item.submiterInfo.empno }} - {{ item.submiterInfo.dept_sumt }}
+            </v-btn>
+        </template>
+        <template v-slot:[`item.qty_req`]="{ item }">
+            <div>
+                {{ getDisplayQuantity(item.qty_req, item) }}
+                <v-tooltip bottom v-if="hasQuantityChange(item) && !isAmendmentDeniedButOriginalValid(item) && item.status_amendent === 'completed'" color="warning">
+                    <template v-slot:activator="{ on, attrs }">
+                        <span v-bind="attrs" v-on="on">
+                            <v-icon small color="warning" class="mx-1">mdi-arrow-right-bold</v-icon>
+                            <span class="font-weight-bold">{{ getChangeQuantity(item) }}</span>
+                        </span>
+                    </template>
+                    <span>{{ getChangeReason(item) }}</span>
+                </v-tooltip>
             </div>
-        </v-chip>
-        
-    </template>
-    <template v-slot:[`item.submitter`]="{ item }">
-        <v-btn v-if="item.submitter" color="blue" small text>
-            <v-icon left>mdi-account</v-icon>
-            {{ item.submiterInfo.name }}
-        </v-btn>
-        <br />
-        <v-btn v-if="item.submitter" color="blue" small text>
-            <v-icon left>mdi-card-account-details-outline</v-icon>
-            {{ item.submiterInfo.empno }} - {{ item.submiterInfo.dept_sumt }}
-        </v-btn>
-    </template>
-    <template v-slot:[`item.qty_req`]="{ item }">
-        <div>
-            {{ getDisplayQuantity(item.qty_req, item) }}
-            <v-tooltip bottom v-if="hasQuantityChange(item) && !isAmendmentDeniedButOriginalValid(item) && item.status_amendent === 'completed'" color="warning">
-                <template v-slot:activator="{ on, attrs }">
-                    <span v-bind="attrs" v-on="on">
-                        <v-icon small color="warning" class="mx-1">mdi-arrow-right-bold</v-icon>
-                        <span class="font-weight-bold">{{ getChangeQuantity(item) }}</span>
-                    </span>
-                </template>
-                <span>{{ getChangeReason(item) }}</span>
-            </v-tooltip>
+        </template>
+        <template v-slot:[`item.recruited`]="{ item }">
+            <!-- {{ item.recruited || 0 }} -->
+            <div 
+            style="cursor: pointer; color: blue;" 
+            @click="showCandidatesDialog(item.candidates)">
+            {{ item.recruited || 0 }}
         </div>
     </template>
-    <template v-slot:[`item.recruited`]="{ item }">
-        <!-- {{ item.recruited || 0 }} -->
+    <template v-slot:[`item.resign`]="{ item }">
         <div 
-        style="cursor: pointer; color: blue;" 
-        @click="showCandidatesDialog(item.candidates)">
-        {{ item.recruited || 0 }}
+        style="cursor: pointer; color: red;" 
+        @click="showResignDialog(item.resignList)">
+        {{ item.resign || 0 }}
     </div>
-</template>
-<template v-slot:[`item.resign`]="{ item }">
-    <div 
-    style="cursor: pointer; color: red;" 
-    @click="showResignDialog(item.resignList)">
-    {{ item.resign || 0 }}
-</div>
 </template>
 <template v-slot:[`item.status`]="{ item }">
     <div class="d-flex align-center flex-wrap">
@@ -252,7 +241,7 @@
                 {{ getStatusWithApprover(item.status, item) }}
             </v-chip>
         </template>
-        <span v-if="getReturnInfo(item).returned">
+        <span v-if="getReturnInfo(item).returned && item.status !== 'completed'">
             <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
             {{ getNextApproverInfoForStatus(item) }}
         </span>
@@ -279,6 +268,10 @@
             {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
         </v-chip>
     </template>
+    <span v-if="getReturnInfo(item).returned && item.status_amendent !== 'completed'">
+        <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
+        {{ getNextApproverInfoForStatus(item) }}
+    </span>
     <span>
         {{ getNextApproverInfoForAmendment(item) }}
     </span>
@@ -296,7 +289,7 @@
             <span class="text-truncate" style="max-width:150px;">
                 {{  getLocalizedOtherReason(item.isOther_reason) }}
             </span>
-            <v-btn x-small text color="primary" @click="openOtherReasonDialog(item)"><v-icon x-small>mdi-eye</v-icon></v-btn>
+            <!-- <v-btn x-small text color="primary" @click="openOtherReasonDialog(item)"><v-icon x-small>mdi-eye</v-icon></v-btn> -->
         </div>
     </template>
     <template v-else>
@@ -780,6 +773,141 @@
     </v-card-text>
 </v-card>
 </v-dialog>
+<v-dialog v-model="dlogSetting" max-width="1000px">
+    <v-card>
+        <v-card-title style="background-color: #00838F; color: white;">
+            <v-icon left dark>mdi-cog</v-icon>
+            {{ $t('Year-End Settings') }}
+            <v-spacer></v-spacer>
+            <v-btn icon dark @click="dlogSetting = false">
+                <v-icon>mdi-close</v-icon>
+            </v-btn>
+        </v-card-title>
+        <v-card-text class="pt-2">
+            <v-row class="mb-2 mt-5" >
+                <v-col cols="12" sm="6" md="3">
+                    <v-text-field v-model="settingForm.year" :label="$t('year')" type="number" outlined dense hide-details ></v-text-field>
+                </v-col>
+                <v-col cols="12" sm="6" md="3">
+                    <v-menu v-model="menuEmailDate" :close-on-content-click="false" transition="scale-transition" offset-y min-width="auto" >
+                        <template v-slot:activator="{ on, attrs }">
+                            <v-text-field
+                            v-model="settingForm.emailDate"
+                            :label="$t('Email Notification Date')"
+                            prepend-inner-icon="mdi-calendar"
+                            readonly
+                            outlined
+                            dense
+                            hide-details
+                            background-color="white"
+                            v-bind="attrs"
+                            v-on="on"
+                            ></v-text-field>
+                        </template>
+                        <v-date-picker v-model="settingForm.emailDate" @input="menuEmailDate = false" no-title scrollable ></v-date-picker>
+                    </v-menu>
+                </v-col>
+                <v-col cols="12" sm="6" md="3">
+                    <v-menu v-model="menuReplyDate" :close-on-content-click="false" transition="scale-transition" offset-y min-width="auto" >
+                        <template v-slot:activator="{ on, attrs }">
+                            <v-text-field
+                            v-model="settingForm.replyDeadline"
+                            :label="$t('Reply Deadline')"
+                            prepend-inner-icon="mdi-calendar"
+                            readonly
+                            outlined
+                            dense
+                            hide-details
+                            background-color="white"
+                            v-bind="attrs"
+                            v-on="on"
+                            ></v-text-field>
+                        </template>
+                        <v-date-picker
+                        v-model="settingForm.replyDeadline"
+                        @input="menuReplyDate = false"
+                        no-title
+                        scrollable
+                        ></v-date-picker>
+                    </v-menu>
+                </v-col>
+                <v-col cols="12" sm="6" md="3">
+                    <v-menu
+                    v-model="menuUpdateDate"
+                    :close-on-content-click="false"
+                    transition="scale-transition"
+                    offset-y
+                    min-width="auto"
+                    >
+                    <template v-slot:activator="{ on, attrs }">
+                        <v-text-field
+                        v-model="settingForm.systemUpdateDate"
+                        :label="$t('System Update Date')"
+                        prepend-inner-icon="mdi-calendar"
+                        readonly
+                        outlined
+                        dense
+                        hide-details
+                        background-color="white"
+                        v-bind="attrs"
+                        v-on="on"
+                        ></v-text-field>
+                    </template>
+                    <v-date-picker
+                    v-model="settingForm.systemUpdateDate"
+                    @input="menuUpdateDate = false"
+                    no-title
+                    scrollable
+                    ></v-date-picker>
+                </v-menu>
+            </v-col>
+        </v-row>
+        
+        <v-row class="mt-6">
+            <v-col cols="12">
+                <div class="text-h6 mb-2 text-center" style="background-color: #FFE0B2; padding: 5px; border-radius: 4px;">
+                    {{$t('Historical Settings')}}
+                </div>
+                <v-data-table
+                :headers="settingHeaders"
+                :items="filteredSettingHistory" class="elevation-1"
+                >
+                <template v-slot:item.year="{ item }">
+                    <span class="font-weight-bold">{{ item.year }}</span>
+                </template>
+                
+                <template v-slot:header.year="{ header }">
+                    <DsFilter :name="$t('year')" :in-items="computedSettingFilterItems.year" @changed="updateSettingFilter('year', $event)" />
+                </template>
+                <template v-slot:header.email_date="{ header }">
+                    <DsFilter :name="$t('Email Notification Date')" :in-items="computedSettingFilterItems.email_date" @changed="updateSettingFilter('email_date', $event)" />
+                </template>
+                <template v-slot:header.deadline_date="{ header }">
+                    <DsFilter :name="$t('Reply Deadline')" :in-items="computedSettingFilterItems.deadline_date" @changed="updateSettingFilter('deadline_date', $event)" />
+                </template>
+                <template v-slot:header.update_date="{ header }">
+                    <DsFilter :name="$t('System Update Date')" :in-items="computedSettingFilterItems.update_date" @changed="updateSettingFilter('update_date', $event)" />
+                </template>
+                
+                <template v-slot:header.action="{ header }">
+                    
+                </template>
+                <template v-slot:item.action="{ item }">
+                    <v-icon left color="primary" @click="editSetting(item)">mdi-pen</v-icon>  
+                </template>
+            </v-data-table>
+        </v-col>
+    </v-row>
+</v-card-text>
+<v-card-actions>
+    <v-spacer></v-spacer>
+    <v-btn color="#009688" dark @click="saveSetting">
+        <v-icon left>mdi-content-save</v-icon>  
+        {{ $t('Confirm') }}
+    </v-btn>
+</v-card-actions>
+</v-card>
+</v-dialog>
 </v-row>
 </template>
 <script>
@@ -811,13 +939,12 @@ const formatters = {
 
 export default {
     components: { DSFilter, RequestDialog },
-    layout: '',
+    layout: 'default',
     data() {
         const defaultHeaders = [
         {text:'',value:'select',sortable:false,width:'30px'},
         { text: 'Req ID', value: 'req_id', width: '60px', align: 'center'},
         { text: 'Req date', value: 'date_req', width: '120px' },
-        
         { text: 'Position', value: 'pos', width: '100px' },
         { text: 'Demand', value: 'qty_req', align: 'center', width: '100px' },
         { text: 'Reason', value: 'reason', width: '120px' },
@@ -829,7 +956,7 @@ export default {
         
         return {
             search: '',
-            api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
+            api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
             storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
             loading: false,
             cancelDialog: false,
@@ -905,11 +1032,56 @@ export default {
             ],
             otherReasonDialog: false,
             otherReasonText: '',
-            approvalPanelsActive:null
-            
+            approvalPanelsActive:null,
+            otherReason: [],
+            dlogSetting: false,
+            dlogSetting: false,
+            menuEmailDate: false,
+            menuReplyDate: false,
+            menuUpdateDate: false,
+            settingForm: {
+                year: new Date().getFullYear(),
+                emailDate: '',
+                replyDeadline: '',
+                systemUpdateDate: ''
+            },
+            settingHeaders: [
+            { text: 'Year', value: 'year', align: 'center', class: 'orange lighten-4' },
+            { text: 'Email Notification Date', value: 'email_date', align: 'center', class: 'orange lighten-4' },
+            { text: 'Reply Deadline', value: 'deadline_date', align: 'center', class: 'orange lighten-4' },
+            { text: 'System Update Date', value: 'update_date', align: 'center', class: 'orange lighten-4' },
+            {text:'',value:'action',align:'center',sortable:false,class:'orange lighten-4'}
+            ],
+            settingHistory: [ ],
+            settingFilterValues: {},
         }
     },
     computed: {
+        computedSettingFilterItems() {
+            const items = {
+                year: [...new Set(this.settingHistory.map(item => item.year))].filter(Boolean),
+                email_date: [...new Set(this.settingHistory.map(item => item.email_date))].filter(Boolean),
+                deadline_date: [...new Set(this.settingHistory.map(item => item.deadline_date))].filter(Boolean),
+                update_date: [...new Set(this.settingHistory.map(item => item.update_date))].filter(Boolean),
+            };
+            // Sắp xếp các mục lọc
+            Object.keys(items).forEach(key => items[key].sort());
+            return items;
+        },
+        
+        // THÊM COMPUTED MỚI NÀY:
+        filteredSettingHistory() {
+            let result = [...this.settingHistory];
+            
+            Object.entries(this.settingFilterValues).forEach(([key, values]) => {
+                if (values && values.length) {
+                    result = result.filter(item => {
+                        return values.includes(item[key]);
+                    });
+                }
+            });
+            return result;
+        },
         approvalHeaders() {
             return [
             { text: this.$t('Type'), value: 'type', align: 'center', sortable: false },
@@ -1167,11 +1339,19 @@ export default {
             });
         },
         dataFilteredByYear() {
-            if (!this.selectedYears.length) return this.formattedData;
+            if (!this.selectedYears || this.selectedYears.length === 0) {
+                return this.formattedData;
+            }
             
             return this.formattedData.filter(item => {
-                if (!item.key_in_date) return false;
-                const itemYear = new Date(item.key_in_date).getFullYear().toString();
+                if (!item.req_id) return false;
+                
+                // Sử dụng hàm hỗ trợ mới để lấy năm từ req_id
+                const itemYear = this.getYearFromReqId(item.req_id); 
+                
+                if (!itemYear) return false;
+                
+                // Kiểm tra xem năm của đơn có nằm trong danh sách đã chọn không
                 return this.selectedYears.includes(itemYear);
             });
         },
@@ -1194,29 +1374,22 @@ export default {
             }
             
             // 2. Lọc theo tab status
-            if (this.statusFilter === 1) {
-                // Tab To Do
+            if (this.statusFilter === 1) { 
                 result = result.filter(item => this.canApproveItemForTodo(item));
-            } else if (this.statusFilter === 2) {
-                // Tab Pending
+            } else if (this.statusFilter === 2) { 
                 result = result.filter(item => 
-                [ 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 
-                'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
-                [ 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 
-                'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)
+                ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
+                ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)
                 );
-            } else if (this.statusFilter === 3) {
-                // Tab Returned
+            } else if (this.statusFilter === 3) { 
                 result = result.filter(item => 
-                item.status === 'returned' || 
-                item.status_amendent === 'returned' ||
+                (item.status === 'waiting_dept' || 
+                item.status_amendent === 'waiting_dept') &&
                 this.hasReturnedLevel(item)
                 );
-            } else if (this.statusFilter === 4) {
-                // Tab Approved
+            } else if (this.statusFilter === 4) { // Approved tab
                 result = result.filter(item => 
-                item.status === 'completed' || 
-                item.status_amendent === 'completed'
+                item.status === 'completed' || item.status_amendent === 'completed'
                 );
             } else if (this.statusFilter === 5) {
                 // Tab Rejected
@@ -1252,7 +1425,20 @@ export default {
                             return values.includes(this.getPositionName(item.pos));
                             
                             case 'reason':
-                            return values.includes(item.reason);
+                            return values.some(v => {
+                                // match normal reason label
+                                if (item.reason && item.reason === v) return true;
+                                // if stored as Other (reason_exp === 3) then compare localized other reason text
+                                try {
+                                    if (Number(item.reason_exp) === 3) {
+                                        const localized = this.getLocalizedOtherReason(item.isOther_reason);
+                                        if (localized && localized === v) return true;
+                                    }
+                                } catch (e) {
+                                    // ignore
+                                }
+                                return false;
+                            });
                             
                             case 'status':
                             return values.includes(this.getStatusText(item.status)) ||
@@ -1314,15 +1500,23 @@ export default {
             return result;
         },
         availableYears() {
-            const currentYear = new Date().getFullYear();
-            const years = [];
-            const startYear = 2024; // Cố định năm bắt đầu là 2024
-            const endYear = currentYear + 3; // Hiển thị thêm 3 năm kể từ năm hiện tại
-            
-            for (let i = startYear; i <= endYear; i++) {
-                years.push(i.toString());
+            if (!this.formattedData || this.formattedData.length === 0) {
+                return [new Date().getFullYear().toString()]; // Dự phòng nếu không có dữ liệu
             }
-            return years;
+            
+            // Dùng Set để lấy các năm duy nhất
+            const years = new Set();
+            
+            this.formattedData.forEach(item => {
+                // Sử dụng hàm hỗ trợ mới để lấy năm
+                const year = this.getYearFromReqId(item.req_id); 
+                if (year) {
+                    years.add(year);
+                }
+            });
+            
+            // Sắp xếp năm mới nhất lên đầu
+            return Array.from(years).sort((a, b) => b - a);
         },
         positionFilterItems() {
             const items = new Set();
@@ -1361,7 +1555,14 @@ export default {
                 unit: [...new Set(this.formattedData.map(item => item.unit))].filter(Boolean),
                 // division: [...new Set(this.formattedData.map(item => item.division))].filter(Boolean),
                 pos: [...new Set(this.formattedData.map(item => this.getPositionName(item.pos)))].filter(Boolean),
-                reason: [...new Set(this.formattedData.map(item => item.reason))].filter(Boolean),
+                reason: [...new Set(this.formattedData.map(item => {
+                    // Nếu là reason_exp = 3 (Other) thì lấy giá trị localized từ isOther_reason
+                    if (Number(item.reason_exp) === 3 && item.isOther_reason) {
+                        return this.getLocalizedOtherReason(item.isOther_reason);
+                    }
+                    // Nếu không phải Other reason thì lấy reason thông thường
+                    return item.reason;
+                }))].filter(Boolean),
                 status: [...new Set(this.formattedData.flatMap(item => [
                 this.getStatusText(item.status),
                 this.getStatusText(item.status_amendent)
@@ -1393,9 +1594,89 @@ export default {
         },
     },
     methods: {
-        setLocale(locale) {
+        getYearFromReqId(req_id) {
+            if (!req_id || typeof req_id !== 'string' || req_id.length < 11) {
+                return null; // Bỏ qua nếu req_id không hợp lệ
+            }
+            // Lấy 2 ký tự năm (ví dụ '25') từ vị trí 9
+            const yearPrefix = req_id.substring(9, 11);
+            
+            if (yearPrefix && /^\d{2}$/.test(yearPrefix)) {
+                return `20${yearPrefix}`; // Chuyển '25' thành '2025'
+            }
+            return null;
+        },
+        updateSettingFilter(key, value) {
+            if (value && value.length) {
+                this.$set(this.settingFilterValues, key, value);
+            } else {
+                this.$delete(this.settingFilterValues, key);
+            }
+        },
+        editSetting(item) {
+            this.settingForm = {
+                year: item.year,
+                emailDate: item.email_date,     
+                replyDeadline: item.deadline_date, 
+                systemUpdateDate: item.update_date
+            };
+        },
+        resetSettingForm() {
+            this.settingForm = {
+                year: new Date().getFullYear(),
+                emailDate: '',
+                replyDeadline: '',
+                systemUpdateDate: ''
+            };
+        },
+        async saveSetting() {
+            if (!this.settingForm.year || !this.settingForm.emailDate || 
+            !this.settingForm.replyDeadline || !this.settingForm.systemUpdateDate) {
+                this.$notify({
+                    title: 'Warning',
+                    text: this.$t('Please fill all required fields'),
+                    type: 'warning'
+                });
+                return;
+            }
+            try {
+                this.loading = true; 
+                const payload = {
+                    year: this.settingForm.year,
+                    email_date: this.settingForm.emailDate,
+                    reply_deadline: this.settingForm.replyDeadline,
+                    system_update_date: this.settingForm.systemUpdateDate
+                };
+                
+                const res = await this.$axios.post(this.api + 'saveYearSetting', payload);
+                
+                if (res.data.success) {
+                    this.$notify({
+                        title: 'Success',
+                        text: this.$t('Settings saved successfully'),
+                        type: 'success'
+                    });
+                    this.resetSettingForm(); 
+                    await this.fetchData();
+                } else {
+                    this.$notify({
+                        title: 'Error',
+                        text: res.data.message || 'Failed to save settings',
+                        type: 'error'
+                    });
+                }
+            } catch (error) {
+                console.error('Save setting error:', error);
+                this.$notify({
+                    title: 'Error',
+                    text: error.response?.data?.message || 'Error saving settings',
+                    type: 'error'
+                });
+            } finally {
+                this.loading = false;
+            }
+        }, setLocale(locale) {
             this.$i18n.locale = locale;
-            // localStorage.setItem('preferred-locale', locale);
             this.$forceUpdate();
         },
         getLocalizedText(raw) {
@@ -1559,7 +1840,36 @@ export default {
         
         getLocalizedOtherReason(otherReason) {
             try {
-                // Normalize to object if JSON string
+                if (otherReason === null || otherReason === undefined) return '';
+                const locale = (this.$i18n && this.$i18n.locale) ? this.$i18n.locale : (localStorage.getItem('preferred-locale') || 'en');
+                
+                // 1) Nếu otherReason là id (number) hoặc string number -> tìm trong this.otherReason
+                let candidateId = null;
+                if (typeof otherReason === 'number') {
+                    candidateId = otherReason;
+                } else if (typeof otherReason === 'string') {
+                    const s = otherReason.trim();
+                    if (!s) return '';
+                    // string dạng JSON object -> xử lý bên dưới
+                    if (!s.startsWith('{')) {
+                        const parsedId = parseInt(s, 10);
+                        if (!isNaN(parsedId)) candidateId = parsedId;
+                    }
+                }
+                
+                if (candidateId && Array.isArray(this.otherReason)) {
+                    const found = this.otherReason.find(r => Number(r.id) === Number(candidateId));
+                    if (found) {
+                        try {
+                            const nameObj = typeof found.reason_name === 'string' ? JSON.parse(found.reason_name) : found.reason_name;
+                            return (nameObj && (nameObj[locale] || nameObj.en || nameObj.vi || nameObj.cn)) || String(found.id);
+                        } catch (e) {
+                            return found.reason_name || String(found.id);
+                        }
+                    }
+                }
+                
+                // 2) Nếu không phải id -> xử lý như trước (string JSON hoặc object)
                 let obj = otherReason;
                 if (typeof otherReason === 'string') {
                     const trimmed = otherReason.trim();
@@ -1568,7 +1878,6 @@ export default {
                         try {
                             obj = JSON.parse(trimmed);
                         } catch (e) {
-                            // not JSON, return raw string
                             return trimmed;
                         }
                     } else {
@@ -1577,37 +1886,31 @@ export default {
                 }
                 if (!obj || typeof obj !== 'object') return obj || '';
                 
-                const supported = ['vi', 'en', 'cn'];
-                const locale = (this.$i18n && this.$i18n.locale) ? this.$i18n.locale : (localStorage.getItem('preferred-locale') || 'en');
-                
-                // if text already present for locale return it
+                // nếu đã có text cho locale thì trả về ngay
                 if (obj[locale] && String(obj[locale]).trim()) return String(obj[locale]);
                 
-                // find a source language with text
+                // lấy source text nếu có và dịch async giống trước
+                const supported = ['vi','en','cn'];
                 const sourceLang = supported.find(k => obj[k] && String(obj[k]).trim());
                 const sourceText = (sourceLang && obj[sourceLang]) ? String(obj[sourceLang]).trim() : '';
                 if (!sourceText) return '';
                 
-                // prepare cache
                 if (!this._otherReasonCache) this._otherReasonCache = new Map();
                 const cacheKey = JSON.stringify(obj);
                 if (!this._otherReasonCache.has(cacheKey)) {
-                    // seed cache with original object values
                     this._otherReasonCache.set(cacheKey, Object.assign({}, obj));
                 }
                 const cached = this._otherReasonCache.get(cacheKey) || {};
                 if (cached[locale] && String(cached[locale]).trim()) return String(cached[locale]);
                 
-                // background async translation using new API
+                // background translate
                 (async () => {
                     try {
                         const translateApi = 'http://gmo021.cansportsvg.com:49200/api/translate';
-                        // Build list of target languages to request (map 'cn' -> 'zh-tw')
                         const missing = supported
                         .filter(k => !cached[k] || !String(cached[k]).trim())
                         .filter(k => k !== sourceLang);
                         if (missing.length === 0) return;
-                        
                         const targetLangs = Array.from(new Set(missing.map(k => (k === 'cn' ? 'zh-tw' : k))));
                         const payload = {
                             text: sourceText,
@@ -1615,22 +1918,16 @@ export default {
                             model: 'qwen3-8b',
                             source: 'hrm'
                         };
-                        
                         const res = await this.$axios.post(translateApi, payload);
                         const translations = res?.data?.data?.translation || {};
-                        
                         const cur = this._otherReasonCache.get(cacheKey) || {};
-                        // map returned keys back to app keys (zh-tw -> cn)
                         Object.keys(translations).forEach(key => {
                             const appKey = (key === 'zh-tw') ? 'cn' : key;
                             cur[appKey] = translations[key];
                         });
-                        // ensure we keep existing originals
                         this._otherReasonCache.set(cacheKey, Object.assign({}, cached, cur));
-                        // trigger update so template re-renders
                         this.$forceUpdate();
                     } catch (e) {
-                        // swallow to avoid UI breakage
                         console.error('Translation API error', e);
                     }
                 })();
@@ -1673,27 +1970,42 @@ export default {
             return remaining;
         },
         getRecruitmentStatus(item) {
-            
             const stocknumber = parseInt(item.stocknumber);
             const recruited = parseInt(item.recruited);
             const hold = parseInt(item.hold);
             const resumed = parseInt(item.resumed);
             const status = item.status;
             const statusAmendent = item.status_amendent;
+            const activeRctVal = item?.activeRct;
+            const activeRctInt = (activeRctVal === null || typeof activeRctVal === 'undefined') ? null : parseInt(activeRctVal);
             
             const isCompleted = (status === 'completed') && (!statusAmendent);
             
-            if (item.deny_temp && statusAmendent === 'completed') {
-                const denyTempData = JSON.parse(item.deny_temp);
-                
-                if (denyTempData.fullfilldate) {
-                    return {
-                        text: this.$t('Closed'),
-                        // detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
-                        show: true,
-                        color: '#6c757d', 
-                        dark: false,
-                    };
+            // If there's deny_temp and either amendment completed OR main status completed with activeRct === 0,
+            // treat as closed based on deny_temp (useful when request was auto-denied/closed)
+            if (item.deny_temp &&
+            typeof item.deny_temp === 'string' &&
+            item.deny_temp.trim() !== '' &&
+            (
+            statusAmendent === 'completed' ||
+            (status === 'completed' && activeRctInt !== "")
+            )
+            ) {
+                try {
+                    const denyTempData = JSON.parse(item.deny_temp);
+                    
+                    if (denyTempData.fullfilldate) {
+                        return {
+                            text: this.$t('Closed'),
+                            // detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
+                            show: true,
+                            color: '#6c757d', 
+                            dark: false,
+                        };
+                    }
+                } catch (e) {
+                    // fall through to normal logic if parsing fails
+                    console.error('Error parsing deny_temp in getRecruitmentStatus:', e);
                 }
             }
             
@@ -1930,7 +2242,7 @@ export default {
                 if (item.status === 'completed' || item.status_amendent === 'completed') {
                     completed++;
                 }
-                if (item.status === 'returned' || item.status_amendent === 'returned' || this.hasReturnedLevel(item)) {
+                if ((item.status === 'waiting_dept' || item.status_amendent === 'waiting_dept') && this.hasReturnedLevel(item)) {
                     returned++;
                 }
                 if (['declined', 'cancelled'].includes(item.status) || ['declined', 'cancelled'].includes(item.status_amendent)) {
@@ -2116,6 +2428,8 @@ export default {
                     this.pos = res.data.dataTypeApply;
                     this.lang = res.data.dataLang;
                     this.subPos = res.data.dataSubPos;
+                    this.otherReason = res.data.dataOtherReason;
+                    this.settingHistory = res.data.dataEndYear;
                     this.flowCache.clear();
                     // await this.preloadFlowData();
                     this.filteredItems = [];
@@ -2296,7 +2610,7 @@ export default {
             if (!item.approval) return false;
             try {
                 const approvalData = JSON.parse(item.approval);
-                return approvalData.some(level => level.status === 'returned') && item.status === 'waiting_dept';
+                return approvalData.some(level => level.status === 'returned');
             } catch (error) {
                 console.error('Error parsing approval data:', error);
                 return false;
@@ -2326,15 +2640,20 @@ export default {
         },
         getDisplayQuantity(qtyReq, item) {
             try {
-                // Kiểm tra deny_temp trước tiên VÀ status_amendent phải là 'completed'
-                if (item && 
-                item.deny_temp && 
-                typeof item.deny_temp === 'string' && 
+                const activeRctVal = item?.activeRct;
+                const activeRctInt = (activeRctVal === null || typeof activeRctVal === 'undefined') ? null : parseInt(activeRctVal);
+                
+                if (item &&
+                item.deny_temp &&
+                typeof item.deny_temp === 'string' &&
                 item.deny_temp.trim() !== '' &&
-                item.status_amendent === 'completed') {
+                (
+                item.status_amendent === 'completed' ||
+                (item.status === 'completed' && activeRctInt !== "" )
+                )
+                ) {
                     try {
                         const denyTempData = JSON.parse(item.deny_temp);
-                        // Nếu có deny_temp và status_amendent='completed', sử dụng recruited từ deny_temp hoặc recruited từ item
                         if (denyTempData.recruited !== undefined) {
                             return parseInt(denyTempData.recruited);
                         } else if (item.recruited !== undefined) {
@@ -2344,6 +2663,7 @@ export default {
                         console.error('Error parsing deny_temp for quantity display:', error);
                     }
                 }
+                
                 if (typeof qtyReq === 'string') {
                     if (qtyReq.startsWith('{')) {
                         const qtyData = JSON.parse(qtyReq);
@@ -2369,7 +2689,6 @@ export default {
             if (typeof qtyReq === 'string') {
                 if (qtyReq.startsWith('{')) {
                     const qtyData = JSON.parse(qtyReq);
-                    // Chỉ tính đến leader, bỏ qua tranlator và level
                     return (
                     parseInt(qtyData.workers || 0) +
                     parseInt(qtyData.staff || 0) +
@@ -2630,49 +2949,81 @@ export default {
         },
         canApproveItemForTodo(item)
         {
-            if (!item || !this.activeUser) return false;
-            if ((item.status === 'completed' || item.status === 'declined') &&
+            if (item.approval) {
+                try {
+                    const approvalData = JSON.parse(item.approval);
+                    const hasReturnedStatus = approvalData.some(level => level.status === 'returned');
+                    
+                    // If status is waiting_dept and has returned status, exclude from todo
+                    if ((item.status === 'waiting_dept' || item.status_amendent === 'waiting_dept') && hasReturnedStatus) {
+                        return false;
+                    }
+                } catch (error) {
+                    console.error('Error parsing approval data:', error);
+                }
+            }
+            
+            
+            if ((item.status === 'completed' || item.status === 'declined') && 
             (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined')) {
                 return false;
             }
-            
             const validStatuses = [
-            'waiting_dept',
-            'waiting_div',
-            'waiting_hr_rec_sf',
-            'waiting_hr',
-            'waiting_ad',
+            'waiting_dept', 
+            'waiting_div', 
+            'waiting_hr_rec_sf', 
+            'waiting_hr', 
+            'waiting_ad', 
             'waiting_gm'
             ];
             
-            // Nếu cả 2 trạng thái đều không thuộc danh sách hợp lệ -> không phải todo
-            if (!validStatuses.includes(item.status) &&
-            (!item.status_amendent || !validStatuses.includes(item.status_amendent))) {
-                return false;
-            }
-            
             try {
-                const approval = item.approval ? JSON.parse(item.approval) : [];
+                const approval = JSON.parse(item.approval);
                 
-                // Tìm level đang chờ trong approval (dùng chung cho cả status và amendment)
-                const waitingLevel = approval.find(level => level.status === 'waiting');
-                if (!waitingLevel) return false;
-                
-                // Chọn trạng thái hiệu dụng: nếu có status_amendent đang chờ thì ưu tiên
-                const effectiveStatus = (item.status_amendent && validStatuses.includes(item.status_amendent))
-                ? item.status_amendent
-                : item.status;
-                
-                // Lấy flow data (cache hoặc chung)
-                const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
-                
-                // Nếu chưa có flow data, bắt đầu nạp bất đồng bộ rồi trả false tạm — tránh hiển thị sai
-                if (!flowData || !Array.isArray(flowData)) {
-                    this.getFlowDataForItem(item).catch(() => {});
-                    return false;
+                // Nếu có status_amendent, sử dụng logic khác
+                if (item.status_amendent) {
+                    const statusToLevelCode = {
+                        'waiting_dept': 'dept_manager',
+                        'waiting_div': 'division_manager',
+                        'waiting_hr_rec_sf': 'hr_rec_sf',
+                        'waiting_hr': 'hr_manager',
+                        'waiting_ad': 'smp_manager',
+                        'waiting_gm': 'general_manager'
+                    };
+                    
+                    const currentLevelCode = statusToLevelCode[item.status_amendent];
+                    if (!currentLevelCode) return false;
+                    
+                    const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
+                    if (!flowData || !Array.isArray(flowData)) return false;
+                    
+                    const currentFlowLevel = flowData.find(level => level.lvl_code === currentLevelCode);
+                    if (!currentFlowLevel?.managers) return false;
+                    
+                    return currentFlowLevel.managers.some(manager => {
+                        if (manager.empno === this.activeUser.empno) return true;
+                        
+                        if (manager.deputies && Array.isArray(manager.deputies)) {
+                            return manager.deputies.some(deputy => 
+                            deputy.empno === this.activeUser.empno && 
+                            deputy.status === true
+                            );
+                        }
+                        return false;
+                    });
                 }
                 
-                // Map trạng thái sang lvl_code trong flow
+                // Logic cũ cho status thông thường
+                const currentLevel = approval.find(level => level.status === 'waiting');
+                if (!currentLevel) return false;
+                
+                if (currentLevel.approver && currentLevel.approver.empno === this.activeUser.empno) {
+                    return true;
+                }
+                
+                const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
+                if (!flowData || !Array.isArray(flowData)) return false;
+                
                 const statusToLevelCode = {
                     'waiting_dept': 'dept_manager',
                     'waiting_div': 'division_manager',
@@ -2681,21 +3032,24 @@ export default {
                     'waiting_ad': 'smp_manager',
                     'waiting_gm': 'general_manager'
                 };
-                
-                const currentLevelCode = statusToLevelCode[effectiveStatus];
+                const currentLevelCode = statusToLevelCode[item.status];
                 if (!currentLevelCode) return false;
                 
                 const currentFlowLevel = flowData.find(level => level.lvl_code === currentLevelCode);
-                if (!currentFlowLevel || !currentFlowLevel.managers) return false;
+                if (!currentFlowLevel?.managers) return false;
                 
-                // Kiểm tra xem activeUser có nằm trong managers hoặc deputies active không
                 return currentFlowLevel.managers.some(manager => {
                     if (manager.empno === this.activeUser.empno) return true;
-                    if (Array.isArray(manager.deputies)) {
-                        return manager.deputies.some(deputy => deputy.empno === this.activeUser.empno && deputy.status === true);
+                    
+                    if (manager.deputies && Array.isArray(manager.deputies)) {
+                        return manager.deputies.some(deputy => 
+                        deputy.empno === this.activeUser.empno && 
+                        deputy.status === true
+                        );
                     }
                     return false;
                 });
+                
             } catch (error) {
                 console.error('Error in canApproveItemForTodo:', error);
                 return false;
@@ -3497,6 +3851,13 @@ export default {
                     const row = {};
                     headers.forEach(header => {
                         switch (header.key) {
+                            case 'reason':
+                            if (Number(item.reason_exp) === 3) {
+                                row[header.title] = this.getLocalizedOtherReason(item.isOther_reason);
+                            } else {
+                                row[header.title] = item.reasonInfo?.type || '';
+                            }
+                            break;
                             case 'submitter':
                             row[header.title] = item.submiterInfo ? 
                             `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';
@@ -3833,7 +4194,13 @@ export default {
             "Rows per page":"Rows per page",
             "Loading approver info...":"Loading approver info...",
             "Current":"Current",
-            "loadingData":"Loading data...please wait"
+            "loadingData":"Loading data...please wait",
+            "Year-End Settings":"Year-End Settings",
+            "year":"Year",
+            "Email Notification Date":"Email Notification Date",
+            "Reply Deadline":"Reply Deadline",
+            "System Update Date":"System Update Date",
+            "Historical Settings":"Historical Settings"
         },
         "vi": {
             "ID": "Mã đơn",
@@ -3949,7 +4316,14 @@ export default {
             "Rows per page": "Số hàng mỗi trang",
             "Loading approver info...":"Đang tải thông tin người phê duyệt...",
             "Current":"Hiện tại",
-            "loadingData":"Đang tải dữ liệu...vui lòng chờ"
+            "loadingData":"Đang tải dữ liệu...vui lòng chờ",
+            "Year-End Settings":"Cài đặt kết toán",
+            "year":"Năm",
+            "Email Notification Date":"Ngày thông báo qua email",
+            "Reply Deadline":"Hạn cuối phản hồi",
+            "System Update Date":"Ngày cập nhật hệ thống",
+            "Historical Settings":"Lịch sử cài đặt",
+            "Action":"Hành động"
         },
         "cn": {
             "ID": "表單編號",
@@ -4067,7 +4441,13 @@ export default {
             "Rows per page": "每頁行數",
             "Loading approver info...":"正在加載審批人信息...",
             "Current":"當前",
-            "loadingData":"正在加載數據...請稍候"
+            "loadingData":"正在加載數據...請稍候",
+            "Year-End Settings": "年度結算條件設定",
+            "year":"年度",
+            "Email Notification Date":"年度結算email通知日期",
+            "Reply Deadline":"最後回覆期限日期",
+            "System Update Date":"系統更新狀態日期",
+            "Historical Settings":"歷年設定紀錄"
         }
     }  
 </i18n>     

@@ -46,7 +46,7 @@
                     </v-tab>
                     <v-tab>
                         {{ $t("Rejected") }}
-                        <v-badge :content="statusCounts.decline.toString()" color="" :value="statusCounts.decline" ></v-badge>
+                        <!-- <v-badge :content="statusCounts.decline.toString()" color="" :value="statusCounts.decline" ></v-badge> -->
                     </v-tab>
                     <v-spacer></v-spacer>
                     <!-- export excel -->
@@ -240,7 +240,7 @@
                 {{ getStatusWithApprover(item.status, item) }}
             </v-chip>
         </template>
-        <span v-if="getReturnInfo(item).returned">
+        <span v-if="getReturnInfo(item).returned && item.status !== 'completed'">
             <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
             {{ getNextApproverInfoForStatus(item) }}
         </span>
@@ -267,6 +267,10 @@
             {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
         </v-chip>
     </template>
+    <span v-if="getReturnInfo(item).returned && item.status_amendent !== 'completed'">
+        <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
+        {{ getNextApproverInfoForStatus(item) }}
+    </span>
     <span>
         {{ getNextApproverInfoForAmendment(item) }}
     </span>
@@ -292,7 +296,7 @@
             <span class="text-truncate" style="max-width:150px; display:inline-block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                 {{ getLocalizedOtherReason(item.isOther_reason) }}
             </span>
-            <v-btn x-small text color="primary" @click="openOtherReasonDialog(item)"><v-icon x-small>mdi-eye</v-icon></v-btn>
+            <!-- <v-btn x-small text color="primary" @click="openOtherReasonDialog(item)"><v-icon x-small>mdi-eye</v-icon></v-btn> -->
         </div>
     </template>
     <template v-else>
@@ -790,7 +794,7 @@ export default {
     data() {
         return {
             search: '',
-            api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
+            api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
             storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
             loading: false,
             cancelDialog: false,
@@ -863,7 +867,8 @@ export default {
             ],
             otherReasonDialog: false,
             otherReasonText: '',
-            approvalPanelsActive:null
+            approvalPanelsActive:null,
+            otherReason:[]
         }
     },
     computed: {
@@ -1124,11 +1129,19 @@ export default {
             });
         },
         dataFilteredByYear() {
-            if (!this.selectedYears.length) return this.formattedData;
+            if (!this.selectedYears || this.selectedYears.length === 0) {
+                return this.formattedData;
+            }
             
             return this.formattedData.filter(item => {
-                if (!item.key_in_date) return false;
-                const itemYear = new Date(item.key_in_date).getFullYear().toString();
+                if (!item.req_id) return false;
+                
+                // Sử dụng hàm hỗ trợ mới để lấy năm từ req_id
+                const itemYear = this.getYearFromReqId(item.req_id); 
+                
+                if (!itemYear) return false;
+                
+                // Kiểm tra xem năm của đơn có nằm trong danh sách đã chọn không
                 return this.selectedYears.includes(itemYear);
             });
         },
@@ -1144,20 +1157,20 @@ export default {
                 );
             } else if (this.statusFilter === 3) { 
                 result = result.filter(item => 
-                item.status === 'returned' || 
-                item.status_amendent === 'returned' ||
+                (item.status === 'waiting_dept' || 
+                item.status_amendent === 'waiting_dept' )&&
                 this.hasReturnedLevel(item)
                 );
             } else if (this.statusFilter === 4) { // Approved tab
                 result = result.filter(item => 
                 item.status === 'completed' || item.status_amendent === 'completed'
                 );
-            } else if (this.statusFilter === 5) { 
+            } else if (this.statusFilter === 5) {
                 result = result.filter(item =>  
                 ['declined', 'cancelled'].includes(item.status) ||
                 ['declined', 'cancelled'].includes(item.status_amendent)
                 );
-            } 
+            }
             
             
             Object.entries(this.filterValues).forEach(([key, values]) => {
@@ -1181,7 +1194,20 @@ export default {
                             case 'language':
                             return values.includes(item.language);
                             case 'reason':
-                            return values.includes(item.reason);
+                            return values.some(v => {
+                                // match normal reason label
+                                if (item.reason && item.reason === v) return true;
+                                // if stored as Other (reason_exp === 3) then compare localized other reason text
+                                try {
+                                    if (Number(item.reason_exp) === 3) {
+                                        const localized = this.getLocalizedOtherReason(item.isOther_reason);
+                                        if (localized && localized === v) return true;
+                                    }
+                                } catch (e) {
+                                    // ignore
+                                }
+                                return false;
+                            });
                             case 'status':
                             return values.includes(this.getStatusText(item.status)) ||
                             values.includes(this.getStatusText(item.status_amendent));
@@ -1234,15 +1260,23 @@ export default {
             return result;
         },
         availableYears() {
-            const currentYear = new Date().getFullYear();
-            const years = [];
-            const startYear = 2024; // Cố định năm bắt đầu là 2024
-            const endYear = currentYear + 3; // Hiển thị thêm 3 năm kể từ năm hiện tại
-            
-            for (let i = startYear; i <= endYear; i++) {
-                years.push(i.toString());
+            if (!this.formattedData || this.formattedData.length === 0) {
+                return [new Date().getFullYear().toString()]; // Dự phòng nếu không có dữ liệu
             }
-            return years;
+            
+            // Dùng Set để lấy các năm duy nhất
+            const years = new Set();
+            
+            this.formattedData.forEach(item => {
+                // Sử dụng hàm hỗ trợ mới để lấy năm
+                const year = this.getYearFromReqId(item.req_id); 
+                if (year) {
+                    years.add(year);
+                }
+            });
+            
+            // Sắp xếp năm mới nhất lên đầu
+            return Array.from(years).sort((a, b) => b - a);
         },
         positionFilterItems() {
             const items = new Set();
@@ -1282,7 +1316,14 @@ export default {
                 // division: [...new Set(this.formattedData.map(item => item.division))].filter(Boolean), 
                 pos: [...new Set(this.formattedData.map(item => this.getPositionName(item.pos)))].filter(Boolean),
                 language: [...new Set(this.formattedData.map(item => item.language))].filter(Boolean),
-                reason: [...new Set(this.formattedData.map(item => item.reason))].filter(Boolean),
+                reason: [...new Set(this.formattedData.map(item => {
+                    // Nếu là reason_exp = 3 (Other) thì lấy giá trị localized từ isOther_reason
+                    if (Number(item.reason_exp) === 3 && item.isOther_reason) {
+                        return this.getLocalizedOtherReason(item.isOther_reason);
+                    }
+                    // Nếu không phải Other reason thì lấy reason thông thường
+                    return item.reason;
+                }))].filter(Boolean),
                 status: [...new Set(this.formattedData.flatMap(item => [
                 this.getStatusText(item.status),
                 this.getStatusText(item.status_amendent)
@@ -1326,7 +1367,7 @@ export default {
                 if (item.status === 'completed' || item.status_amendent === 'completed') {
                     completed++;
                 }
-                if (item.status === 'returned' || item.status_amendent === 'returned' || this.hasReturnedLevel(item)) {
+                if ((item.status === 'waiting_dept' || item.status_amendent === 'waiting_dept') && this.hasReturnedLevel(item)) {
                     returned++;
                 }
                 if (['declined', 'cancelled'].includes(item.status) || ['declined', 'cancelled'].includes(item.status_amendent)) {
@@ -1345,6 +1386,18 @@ export default {
         },
     },
     methods: {
+          getYearFromReqId(req_id) {
+            if (!req_id || typeof req_id !== 'string' || req_id.length < 11) {
+                return null; // Bỏ qua nếu req_id không hợp lệ
+            }
+            // Lấy 2 ký tự năm (ví dụ '25') từ vị trí 9
+            const yearPrefix = req_id.substring(9, 11);
+            
+            if (yearPrefix && /^\d{2}$/.test(yearPrefix)) {
+                return `20${yearPrefix}`; // Chuyển '25' thành '2025'
+            }
+            return null;
+        },
         setLocale(locale) {
             this.$i18n.locale = locale;
             // localStorage.setItem('preferred-locale', locale);
@@ -1510,7 +1563,36 @@ export default {
         },
         getLocalizedOtherReason(otherReason) {
             try {
-                // Normalize to object if JSON string
+                if (otherReason === null || otherReason === undefined) return '';
+                const locale = (this.$i18n && this.$i18n.locale) ? this.$i18n.locale : (localStorage.getItem('preferred-locale') || 'en');
+                
+                // 1) Nếu otherReason là id (number) hoặc string number -> tìm trong this.otherReason
+                let candidateId = null;
+                if (typeof otherReason === 'number') {
+                    candidateId = otherReason;
+                } else if (typeof otherReason === 'string') {
+                    const s = otherReason.trim();
+                    if (!s) return '';
+                    // string dạng JSON object -> xử lý bên dưới
+                    if (!s.startsWith('{')) {
+                        const parsedId = parseInt(s, 10);
+                        if (!isNaN(parsedId)) candidateId = parsedId;
+                    }
+                }
+                
+                if (candidateId && Array.isArray(this.otherReason)) {
+                    const found = this.otherReason.find(r => Number(r.id) === Number(candidateId));
+                    if (found) {
+                        try {
+                            const nameObj = typeof found.reason_name === 'string' ? JSON.parse(found.reason_name) : found.reason_name;
+                            return (nameObj && (nameObj[locale] || nameObj.en || nameObj.vi || nameObj.cn)) || String(found.id);
+                        } catch (e) {
+                            return found.reason_name || String(found.id);
+                        }
+                    }
+                }
+                
+                // 2) Nếu không phải id -> xử lý như trước (string JSON hoặc object)
                 let obj = otherReason;
                 if (typeof otherReason === 'string') {
                     const trimmed = otherReason.trim();
@@ -1519,7 +1601,6 @@ export default {
                         try {
                             obj = JSON.parse(trimmed);
                         } catch (e) {
-                            // not JSON, return raw string
                             return trimmed;
                         }
                     } else {
@@ -1528,37 +1609,31 @@ export default {
                 }
                 if (!obj || typeof obj !== 'object') return obj || '';
                 
-                const supported = ['vi', 'en', 'cn'];
-                const locale = (this.$i18n && this.$i18n.locale) ? this.$i18n.locale : (localStorage.getItem('preferred-locale') || 'en');
-                
-                // if text already present for locale return it
+                // nếu đã có text cho locale thì trả về ngay
                 if (obj[locale] && String(obj[locale]).trim()) return String(obj[locale]);
                 
-                // find a source language with text
+                // lấy source text nếu có và dịch async giống trước
+                const supported = ['vi','en','cn'];
                 const sourceLang = supported.find(k => obj[k] && String(obj[k]).trim());
                 const sourceText = (sourceLang && obj[sourceLang]) ? String(obj[sourceLang]).trim() : '';
                 if (!sourceText) return '';
                 
-                // prepare cache
                 if (!this._otherReasonCache) this._otherReasonCache = new Map();
                 const cacheKey = JSON.stringify(obj);
                 if (!this._otherReasonCache.has(cacheKey)) {
-                    // seed cache with original object values
                     this._otherReasonCache.set(cacheKey, Object.assign({}, obj));
                 }
                 const cached = this._otherReasonCache.get(cacheKey) || {};
                 if (cached[locale] && String(cached[locale]).trim()) return String(cached[locale]);
                 
-                // background async translation using new API
+                // background translate
                 (async () => {
                     try {
                         const translateApi = 'http://gmo021.cansportsvg.com:49200/api/translate';
-                        // Build list of target languages to request (map 'cn' -> 'zh-tw')
                         const missing = supported
                         .filter(k => !cached[k] || !String(cached[k]).trim())
                         .filter(k => k !== sourceLang);
                         if (missing.length === 0) return;
-                        
                         const targetLangs = Array.from(new Set(missing.map(k => (k === 'cn' ? 'zh-tw' : k))));
                         const payload = {
                             text: sourceText,
@@ -1566,27 +1641,20 @@ export default {
                             model: 'qwen3-8b',
                             source: 'hrm'
                         };
-                        
                         const res = await this.$axios.post(translateApi, payload);
                         const translations = res?.data?.data?.translation || {};
-                        
                         const cur = this._otherReasonCache.get(cacheKey) || {};
-                        // map returned keys back to app keys (zh-tw -> cn)
                         Object.keys(translations).forEach(key => {
                             const appKey = (key === 'zh-tw') ? 'cn' : key;
                             cur[appKey] = translations[key];
                         });
-                        // ensure we keep existing originals
                         this._otherReasonCache.set(cacheKey, Object.assign({}, cached, cur));
-                        // trigger update so template re-renders
                         this.$forceUpdate();
                     } catch (e) {
-                        // swallow to avoid UI breakage
                         console.error('Translation API error', e);
                     }
                 })();
                 
-                // return sourceText as fallback now
                 return sourceText;
             } catch (error) {
                 console.error('Error getting localized other reason:', error);
@@ -1600,20 +1668,36 @@ export default {
             const resumed = parseInt(item.resumed);
             const status = item.status;
             const statusAmendent = item.status_amendent;
+            const activeRctVal = item?.activeRct;
+            const activeRctInt = (activeRctVal === null || typeof activeRctVal === 'undefined') ? null : parseInt(activeRctVal);
             
             const isCompleted = (status === 'completed') && (!statusAmendent);
             
-            if (item.deny_temp && statusAmendent === 'completed') {
-                const denyTempData = JSON.parse(item.deny_temp);
-                
-                if (denyTempData.fullfilldate) {
-                    return {
-                        text: this.$t('Closed'),
-                        // detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
-                        show: true,
-                        color: '#6c757d', 
-                        dark: false,
-                    };
+            // If there's deny_temp and either amendment completed OR main status completed with activeRct === 0,
+            // treat as closed based on deny_temp (useful when request was auto-denied/closed)
+            if (item.deny_temp &&
+            typeof item.deny_temp === 'string' &&
+            item.deny_temp.trim() !== '' &&
+            (
+            statusAmendent === 'completed' ||
+            (status === 'completed' && activeRctInt !== "")
+            )
+            ) {
+                try {
+                    const denyTempData = JSON.parse(item.deny_temp);
+                    
+                    if (denyTempData.fullfilldate) {
+                        return {
+                            text: this.$t('Closed'),
+                            // detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
+                            show: true,
+                            color: '#6c757d', 
+                            dark: false,
+                        };
+                    }
+                } catch (e) {
+                    // fall through to normal logic if parsing fails
+                    console.error('Error parsing deny_temp in getRecruitmentStatus:', e);
                 }
             }
             
@@ -1643,7 +1727,7 @@ export default {
                     dark: false,
                 };
             }
-            if (status === 'completed' && statusAmendent == 'completed' && hold === 0 && resumed === 0) {
+            if (status === 'completed' && statusAmendent === 'completed'&& hold ===0 && resumed ===0) {
                 return {
                     text: this.$t('Recruiting'),
                     show: true,
@@ -1667,7 +1751,7 @@ export default {
                     text: this.$t('Closed'),
                     detail: '',
                     show: true,
-                    color: '#6c757d', // Đổi từ đỏ sang xám cho Closed cho đồng bộ, tránh nhầm với Cancelled
+                    color: '#6c757d', 
                 };
             }
             
@@ -2019,6 +2103,7 @@ export default {
                     this.dataRecruitmentReason = res.data.dataRecReason;
                     this.unitNames = res.data.dataDeptHrm;
                     this.pos = res.data.dataTypeApply;
+                    this.otherReason = res.data.dataOtherReason;
                     this.flowCache.clear();
                     // await this.preloadFlowData();
                     this.filteredItems = [];
@@ -2227,47 +2312,46 @@ export default {
             return nameObj[locale] || nameObj.en || '-';
         },
         getDisplayQuantity(qtyReq, item) {
-            if (!qtyReq) return 0;
-            
             try {
-                // Kiểm tra deny_temp trước tiên VÀ status_amendent phải là 'completed'
-                if (item && 
-                item.deny_temp && 
-                typeof item.deny_temp === 'string' && 
+                const activeRctVal = item?.activeRct;
+                const activeRctInt = (activeRctVal === null || typeof activeRctVal === 'undefined') ? null : parseInt(activeRctVal);
+                
+                if (item &&
+                item.deny_temp &&
+                typeof item.deny_temp === 'string' &&
                 item.deny_temp.trim() !== '' &&
-                item.status_amendent === 'completed') {
+                (
+                item.status_amendent === 'completed' ||
+                (item.status === 'completed' && activeRctInt !== "")
+                )
+                ) {
                     try {
                         const denyTempData = JSON.parse(item.deny_temp);
                         if (denyTempData.recruited !== undefined) {
-                            return parseInt(denyTempData.recruited) || 0;
+                            return parseInt(denyTempData.recruited);
                         } else if (item.recruited !== undefined) {
-                            return parseInt(item.recruited) || 0;
+                            return parseInt(item.recruited);
                         }
                     } catch (error) {
                         console.error('Error parsing deny_temp for quantity display:', error);
                     }
                 }
                 
-                // if (this.hasQuantityChange({qty_req: qtyReq, change_req: item?.change_req})) {
-                //     return parseInt(this.getChangeQuantity({qty_req: qtyReq, change_req: item?.change_req})) || 0;
-                // }
-                
                 if (typeof qtyReq === 'string') {
                     if (qtyReq.startsWith('{')) {
                         const qtyData = JSON.parse(qtyReq);
                         return (
-                        parseInt(qtyData.workers || 0) +
-                        parseInt(qtyData.staff || 0) +
-                        parseInt(qtyData.staff_lang || 0) +
-                        parseInt(qtyData.engineers || 0) +
-                        parseInt(qtyData.leader || 0) +
-                        parseInt(qtyData.tranlator || 0)
+                        parseInt(qtyData.workers) +
+                        parseInt(qtyData.staff) +
+                        parseInt(qtyData.engineers) +
+                        parseInt(qtyData.leader) +
+                        parseInt(qtyData.tranlator)
                         );
                     } else {
-                        return parseInt(qtyReq) || 0;
+                        return parseInt(qtyReq);
                     }
                 }
-                return parseInt(qtyReq) || 0;
+                return parseInt(qtyReq);
             } catch (e) {
                 console.error("Error parsing quantity:", e);
                 return 0;
@@ -2627,16 +2711,15 @@ export default {
             }
         },
         getReturnInfo(item) {
-            if (!item.approval) return { returned: false, reason: '' };
+            // if (!item.approval) return { returned: false, reason: '' };
             try {
                 const approvalData = JSON.parse(item.approval);
                 const returnedLevel = approvalData.find(level => level.status === 'returned');
-                
                 if (returnedLevel && returnedLevel.return_reason) {
                     let reason = returnedLevel.return_reason;
                     try {
                         const reasonObj = JSON.parse(reason);
-                        const currentLang = this.$i18n?.locale || 'vi'; // hoặc lấy từ localStorage, config
+                        const currentLang = this.$i18n?.locale || 'vi'; 
                         reason = reasonObj[currentLang] || reasonObj['vi'] || '';
                     } catch (e) {
                     }
@@ -3254,24 +3337,7 @@ export default {
             };
             return levels[status] || this.$t('Unknown');
         },
-        // getReturnInfo(item) {
-        //     if (!item.approval) return { returned: false, reason: '' };
         
-        //     try {
-        //         const approvalData = JSON.parse(item.approval);
-        //         const returnedLevel = approvalData.find(level => level.status === 'returned');
-        //         if (returnedLevel && returnedLevel.return_reason) {
-        //             return {
-        //                 returned: true,
-        //                 reason: returnedLevel.return_reason,
-        //                 level: returnedLevel.level
-        //             };
-        //         }
-        //     } catch (error) {
-        //         console.error('Error parsing approval data:', error);
-        //     }
-        //     return { returned: false, reason: '' };
-        // },
         getRejectionReason(item) {
             if (!item.approval) return '';
             try {
@@ -3333,24 +3399,21 @@ export default {
         },
         canApproveItemForTodo(item)
         {
+            if (item.approval) {
+                try {
+                    const approvalData = JSON.parse(item.approval);
+                    const hasReturnedStatus = approvalData.some(level => level.status === 'returned');
+                    if ((item.status === 'waiting_dept' || item.status_amendent === 'waiting_dept') && hasReturnedStatus) {
+                        return false;
+                    }
+                } catch (error) {
+                    console.error('Error parsing approval data:', error);
+                }
+            }
             if ((item.status === 'completed' || item.status === 'declined') && 
             (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined')) {
                 return false;
             }
-            const validStatuses = [
-            'waiting_dept', 
-            'waiting_div', 
-            'waiting_hr_rec_sf', 
-            'waiting_hr', 
-            'waiting_ad', 
-            'waiting_gm'
-            ];
-            
-            // Kiểm tra xem có ít nhất một trong hai trạng thái thuộc danh sách hợp lệ
-            // if (!validStatuses.includes(item.status) && 
-            // (!item.status_amendent || !validStatuses.includes(item.status_amendent))) {
-            //     return false;
-            // }
             
             try {
                 const approval = JSON.parse(item.approval);
@@ -3487,6 +3550,15 @@ export default {
                     const row = {};
                     headers.forEach(header => {
                         switch (header.key) {
+                            case 'reason':
+                            if (Number(item.reason_exp) === 3) {
+                                // Nếu là Other reason, lấy text đã localized
+                                row[header.title] = this.getLocalizedOtherReason(item.isOther_reason);
+                            } else {
+                                // Nếu không phải Other reason, lấy reason thông thường
+                                row[header.title] = item.reasonInfo?.type || '';
+                            }
+                            break;
                             case 'submitter':
                             row[header.title] = item.submiterInfo ? 
                             `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';

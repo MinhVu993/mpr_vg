@@ -319,9 +319,10 @@
                                                             layout: "print",
                                                             data() {
                                                                 return {
-                                                                    api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
+                                                                    api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
                                                                     formData: null,
-                                                                    duty:[]
+                                                                    duty:[],
+                                                                    otherReason: []
                                                                 };
                                                             },
                                                             async created() {
@@ -530,7 +531,8 @@
                                                                         if (response.data) {
                                                                             const dutyData = response.data.dataDutyHrm || [];
                                                                             this.duty = dutyData;
-                                                                            console.log('Fetched duty data:', this.duty);
+                                                                            this.otherReason = response.data.dataOtherReason;
+                                                                            
                                                                             return dutyData;
                                                                         } else {
                                                                             console.error('API response missing data');
@@ -550,19 +552,45 @@
                                                                     try {
                                                                         if (!reason) return '';
                                                                         
-                                                                        // Nếu reason là string JSON
-                                                                        if (typeof reason === 'string' && reason.startsWith('{')) {
-                                                                            const parsedReason = JSON.parse(reason);
-                                                                            return `${parsedReason.vi}/${parsedReason.cn}`; // Hiển thị cả tiếng Việt và tiếng Trung
-                                                                        }
-                                                                        
-                                                                        // Nếu reason đã là object
+                                                                        // Nếu reason là object hoặc JSON string object -> parse và trả về vi/cn
                                                                         if (typeof reason === 'object' && reason !== null) {
-                                                                            return `${reason.vi}/${reason.cn}`; // Hiển thị cả tiếng Việt và tiếng Trung
+                                                                            return `${reason.vi}/${reason.cn}`;
                                                                         }
                                                                         
-                                                                        // Nếu là string thường
-                                                                        return reason;
+                                                                        if (typeof reason === 'string') {
+                                                                            const trimmed = reason.trim();
+                                                                            // JSON string object
+                                                                            if (trimmed.startsWith('{')) {
+                                                                                const parsedReason = JSON.parse(trimmed);
+                                                                                return `${parsedReason.vi}/${parsedReason.cn}`;
+                                                                            }
+                                                                            
+                                                                            // Nếu là id dạng "1" hoặc number -> tìm trong this.otherReason
+                                                                            const id = parseInt(trimmed);
+                                                                            if (!isNaN(id) && Array.isArray(this.otherReason)) {
+                                                                                const found = this.otherReason.find(r => Number(r.id) === id);
+                                                                                if (found) {
+                                                                                    const rn = typeof found.reason_name === 'string'
+                                                                                    ? JSON.parse(found.reason_name)
+                                                                                    : found.reason_name;
+                                                                                    return `${rn.vi}/${rn.cn}`;
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        // Nếu là number id
+                                                                        if (typeof reason === 'number' && Array.isArray(this.otherReason)) {
+                                                                            const found = this.otherReason.find(r => Number(r.id) === reason);
+                                                                            if (found) {
+                                                                                const rn = typeof found.reason_name === 'string'
+                                                                                ? JSON.parse(found.reason_name)
+                                                                                : found.reason_name;
+                                                                                return `${rn.vi}/${rn.cn}`;
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        // Fallback: trả về nguyên bản
+                                                                        return String(reason);
                                                                     } catch (error) {
                                                                         console.error('Error parsing other reason:', error);
                                                                         return reason || '';
@@ -579,29 +607,7 @@
                                                                         ? JSON.parse(dutyItem.duty_name) 
                                                                         : dutyItem.duty_name;
                                                                         
-                                                                        // Get vi and cn values
-                                                                        let viName = dutyName.vi || '';
-                                                                        let cnName = dutyName.cn || '';
-                                                                        
-                                                                        // Handle VG prefix for Vietnamese name
-                                                                        if (viName.startsWith('VG')) {
-                                                                            const parts = viName.split(' ');
-                                                                            if (parts.length > 2) {
-                                                                                viName = parts.slice(2).join(' '); 
-                                                                            }
-                                                                        }
-                                                                        
-                                                                        // Handle VG prefix for Chinese name
-                                                                        if (cnName.startsWith('VG')) {
-                                                                            const parts = cnName.split(' ');
-                                                                            if (parts.length > 2) {
-                                                                                cnName = parts.slice(2).join(' ');
-                                                                            }
-                                                                        }
-                                                                        
-                                                                        // Return formatted string
-                                                                        return `${viName}/${cnName}`; 
-                                                                        
+                                                                        return `${dutyName.vi}/${dutyName.cn}`; // Return format: Vietnamese/Chinese
                                                                     } catch (e) {
                                                                         console.error('Error parsing duty name:', e);
                                                                         return dutyNo;
