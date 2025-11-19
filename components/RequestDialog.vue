@@ -230,7 +230,7 @@
         :clearable="true" accept=".doc,.docx,.pdf,.xls,.xlsx"></v-file-input>
         <div v-show="filePreview.dimissionList && form.recruitment.reason === 2"
         class="file-preview mt-2">
-        <v-chip small close @click:close="clearFile('dimissionList')" class="mb-1">
+        <v-chip small  class="mb-1">
             <v-icon left small>{{ getFileIcon(form.attachments.dimissionList?.type ||
                 getFileTypeFromName(form.attachments.dimissionList) ) }}</v-icon>
                 {{ getFileName("dimissionList") }}
@@ -282,7 +282,7 @@
                     hide-details @change="previewFile('jobDesc', $event)" v-show="form.pos !== 1"
                     :clearable="true" accept=".doc,.docx,.pdf"></v-file-input>
                     <div v-if="filePreview.jobDesc" class="file-preview mt-2">
-                        <v-chip small close @click:close="clearFile('jobDesc')" class="mb-1">
+                        <v-chip small  class="mb-1">
                             <v-icon left small>{{ getFileIcon(form.attachments.jobDesc?.type ||
                                 getFileTypeFromName(form.attachments.jobDesc) ) }}</v-icon>
                                 {{ getFileName("jobDesc") }}
