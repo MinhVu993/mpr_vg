@@ -223,61 +223,47 @@
 </template>
 <template v-slot:[`item.status`]="{ item }">
     <div class="d-flex align-center flex-wrap">
+        <v-chip v-if="isNewYearRequest(item)" label outlined color="green darken-2" small dark class="mr-1 mb-1" >
+            {{ $t('Approved') }}
+        </v-chip>
+        
         <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
             <template v-slot:activator="{ on, attrs }">
-                <v-chip 
-                v-if="item.status" 
-                label 
-                outlined
-                :color="getStatusColor(item.status, item)" 
-                small 
-                dark
-                v-bind="attrs" 
-                v-on="on" 
-                class="mr-1 mb-1" 
-                @click="openApprovalDetails(item)" 
-                style="cursor: pointer"
-                >
-                {{ getStatusWithApprover(item.status, item) }}
-            </v-chip>
-        </template>
-        <span v-if="getReturnInfo(item).returned && item.status !== 'completed'">
-            <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
-            {{ getNextApproverInfoForStatus(item) }}
-        </span>
-        <span v-else-if="getNextApproverInfoForStatus(item)">
-            {{ getNextApproverInfoForStatus(item) }}
-        </span>
-    </v-tooltip>
-    
-    <!-- Amendment Status Chip with Separate Tooltip -->
-    <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
-        <template v-slot:activator="{ on: amendmentOn, attrs: amendmentAttrs }">
-            <v-chip 
-            label 
-            :color="getAmendmentStatusColor(item.status_amendent)" 
-            small 
-            outlined
-            dark
-            v-bind="amendmentAttrs"
-            v-on="amendmentOn"
-            class="mr-1 mb-1"
-            @click="openApprovalDetails(item)"
-            style="cursor: pointer"
-            >
-            {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
-        </v-chip>
-    </template>
-    <span v-if="getReturnInfo(item).returned && item.status_amendent !== 'completed'">
-        <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
-        {{ getNextApproverInfoForStatus(item) }}
-    </span>
-    <span>
-        {{ getNextApproverInfoForAmendment(item) }}
-    </span>
-</v-tooltip>
-
-</div>
+                <v-chip v-if="item.status" label outlined :color="getStatusColor(item.status, item)" small dark v-bind="attrs" v-on="on" class="mr-1 mb-1" @click="openApprovalDetails(item)" style="cursor: pointer" >
+                    <template v-if="isNewYearRequest(item)">
+                        <v-icon left small color="primary">mdi-calendar-refresh</v-icon>
+                        <!-- <span class="font-weight-bold mr-1">{{ $t('NY_Prefix') }}:</span> -->
+                    </template>
+                    
+                    {{ getStatusWithApprover(item.status, item) }}
+                </v-chip>
+            </template>
+            
+            <span v-if="getReturnInfo(item).returned && item.status !== 'completed'">
+                <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
+                {{ getNextApproverInfoForStatus(item) }}
+            </span>
+            <span v-else-if="getNextApproverInfoForStatus(item)">
+                {{ getNextApproverInfoForStatus(item) }}
+            </span>
+        </v-tooltip>
+        
+        <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
+            <template v-slot:activator="{ on: amendmentOn, attrs: amendmentAttrs }">
+                <v-chip label :color="getAmendmentStatusColor(item.status_amendent)" small outlined dark v-bind="amendmentAttrs" v-on="amendmentOn" class="mr-1 mb-1" @click="openApprovalDetails(item)" style="cursor: pointer" >
+                    {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
+                </v-chip>
+            </template>
+            <span v-if="getReturnInfo(item).returned && item.status_amendent !== 'completed'">
+                <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
+                {{ getNextApproverInfoForStatus(item) }}
+            </span>
+            <span>
+                {{ getNextApproverInfoForAmendment(item) }}
+            </span>
+        </v-tooltip>
+        
+    </div>
 </template>
 <template v-slot:[`item.action`]="{ item }">
     <v-icon @click="printDocument(item)">mdi-printer</v-icon>
@@ -1052,7 +1038,7 @@ export default {
             { text: 'System Update Date', value: 'update_date', align: 'center', class: 'orange lighten-4' },
             {text:'',value:'action',align:'center',sortable:false,class:'orange lighten-4'}
             ],
-            settingHistory: [ ],
+            settingHistory: [],
             settingFilterValues: {},
         }
     },
@@ -1071,7 +1057,7 @@ export default {
         
         // THÊM COMPUTED MỚI NÀY:
         filteredSettingHistory() {
-            let result = [...this.settingHistory];
+            let result = [...(this.settingHistory || [])];
             
             Object.entries(this.settingFilterValues).forEach(([key, values]) => {
                 if (values && values.length) {
@@ -1595,15 +1581,35 @@ export default {
     },
     methods: {
         getYearFromReqId(req_id) {
-            if (!req_id || typeof req_id !== 'string' || req_id.length < 11) {
-                return null; // Bỏ qua nếu req_id không hợp lệ
+            if (!req_id || typeof req_id !== 'string') {
+                return null; 
             }
-            // Lấy 2 ký tự năm (ví dụ '25') từ vị trí 9
-            const yearPrefix = req_id.substring(9, 11);
             
-            if (yearPrefix && /^\d{2}$/.test(yearPrefix)) {
-                return `20${yearPrefix}`; // Chuyển '25' thành '2025'
+            let yearPrefix = '';
+            
+            // CASE 1: Dạng có dấu gạch ngang (HR-MPR00-2601-0001)
+            if (req_id.includes('-')) {
+                const parts = req_id.split('-');
+                // parts[0]: HR, parts[1]: MPR00, parts[2]: 2601 (NămTháng)
+                if (parts.length >= 3) {
+                    const yearMonth = parts[2];
+                    if (yearMonth && yearMonth.length >= 2) {
+                        yearPrefix = yearMonth.substring(0, 2); // Lấy '26'
+                    }
+                }
+            } 
+            // CASE 2: Dạng liền mạch bắt đầu bằng HR (HR250108001)
+            else if (req_id.toUpperCase().startsWith('HR') && req_id.length >= 4) {
+                // Lấy ký tự ở vị trí index 2 và 3 (ngay sau 'HR')
+                // Ví dụ: H(0)R(1)2(2)5(3)... -> Lấy 25
+                yearPrefix = req_id.substring(2, 4);
             }
+            
+            // Kiểm tra xem kết quả lấy được có phải là 2 chữ số không
+            if (yearPrefix && /^\d{2}$/.test(yearPrefix)) {
+                return `20${yearPrefix}`; // Trả về 2026 hoặc 2025
+            }
+            
             return null;
         },
         updateSettingFilter(key, value) {
@@ -1632,11 +1638,18 @@ export default {
         async saveSetting() {
             if (!this.settingForm.year || !this.settingForm.emailDate || 
             !this.settingForm.replyDeadline || !this.settingForm.systemUpdateDate) {
-                this.$notify({
-                    title: 'Warning',
-                    text: this.$t('Please fill all required fields'),
-                    type: 'warning'
-                });
+                alert(this.$t('Please fill all required fields'));
+                return;
+            }
+            const emailDate = new Date(this.settingForm.emailDate);
+            const replyDate = new Date(this.settingForm.replyDeadline);
+            const updateDate = new Date(this.settingForm.systemUpdateDate);
+            if (replyDate < emailDate) {
+                alert(this.$t('Reply Deadline must be after or equal to Email Notification Date'));
+                return;
+            }
+            if (updateDate < replyDate) {
+                alert(this.$t('System Update Date must be after or equal to Reply Deadline'));
                 return;
             }
             try {
@@ -1647,35 +1660,28 @@ export default {
                     reply_deadline: this.settingForm.replyDeadline,
                     system_update_date: this.settingForm.systemUpdateDate
                 };
-                
                 const res = await this.$axios.post(this.api + 'saveYearSetting', payload);
                 
                 if (res.data.success) {
-                    this.$notify({
-                        title: 'Success',
-                        text: this.$t('Settings saved successfully'),
-                        type: 'success'
-                    });
+                    alert(this.$t('Settings saved successfully'));
                     this.resetSettingForm(); 
                     await this.fetchData();
                 } else {
-                    this.$notify({
-                        title: 'Error',
-                        text: res.data.message || 'Failed to save settings',
-                        type: 'error'
-                    });
+                    alert(res.data.message || 'Failed to save settings');
                 }
             } catch (error) {
                 console.error('Save setting error:', error);
-                this.$notify({
-                    title: 'Error',
-                    text: error.response?.data?.message || 'Error saving settings',
-                    type: 'error'
-                });
+                let errorMsg = error.response?.data?.message || 'Error saving settings';
+                if (error.response?.data?.errors) {
+                    const firstError = Object.values(error.response.data.errors)[0];
+                    errorMsg = Array.isArray(firstError) ? firstError[0] : firstError;
+                }
+                alert(errorMsg);
             } finally {
                 this.loading = false;
             }
-        }, setLocale(locale) {
+        },
+        setLocale(locale) {
             this.$i18n.locale = locale;
             this.$forceUpdate();
         },
@@ -1733,11 +1739,8 @@ export default {
                     return sourceText;
                 }
                 
-                // raw is string
                 const s = String(raw).trim();
                 if (!s) return '';
-                
-                // If string encodes JSON object like {"vi":"...", "cn":"..."}
                 if (s.startsWith('{')) {
                     try {
                         const obj = JSON.parse(s);
@@ -1979,10 +1982,22 @@ export default {
             const activeRctVal = item?.activeRct;
             const activeRctInt = (activeRctVal === null || typeof activeRctVal === 'undefined') ? null : parseInt(activeRctVal);
             
+            // --- CẬP NHẬT MỚI: Logic cho đơn năm mới đang duyệt ---
+            // Nếu chọn "Tiếp tục tuyển dụng" (1) VÀ đơn chưa duyệt xong (khác completed) VÀ chưa bị từ chối
+            if (activeRctInt !== '' && status !== 'completed' && status !== 'declined') {
+                return {
+                    text: this.$t('Recruiting'),
+                    // detail: this.$t('NY_Prefix') + ': ' + this.$t('Processing'), // Có thể thêm chi tiết nếu muốn
+                    show: true,
+                    color: '#43A047', // Màu xanh lá (Recruiting)
+                    dark: false,
+                };
+            }
+            // -----------------------------------------------------
+            
             const isCompleted = (status === 'completed') && (!statusAmendent);
             
-            // If there's deny_temp and either amendment completed OR main status completed with activeRct === 0,
-            // treat as closed based on deny_temp (useful when request was auto-denied/closed)
+            // Xử lý trường hợp đóng tự động (auto-close) hoặc đã từ chối
             if (item.deny_temp &&
             typeof item.deny_temp === 'string' &&
             item.deny_temp.trim() !== '' &&
@@ -1999,12 +2014,11 @@ export default {
                             text: this.$t('Closed'),
                             // detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
                             show: true,
-                            color: '#6c757d', 
+                            color: '#6c757d',
                             dark: false,
                         };
                     }
                 } catch (e) {
-                    // fall through to normal logic if parsing fails
                     console.error('Error parsing deny_temp in getRecruitmentStatus:', e);
                 }
             }
@@ -2035,7 +2049,7 @@ export default {
                     dark: false,
                 };
             }
-            if (status === 'completed' && statusAmendent === 'completed'&& hold ===0 && resumed ===0) {
+            if (status === 'completed' && statusAmendent === 'completed' && hold === 0 && resumed === 0) {
                 return {
                     text: this.$t('Recruiting'),
                     show: true,
@@ -2059,7 +2073,7 @@ export default {
                     text: this.$t('Closed'),
                     detail: '',
                     show: true,
-                    color: '#6c757d', 
+                    color: '#6c757d',
                 };
             }
             
@@ -3315,6 +3329,9 @@ export default {
                 return null;
             }
         },
+        isNewYearRequest(item) {
+            return item.activeRct !== null && item.activeRct !== undefined && item.activeRct !== '';
+        },
         getStatusWithApprover(status, item) {
             const statusText = this.$t(this.getStatusText(status, item));
             const approverInfo = this.getApproverName(status, item);
@@ -3324,7 +3341,6 @@ export default {
             }
             return statusText;
         },
-        
         getAmendmentStatusWithApprover(status, item) {
             const statusText = this.$t(this.getAmendmentStatusText(status));
             const approverInfo = this.getApproverNameForAmendment(status, item);
@@ -4200,7 +4216,10 @@ export default {
             "Email Notification Date":"Email Notification Date",
             "Reply Deadline":"Reply Deadline",
             "System Update Date":"System Update Date",
-            "Historical Settings":"Historical Settings"
+            "Historical Settings":"Historical Settings",
+            "NY_Prefix":"Req for New Year ",
+            "Reply Deadline must be after or equal to Email Notification Date": "Reply Deadline must be after or equal to Email Notification Date",
+            "System Update Date must be after or equal to Reply Deadline": "System Update Date must be after or equal to Reply Deadline"
         },
         "vi": {
             "ID": "Mã đơn",
@@ -4323,7 +4342,10 @@ export default {
             "Reply Deadline":"Hạn cuối phản hồi",
             "System Update Date":"Ngày cập nhật hệ thống",
             "Historical Settings":"Lịch sử cài đặt",
-            "Action":"Hành động"
+            "Action":"Hành động",
+            "NY_Prefix":"Yêu cầu cho Năm Mới ",
+            "Reply Deadline must be after or equal to Email Notification Date": "Hạn chót phản hồi phải sau hoặc bằng Ngày gửi Email",
+            "System Update Date must be after or equal to Reply Deadline": "Ngày cập nhật hệ thống phải sau hoặc bằng Hạn chót phản hồi"
         },
         "cn": {
             "ID": "表單編號",
@@ -4447,7 +4469,10 @@ export default {
             "Email Notification Date":"年度結算email通知日期",
             "Reply Deadline":"最後回覆期限日期",
             "System Update Date":"系統更新狀態日期",
-            "Historical Settings":"歷年設定紀錄"
+            "Historical Settings":"歷年設定紀錄",
+            "NY_Prefix":"新年度需求申請",
+            "Reply Deadline must be after or equal to Email Notification Date": "回覆截止日期必須在電子郵件通知日期之後或相同",
+            "System Update Date must be after or equal to Reply Deadline": "系統更新日期必須在回覆截止日期之後或相同"
         }
     }  
 </i18n>     

@@ -222,63 +222,48 @@
 </template>
 <template v-slot:[`item.status`]="{ item }">
     <div class="d-flex align-center flex-wrap">
+        <v-chip v-if="isNewYearRequest(item)" label outlined color="green darken-2" small dark class="mr-1 mb-1" >
+            {{ $t('Approved') }}
+        </v-chip>
+        
         <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
             <template v-slot:activator="{ on, attrs }">
-                <v-chip 
-                v-if="item.status" 
-                label 
-                outlined
-                :color="getStatusColor(item.status, item)" 
-                small 
-                dark
-                v-bind="attrs" 
-                v-on="on" 
-                class="mr-1 mb-1" 
-                @click="openApprovalDetails(item)" 
-                style="cursor: pointer"
-                >
-                {{ getStatusWithApprover(item.status, item) }}
-            </v-chip>
-        </template>
-        <span v-if="getReturnInfo(item).returned && item.status !== 'completed'">
-            <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
-            {{ getNextApproverInfoForStatus(item) }}
-        </span>
-        <span v-else-if="getNextApproverInfoForStatus(item)">
-            {{ getNextApproverInfoForStatus(item) }}
-        </span>
-    </v-tooltip>
-    
-    <!-- Amendment Status Chip with Separate Tooltip -->
-    <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
-        <template v-slot:activator="{ on: amendmentOn, attrs: amendmentAttrs }">
-            <v-chip 
-            label 
-            :color="getAmendmentStatusColor(item.status_amendent)" 
-            small 
-            outlined
-            dark
-            v-bind="amendmentAttrs"
-            v-on="amendmentOn"
-            class="mr-1 mb-1"
-            @click="openApprovalDetails(item)"
-            style="cursor: pointer"
-            >
-            {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
-        </v-chip>
-    </template>
-    <span v-if="getReturnInfo(item).returned && item.status_amendent !== 'completed'">
-        <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
-        {{ getNextApproverInfoForStatus(item) }}
-    </span>
-    <span>
-        {{ getNextApproverInfoForAmendment(item) }}
-    </span>
-</v-tooltip>
-
-</div>
+                <v-chip v-if="item.status" label outlined :color="getStatusColor(item.status, item)" small dark v-bind="attrs" v-on="on" class="mr-1 mb-1" @click="openApprovalDetails(item)" style="cursor: pointer" >
+                    <template v-if="isNewYearRequest(item)">
+                        <v-icon left x-small color="primary">mdi-calendar-refresh</v-icon>
+                        <!-- <span class="font-weight-bold mr-1">{{ $t('NY_Prefix') }}:</span> -->
+                    </template>
+                    
+                    {{ getStatusWithApprover(item.status, item) }}
+                </v-chip>
+            </template>
+            
+            <span v-if="getReturnInfo(item).returned && item.status !== 'completed'">
+                <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
+                {{ getNextApproverInfoForStatus(item) }}
+            </span>
+            <span v-else-if="getNextApproverInfoForStatus(item)">
+                {{ getNextApproverInfoForStatus(item) }}
+            </span>
+        </v-tooltip>
+        
+        <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
+            <template v-slot:activator="{ on: amendmentOn, attrs: amendmentAttrs }">
+                <v-chip label :color="getAmendmentStatusColor(item.status_amendent)" small outlined dark v-bind="amendmentAttrs" v-on="amendmentOn" class="mr-1 mb-1" @click="openApprovalDetails(item)" style="cursor: pointer" >
+                    {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
+                </v-chip>
+            </template>
+            <span v-if="getReturnInfo(item).returned && item.status_amendent !== 'completed'">
+                <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
+                {{ getNextApproverInfoForStatus(item) }}
+            </span>
+            <span>
+                {{ getNextApproverInfoForAmendment(item) }}
+            </span>
+        </v-tooltip>
+        
+    </div>
 </template>
-
 <template v-slot:[`item.action`]="{ item }">
     <v-icon @click="printDocument(item)">mdi-printer</v-icon>
 </template>
@@ -1386,16 +1371,36 @@ export default {
         },
     },
     methods: {
-          getYearFromReqId(req_id) {
-            if (!req_id || typeof req_id !== 'string' || req_id.length < 11) {
-                return null; // Bỏ qua nếu req_id không hợp lệ
+        getYearFromReqId(req_id) {
+            if (!req_id || typeof req_id !== 'string') {
+                return null; 
             }
-            // Lấy 2 ký tự năm (ví dụ '25') từ vị trí 9
-            const yearPrefix = req_id.substring(9, 11);
             
-            if (yearPrefix && /^\d{2}$/.test(yearPrefix)) {
-                return `20${yearPrefix}`; // Chuyển '25' thành '2025'
+            let yearPrefix = '';
+            
+            // CASE 1: Dạng có dấu gạch ngang (HR-MPR00-2601-0001)
+            if (req_id.includes('-')) {
+                const parts = req_id.split('-');
+                // parts[0]: HR, parts[1]: MPR00, parts[2]: 2601 (NămTháng)
+                if (parts.length >= 3) {
+                    const yearMonth = parts[2];
+                    if (yearMonth && yearMonth.length >= 2) {
+                        yearPrefix = yearMonth.substring(0, 2); // Lấy '26'
+                    }
+                }
+            } 
+            // CASE 2: Dạng liền mạch bắt đầu bằng HR (HR250108001)
+            else if (req_id.toUpperCase().startsWith('HR') && req_id.length >= 4) {
+                // Lấy ký tự ở vị trí index 2 và 3 (ngay sau 'HR')
+                // Ví dụ: H(0)R(1)2(2)5(3)... -> Lấy 25
+                yearPrefix = req_id.substring(2, 4);
             }
+            
+            // Kiểm tra xem kết quả lấy được có phải là 2 chữ số không
+            if (yearPrefix && /^\d{2}$/.test(yearPrefix)) {
+                return `20${yearPrefix}`; // Trả về 2026 hoặc 2025
+            }
+            
             return null;
         },
         setLocale(locale) {
@@ -1671,10 +1676,16 @@ export default {
             const activeRctVal = item?.activeRct;
             const activeRctInt = (activeRctVal === null || typeof activeRctVal === 'undefined') ? null : parseInt(activeRctVal);
             
+               if (activeRctInt === 1 && activeRctInt===0 && status !== 'completed' && status !== 'declined') {
+                return {
+                    text: this.$t('Recruiting'),
+                    // detail: this.$t('NY_Prefix') + ': ' + this.$t('Processing'), // Có thể thêm chi tiết nếu muốn
+                    show: true,
+                    color: '#43A047', // Màu xanh lá (Recruiting)
+                    dark: false,
+                };
+            }
             const isCompleted = (status === 'completed') && (!statusAmendent);
-            
-            // If there's deny_temp and either amendment completed OR main status completed with activeRct === 0,
-            // treat as closed based on deny_temp (useful when request was auto-denied/closed)
             if (item.deny_temp &&
             typeof item.deny_temp === 'string' &&
             item.deny_temp.trim() !== '' &&
@@ -1691,12 +1702,11 @@ export default {
                             text: this.$t('Closed'),
                             // detail: `(${this.formatDate(denyTempData.fullfilldate)})`,
                             show: true,
-                            color: '#6c757d', 
+                            color: '#6c757d',
                             dark: false,
                         };
                     }
                 } catch (e) {
-                    // fall through to normal logic if parsing fails
                     console.error('Error parsing deny_temp in getRecruitmentStatus:', e);
                 }
             }
@@ -1727,7 +1737,7 @@ export default {
                     dark: false,
                 };
             }
-            if (status === 'completed' && statusAmendent === 'completed'&& hold ===0 && resumed ===0) {
+            if (status === 'completed' && statusAmendent === 'completed' && hold === 0 && resumed === 0) {
                 return {
                     text: this.$t('Recruiting'),
                     show: true,
@@ -1751,7 +1761,7 @@ export default {
                     text: this.$t('Closed'),
                     detail: '',
                     show: true,
-                    color: '#6c757d', 
+                    color: '#6c757d',
                 };
             }
             
@@ -3005,6 +3015,9 @@ export default {
                 this.$store.dispatch('showError', this.$t('Failed to return request'));
             }
         },
+        isNewYearRequest(item) {
+            return item.activeRct !== null && item.activeRct !== undefined && item.activeRct !== '';
+        },
         getNextApproverInfo(item) {
             try {
                 // Return null if both statuses are completed/declined
@@ -3821,7 +3834,8 @@ export default {
             "Rows per page:":"Rows per page:",
             "Loading approver info...":"Loading approver info...",
             "Current":"Current",
-            "loadingData":"Loading data...please wait"
+            "loadingData":"Loading data...please wait",
+            "NY_Prefix":"Req for New Year "
         },
         "vi": {
             "ID": "Mã đơn",
@@ -3939,7 +3953,8 @@ export default {
             "Rows per page": "Số hàng mỗi trang",
             "Loading approver info...":"Đang tải thông tin người phê duyệt...",
             "Current":"Hiện tại",
-            "loadingData":"Đang tải dữ liệu...vui lòng chờ"
+            "loadingData":"Đang tải dữ liệu...vui lòng chờ",
+            "NY_Prefix":"Yêu cầu cho Năm Mới "
         },
         "cn": {
             "ID": "表單編號",
@@ -4059,7 +4074,8 @@ export default {
             "Rows per page": "每頁列數",
             "Loading approver info...":"正在加載審批人信息...",
             "Current":"當前",
-            "loadingData":"正在加載數據...請稍候"
+            "loadingData":"正在加載數據...請稍候",
+            "NY_Prefix":"新年度需求申請"
         }
     }  
 </i18n>       

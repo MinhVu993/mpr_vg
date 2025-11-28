@@ -48,19 +48,17 @@
     <div class="container">
         <div class="content">
             <p>各位主管好，</p>
-            <p>年度招募結算作業時程如下：</p>
+            <p>為進行年度招募結算，預計作業時程如下，請各位主管知悉。</p>
 
             <div class="date-block">
-                <div class="date-highlight">12/08（一）起</div>
-                <div>HR 停止受理新增補單，已核准需求持續招募至年底。</div>
+                <div>12/08（一）起 HR 將停止受理新的增補單，已核准的增補需求將持續招募至今年底。</div>
             </div>
 
             <div class="date-block">
-                <div class="date-highlight">12/23（二）</div>
-                <div>系統將寄發年度結算通知信，請屆時依通知完成確認。</div>
+                <div>12/23（二）各位主管將收到 MPR 系統寄出之年度結算通知信件。</div>
             </div>
-
-            <p>感謝您的配合。</p>
+            <p>後續請依通知完成確認作業，感謝您的配合。</p>
+            <a href="http://gmo021.cansportsvg.com/vg/hr/mpr">[連結]</a>
         </div>
     </div>
 </body>

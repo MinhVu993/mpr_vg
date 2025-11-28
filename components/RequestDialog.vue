@@ -30,19 +30,22 @@
                     background-color="#fff9c4"></v-autocomplete>
                 </v-col>
             </v-row>
-            <v-card-text v-if="showNewYearSection"  style="background-color: #fff9c4;"  class="mb-4">
+            <v-card-text v-if="showNewYearSection" style="background-color: #fff9c4;" class="mb-4">
                 <v-row class="new-year-section">
-                    <v-col cols="12" md="6" class="d-flex align-center">
-                        <v-icon color="primary" class="mr-3">mdi-calendar-star</v-icon>
-                        <div>
-                            <div class="font-weight-medium subtitle-1">{{ $t("New Year Recruitment") }}</div>
+                    <v-col cols="12">
+                        <div class="d-flex align-center mb-2">
+                            <v-icon color="primary" size="32" class="mr-3">mdi-calendar-star</v-icon>
+                            <div class="text-h6 font-weight-bold">
+                                {{ $t("New Year Recruitment") }}
+                            </div>
                         </div>
-                    </v-col>
-                    <v-col cols="12" md="6" class="d-flex align-center justify-start md:justify-end" >
-                        <v-radio-group v-model="form.newYearRecruitment" row dense hide-details   :disabled="disableNewYearRecruitment">
-                            <v-radio :label="$t('Continue Recruitment')" :value = 1 />
-                            <v-radio :label="$t('Cancel Recruitment')" :value=0 />
-                        </v-radio-group>
+                        
+                        <div class="ml-11">
+                            <v-radio-group v-model="form.newYearRecruitment" column hide-details :disabled="disableNewYearRecruitment" >
+                                <v-radio :label="$t('Continue Recruitment')" :value=1 class="mb-3 custom-radio" color="red"></v-radio>
+                                <v-radio :label="$t('Cancel Recruitment')" :value=0 class="custom-radio" color="red"></v-radio>
+                            </v-radio-group>
+                        </div>
                     </v-col>
                 </v-row>
             </v-card-text>
@@ -318,7 +321,7 @@
                         <v-row class="ml-1">
                             <v-col cols="12" md="4">
                                 <v-radio-group :disabled="formDisabled" v-model="form.either" row dense
-                                hide-details :rules="[languageSelectionRule]">
+                                hide-details>
                                 <div class="subtitle-2">{{ $t("Either:") }}</div>
                                 <v-radio :disabled="formDisabled"
                                 v-for="(level, index) in getLanguageLevels('either')"
@@ -329,7 +332,7 @@
                         
                         <v-col cols="12" md="4" :rules="[rules.required]" required>
                             <v-radio-group :disabled="formDisabled" v-model="form.english" row hide-details
-                            dense :rules="[languageSelectionRule]">
+                            dense>
                             <div class="subtitle-2">{{ $t("English:") }}</div>
                             <v-radio :disabled="formDisabled"
                             v-for="(level, index) in getLanguageLevels('en')"
@@ -339,7 +342,7 @@
                     </v-col>
                     <v-col cols="12" md="4" :rules="[rules.required]" required>
                         <v-radio-group :disabled="formDisabled" v-model="form.chinese" row hide-details
-                        dense :rules="[languageSelectionRule]">
+                        dense>
                         <div class="subtitle-2">{{ $t("Chinese:") }}</div>
                         <v-radio :disabled="formDisabled"
                         v-for="(level, index) in getLanguageLevels('cn')"
@@ -498,20 +501,24 @@
             <v-btn color="#01a6be" class="mr-3 white--text" @click="openAcceptDialog">
                 <v-icon left>mdi-check</v-icon> {{ $t("Accept") }}
             </v-btn>
-            <v-btn v-if="editData && editData.status !== 'declined'" color="#FFA500"
+            
+            <v-btn v-if="editData && editData.status !== 'declined' && !isNewYearProcessing" 
+            color="#FFA500"
             class="mr-3 white--text" @click="openReturnDialog">
             <v-icon left>mdi-undo</v-icon> {{ $t("Return") }}
         </v-btn>
-        <v-btn color="red darken-2" class="mr-6 white--text" @click="openDenyDialog">
-            <v-icon left>mdi-close</v-icon> {{ $t("Deny") }}
-        </v-btn>
-    </template>
-    <v-btn color="grey" class="mr-3 white--text" @click="dialog = false">
-        <v-icon left>mdi-close-circle</v-icon> {{ $t("Cancel") }}
+        
+        <v-btn v-if="!isNewYearProcessing" 
+        color="red darken-2" class="mr-6 white--text" @click="openDenyDialog">
+        <v-icon left>mdi-close</v-icon> {{ $t("Deny") }}
     </v-btn>
-    <v-btn v-show="showSaveButton" color="success" :disabled="disableSaveButton"
-    @click="confirmSubmitDialog = true"> <v-icon left>mdi-send</v-icon>
-    {{ $t("Submit")}}
+</template>
+<v-btn color="grey" class="mr-3 white--text" @click="dialog = false">
+    <v-icon left>mdi-close-circle</v-icon> {{ $t("Cancel") }}
+</v-btn>
+<v-btn v-show="showSaveButton" color="success" :disabled="disableSaveButton"
+@click="confirmSubmitDialog = true"> <v-icon left>mdi-send</v-icon>
+{{ $t("Submit")}}
 </v-btn>
 </v-col>
 </v-row>
@@ -3065,16 +3072,25 @@ export default {
         },
     },
     computed: {
-        noteText() {
-            // Kiểm tra xem có mã đơn cũ không (lấy từ form hoặc editData trực tiếp)
-            const oldId = this.form.req_id_oldyear || (this.editData && this.editData.req_id_oldyear);
+        isNewYearProcessing() {
+            // 1. Đang hiện khung radio
+            if (this.showNewYearSection) return true;
             
+            // 2. Đã có dữ liệu activeRct (0: Hủy, 1: Tiếp tục)
+            if (this.editData) {
+                const val = this.editData.activeRct;
+                // Kiểm tra kỹ val có tồn tại không (chấp nhận cả số 0)
+                if (val !== null && val !== undefined && val !== '') {
+                    return true;
+                }
+            }
+            return false;
+        },
+        noteText() {
+            const oldId = this.form.req_id_oldyear || (this.editData && this.editData.req_id_oldyear);
             if (oldId) {
-                // Ghép chuỗi theo định dạng yêu cầu: "依照" + [Mã cũ] + "招募條件續招"
                 return `${this.$t("Based on")} ${oldId} ${this.$t("continue recruitment based on conditions")}`;
             }
-            // Nếu không có mã cũ, trả về ghi chú bình thường (nếu bạn muốn dùng chung trường này)
-            // hoặc trả về rỗng nếu chỉ muốn hiển thị khi có mã cũ.
             return this.editData?.note || ""; 
         },
         disableNewYearRecruitment() {
@@ -3088,67 +3104,59 @@ export default {
             return false;
         },
         showNewYearSection() {
-            // 1. Kiểm tra dữ liệu đầu vào cơ bản
+            // 1. Kiểm tra cơ bản
             if (!this.editData || !this.activeUser?.empno) return false;
             
-            // 2. [ĐÃ SỬA LỖI] LUÔN ẨN nếu là đơn con được tạo từ năm cũ
-            // (Bỏ comment 3 dòng này là quan trọng nhất)
+            // 2. Ẩn nếu là đơn con
             if (this.editData.req_id_oldyear && this.editData.req_id_oldyear.trim() !== '') {
                 return false;
             }
             
-            // 3. (Phần này bạn đã comment out, có thể giữ nguyên)
-            // if (this.editData.activeRct == null && ...
-            
             try {
-                // 4. Chuẩn hóa dữ liệu
-                const currentUserEmpno = String(this.activeUser.empno).trim();
-                const currentUserDiv = this.activeUser.division;
+                // 3. Logic hiển thị dựa trên hasNewYearData
+                const hasNewYearData = this.editData.activeRct !== null && 
+                this.editData.activeRct !== undefined && 
+                this.editData.activeRct !== '';
                 
-                const submitter = typeof this.editData.submitter === 'string' ? 
+                if (!hasNewYearData) {
+                    // Nếu chưa chọn: Chỉ hiện khi đơn gốc đã hoàn thành
+                    const validStatuses = ['completed'];
+                    if (!validStatuses.includes(this.editData.status) && !validStatuses.includes(this.editData.status_amendent)) {
+                        return false;
+                    }
+                }
+                
+                // 4. Lấy thông tin User hiện tại
+                const currentUserEmpno = String(this.activeUser.empno).trim();
+                
+                // --- BỎ ĐOẠN CHẶN SUBMITTER CŨ ---
+                // Lý do: Trong trường hợp Submitter cũng là Sếp (Level 1/2), họ cần thấy để thao tác/xem lại.
+                // Việc disable chỉnh sửa đã được xử lý ở computed "disableNewYearRecruitment".
+                
+                /* const submitter = typeof this.editData.submitter === 'string' ? 
                 JSON.parse(this.editData.submitter) : this.editData.submitter;
                 const submitterEmpno = submitter.empno ? String(submitter.empno).trim() : "";
+                if (currentUserEmpno === submitterEmpno) return false; 
+                */
                 
-                // --- ƯU TIÊN 1: LÀ NGƯỜI TẠO ĐƠN (SUBMITTER) ---
-                if (currentUserEmpno === submitterEmpno) {
-                    const fulfilled = this.editData.fulfilled;
-                    if (fulfilled !== 'no') return false; 
+                // 5. Kiểm tra DataFlow (Quan trọng nhất)
+                if (this.dataFlow && Array.isArray(this.dataFlow) && this.dataFlow.length > 0) {
+                    // Lấy 2 cấp đầu tiên
+                    const firstTwoLevels = this.dataFlow.slice(0, 2); 
                     
-                    const status = this.editData.status;
-                    const statusAmendent = this.editData.status_amendent;
-                    const validStatuses = [ 'completed'];
-                    
-                    return validStatuses.includes(status) || validStatuses.includes(statusAmendent);
-                }
-                
-                // --- NẾU KHÔNG PHẢI NGƯỜI TẠO ĐƠN ---
-                
-                // Kiểm tra các điều kiện cơ bản khác
-                if (this.editData.fulfilled !== 'no') return false;
-                const validStatuses = [ 'completed'];
-                if (!validStatuses.includes(this.editData.status) && !validStatuses.includes(this.editData.status_amendent)) return false;
-                
-                // Kiểm tra xem đã có quyết định chưa
-                const hasDecision = this.editData.activeRct !== null && this.editData.activeRct !== "" ;
-                const isSameDivision = submitter.div === currentUserDiv;
-                
-                // Nếu CHƯA có quyết định: Chỉ hiện cho người cùng Division
-                if (!hasDecision) {
-                    return isSameDivision;
-                }
-                
-                // Nếu ĐÃ CÓ quyết định: Hiện cho người cùng Div HOẶC người trong luồng duyệt
-                let isInApprovalFlow = false;
-                if (this.dataFlow && Array.isArray(this.dataFlow)) {
-                    isInApprovalFlow = this.dataFlow.some(level => 
+                    const isInFirstTwoLevels = firstTwoLevels.some(level => 
                     level.managers && level.managers.some(manager => 
+                    // Kiểm tra Manager chính
                     String(manager.empno).trim() === currentUserEmpno || 
+                    // Kiểm tra Deputy (Người ủy quyền)
                     (manager.deputies && manager.deputies.some(d => String(d.empno).trim() === currentUserEmpno && d.status === true))
                     )
                     );
+                    
+                    return isInFirstTwoLevels;
                 }
                 
-                return isSameDivision || isInApprovalFlow;
+                return false;
                 
             } catch (e) {
                 console.error('Error in showNewYearSection:', e);
@@ -3374,7 +3382,20 @@ export default {
             return !!this.editData && !this.isCreating;
         },
         disableSaveButton() {
+            // 1. ƯU TIÊN CAO NHẤT: Kiểm tra New Year Recruitment
+            // Nếu đang hiển thị form này, chỉ quan tâm việc đã chọn Radio hay chưa.
+            // Không cần validate các trường khác của form gốc.
+            if (this.showNewYearSection) {
+                const val = this.form.newYearRecruitment;
+                // Nếu val là rỗng, null hoặc undefined -> Disable (true)
+                // Nếu val là 0 hoặc 1 -> Enable (false)
+                return (val === "" || val === null || val === undefined);
+            }
+            
+            // Biến dùng chung cho validation bên dưới
             const reasonSelected = !!(this.form.recruitment && (this.form.recruitment.reason || this.form.recruitment.otherReasonSelected));
+            
+            // 2. Trường hợp là Change Request (Đơn thay đổi)
             if (this.isChange) {
                 const baseValidation =
                 !this.form.pos ||
@@ -3395,27 +3416,15 @@ export default {
                 !(this.form.computerSkills && this.form.computerSkills.length > 0) ||
                 !(this.form.either || this.form.english || this.form.chinese));
             }
-            if (this.showNewYearSection) {
-                const v = this.form.newYearRecruitment;
-                if (v === 1 || v === '1' || v === 0 || v === '0') {
-                    return false; // không disabled
-                }
-                return true; // disabled nếu chưa chọn
-            }
-            // Logic cũ cho các trường hợp khác
             if (this.editData && this.editData.approval &&
             JSON.parse(this.editData.approval).some(level => level.status === 'returned')) {
-                return false;
+                return false; // Enable nút để sửa và gửi lại
             }
             if (this.editData && !this.editData.req_id_change &&
             JSON.parse(this.editData.submitter).empno === this.activeUser.empno) {
-                return true;
+                return true; // Disable
             }
-            
-            
-            if (this.isEdit ) return true;
-            
-            // Validation cho form mới
+            if (this.isEdit) return true;
             const baseValidation =
             !this.form.pos ||
             !this.form.suppType ||
@@ -3427,9 +3436,11 @@ export default {
             !this.form.specialization ||
             !this.form.jobDesc ||
             !this.form.safetyLevels;
+            
             if (this.form.pos === 1) {
                 return baseValidation;
             }
+            
             return (baseValidation ||
             !(this.form.computerSkills && this.form.computerSkills.length > 0) ||
             !(this.form.either || this.form.english || this.form.chinese));
@@ -3480,6 +3491,22 @@ export default {
             return "";
         },
         showSaveButton() {
+           if (this.showNewYearSection) {
+        // Kiểm tra xem đã có dữ liệu activeRct chưa
+        const hasNewYearData = this.editData && 
+                               this.editData.activeRct !== null && 
+                               this.editData.activeRct !== undefined && 
+                               this.editData.activeRct !== '';
+        
+        // Nếu ĐÃ CÓ dữ liệu (đã submit rồi) -> ẨN nút Submit (return false)
+        // Để nhường chỗ cho các nút Accept/Deny hiện ra
+        if (hasNewYearData) {
+            return false;
+        }
+
+        // Nếu CHƯA CÓ dữ liệu (lần đầu vào chọn) -> HIỆN nút Submit
+        return true;
+    }
             if (!this.editData) {
                 return true;
             }
@@ -4437,5 +4464,15 @@ export default {
 .v-tab {
     text-transform: none !important;
     font-weight: 500;
+}
+/* Tăng kích thước chữ và icon của radio button */
+::v-deep .custom-radio label {
+    font-size: 18px !important; /* Chỉnh kích thước chữ tùy ý */
+    font-weight: 500;
+    color: #ff0000 !important; /* Làm đậm màu chữ nếu cần */
+}
+
+::v-deep .custom-radio .v-icon {
+    font-size: 28px !important; /* Tăng kích thước nút tròn radio */
 }
 </style>

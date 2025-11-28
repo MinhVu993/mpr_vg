@@ -228,10 +228,10 @@
                                                                             </template>
                                                                         </td>
                                                                         <td style="text-align: center; height: 100px;">
-                                                                            <!-- <template v-if="getApprover(1)">
+                                                                            <template v-if="getApprover(1)">
                                                                                 {{ getApprover(1).empno }} - {{ getApprover(1).name }}
                                                                                 <div v-if="getApprovalDate(1)">{{ getApprovalDate(1) }}</div>
-                                                                            </template> -->
+                                                                            </template>
                                                                         </td>
                                                                         <td style="text-align: center; height: 100px;">
                                                                             <template v-if="formData?.submitter">
