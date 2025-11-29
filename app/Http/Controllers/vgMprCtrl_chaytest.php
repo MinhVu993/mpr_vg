@@ -72,7 +72,6 @@ class vgMprCtrl extends Controller
                 ], 400);
             }
             
-            // Find MPR record by req_id
             $mpr = Mpr::where('req_id', $req_id)
             ->where('status', 'completed')
             ->first();
@@ -968,22 +967,22 @@ class vgMprCtrl extends Controller
                         }
                         private function sendMsg($params) 
                         {
-                            // try {
-                            //     $client = new \GuzzleHttp\Client();
+                            try {
+                                $client = new \GuzzleHttp\Client();
                             
-                            //     $formData = http_build_query($params);
+                                $formData = http_build_query($params);
                             
-                            //     $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
-                            //         'headers' => [
-                            //             'Content-Type' => 'application/x-www-form-urlencoded'
-                            //         ],
-                            //         'body' => $formData 
-                            //     ]);
+                                $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
+                                    'headers' => [
+                                        'Content-Type' => 'application/x-www-form-urlencoded'
+                                    ],
+                                    'body' => $formData 
+                                ]);
                             
-                            //     return json_decode($response->getBody()->getContents(), true);
-                            // } catch (\Exception $e) {
-                            //     throw $e;
-                            // }
+                                return json_decode($response->getBody()->getContents(), true);
+                            } catch (\Exception $e) {
+                                throw $e;
+                            }
                         }
                         public function denyRequest(Request $req)
                         {
@@ -2818,6 +2817,8 @@ class vgMprCtrl extends Controller
                                                                                         }
                                                                                         
                                                                                         $cancelData = ['date' => $denyTemp['fullfilldate'], 'reason' => $reason];
+                                                                                        $demand->dem_amount = $denyTemp['recruited']; 
+                                                                                        $demand->dem_recruited = $denyTemp['recruited'];
                                                                                         $demand->dem_cancel_date = json_encode($cancelData);
                                                                                         $demand->stocknumber = 0; // Đóng đơn
                                                                                         $demand->dem_fulfilled = 'yes';
@@ -2828,13 +2829,20 @@ class vgMprCtrl extends Controller
                                                                                 return;
                                                                             }
                                                                             
+                                                                            // --- KHỐI 2: XỬ LÝ ĐƠN THƯỜNG (TẠO MỚI hoặc CẬP NHẬT) ---
                                                                             if (empty($mpr->req_id)) {
                                                                                 throw new \Exception('Empty req_id for MPR ID: ' . $mpr->id);
                                                                             }
                                                                             
+                                                                            // === PHẦN SỬA LỖI QUAN TRỌNG ===
+                                                                            // Tìm bản ghi Demand hiện có
                                                                             $existingDemand = Demand::where('id_code', $mpr->req_id)->first();
                                                                             
                                                                             if ($existingDemand) {
+                                                                                // NẾU ĐÃ TỒN TẠI -> CẬP NHẬT (chủ yếu xử lý khi đóng đơn)
+                                                                                \Log::info('Demand already exists for req_id: ' . $mpr->req_id . '. Checking for updates...');
+                                                                                
+                                                                                // Kiểm tra xem đơn MprTemp có bị đóng không (ví dụ: auto-close)
                                                                                 if (!empty($mpr->deny_temp)) {
                                                                                     $denyTemp = json_decode($mpr->deny_temp, true);
                                                                                     
@@ -2845,6 +2853,8 @@ class vgMprCtrl extends Controller
                                                                                         ];
                                                                                         
                                                                                         $existingDemand->dem_cancel_date = json_encode($cancelData);
+                                                                                        $existingDemand->dem_amount = $denyTemp['recruited'];
+                                                                                        $existingDemand->dem_recruited = $denyTemp['recruited'];
                                                                                         $existingDemand->stocknumber = 0; // Set stock về 0
                                                                                         $existingDemand->dem_fulfilled = 'yes';
                                                                                         $existingDemand->dem_fullfilldate = $denyTemp['fullfilldate'];
@@ -2855,9 +2865,14 @@ class vgMprCtrl extends Controller
                                                                                 }
                                                                                 return; // Dừng lại sau khi cập nhật
                                                                             }
+                                                                            // === KẾT THÚC PHẦN SỬA LỖI ===
+                                                                            
+                                                                            // NẾU CHƯA TỒN TẠI -> TẠO MỚI (Logic cũ của bạn vẫn giữ nguyên)
+                                                                            \Log::info('Demand not found. Creating new Demand for req_id: ' . $mpr->req_id);
                                                                             
                                                                             $submitter = json_decode($mpr->submitter, true) ?: [];
                                                                             $dem_dept = $submitter['div'] ?? '';
+                                                                            // ... (Phần code tạo mới $dem_sub_department, $dem_unit, $dem_position... giữ nguyên) ...
                                                                             
                                                                             $dem_sub_department = $submitter['dept'] ?? '';
                                                                             $dem_unit = $submitter['unit'] ?? '';
@@ -3131,14 +3146,13 @@ class vgMprCtrl extends Controller
                                                                                 ]);
                                                                             }
                                                                             
-                                                                            // --- MỚI THÊM: Xử lý ngày Email Date ---
                                                                             $currentYear = date('Y'); // Hoặc 2025 tùy logic
                                                                             $yearSetting = MprEndYear::where('year', $currentYear)->first();
                                                                             if (!$yearSetting) {
                                                                                 $yearSetting = MprEndYear::orderBy('year', 'desc')->first();
                                                                             }
                                                                             
-                                                                            $emailDateText = "12/23（二）"; // Giá trị mặc định (fallback)
+                                                                            $emailDateText = ""; // Giá trị mặc định (fallback)
                                                                             
                                                                             if ($yearSetting && !empty($yearSetting->email_date)) {
                                                                                 try {
@@ -3146,20 +3160,14 @@ class vgMprCtrl extends Controller
                                                                                     $weekMap = [0 => '日', 1 => '一', 2 => '二', 3 => '三', 4 => '四', 5 => '五', 6 => '六'];
                                                                                     $dayOfWeek = $weekMap[$date->dayOfWeek];
                                                                                     
-                                                                                    // Định dạng: 12/23（二）
                                                                                     $emailDateText = $date->format('m/d') . "（{$dayOfWeek}）";
                                                                                 } catch (\Exception $e) {
                                                                                     \Log::error("Date parsing error in notice: " . $e->getMessage());
                                                                                 }
                                                                             }
-                                                                            // ----------------------------------------
-                                                                            
-                                                                            // --- CẬP NHẬT: Truyền biến $email_date vào view ---
                                                                             $emailContent = view('VgMpr-yearEndNotice', [
                                                                                 'email_date' => $emailDateText // <--- Truyền biến vào đây
                                                                                 ])->render();
-                                                                                // --------------------------------------------------
-                                                                                
                                                                                 $emailSubject = "年度招募結算時程作業通知";
                                                                                 
                                                                                 $mailData = [
@@ -3205,7 +3213,7 @@ class vgMprCtrl extends Controller
                                                                                     'candidates',
                                                                                     'qty_req',
                                                                                     'approval',
-                                                                                    'submitter' // <--- THÊM TRƯỜNG NÀY
+                                                                                    'submitter' 
                                                                                     ])
                                                                                     ->where('stocknumber', '>', 0)
                                                                                     ->whereNull('deny_temp')
@@ -3296,12 +3304,12 @@ class vgMprCtrl extends Controller
                                                                                     ]);
                                                                                 }
                                                                                 
-                                                                                $currentYear = date('Y'); // Hoặc lấy theo logic năm của bạn (ví dụ 2025)
+                                                                                $currentYear = date('Y'); 
                                                                                 $yearSetting = MprEndYear::where('year', $currentYear)->first();
                                                                                 if (!$yearSetting) {
                                                                                     $yearSetting = MprEndYear::orderBy('year', 'desc')->first();
                                                                                 }
-                                                                                $deadlineText = ""; // Giá trị mặc định phòng khi lỗi
+                                                                                $deadlineText = ""; 
                                                                                 if ($yearSetting && !empty($yearSetting->deadline_date)) {
                                                                                     try {
                                                                                         $date = \Carbon\Carbon::parse($yearSetting->deadline_date);
@@ -3322,9 +3330,9 @@ class vgMprCtrl extends Controller
                                                                                         \Log::info("Processing year-end confirmation for: $email");
                                                                                         $emailContent = view('VgMpr-yearEndConfirmationList', [
                                                                                             'requests' => $requests,
-                                                                                            'deadline' => $deadlineText // <--- Truyền biến vào đây
+                                                                                            'deadline' => $deadlineText 
                                                                                             ])->render();
-                                                                                            $emailSubject = "[MPR] 人員增補單年度結算，請於 {$deadlineText} 前完成作業。"; // Có thể thay ngày vào Subject luôn nếu muốn
+                                                                                            $emailSubject = "[MPR] 人員增補單年度結算，請於 {$deadlineText} 前完成作業。"; 
                                                                                             $mailData = [
                                                                                                 'to' => [$email],
                                                                                                 'subject' => $emailSubject,
@@ -3507,12 +3515,7 @@ class vgMprCtrl extends Controller
                                                                                                         $mpr->activeRct = 0; // Đánh dấu là "Đã hủy/đóng"
                                                                                                         $mpr->save(); 
                                                                                                         $dbUpdateSuccessCount++;
-                                                                                                        
-                                                                                                        try {
-                                                                                                            \Log::info('[SCHEDULE] Successfully migrated auto-closed MPR to Demand: ' . $mpr->req_id);
-                                                                                                        } catch (\Exception $e) {
-                                                                                                            \Log::error('[SCHEDULE] Failed to migrate auto-closed MPR ID ' . $mpr->id . ' to Demand: ' . $e->getMessage());
-                                                                                                        }
+                                                                                                        $this->migrateCompletedMprToDemandSingle($mpr);
                                                                                                         if (!empty($email)) {
                                                                                                             $groupedForEmail[$email][] = $requestDataRow;
                                                                                                         } else {

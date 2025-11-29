@@ -24,6 +24,7 @@ use App\vgRecruitingReportDeptCodeMdl as nameDeptCode;
 use App\vgRecruitingReportDemandMdl as Demand;
 use App\vgRecruitingReportDutyHrmMdl as DutyHrm;
 use Illuminate\Support\Facades\Validator;
+use Carbon\Carbon;
 
 class vgMprCtrlTemp extends Controller
 {
@@ -874,7 +875,7 @@ class vgMprCtrlTemp extends Controller
                             
                             if ($nextStatus === 'completed') {
                                 try {
-                                    // $this->migrateCompletedMprToDemandSingle($mpr);
+                                    $this->migrateCompletedMprToDemandSingle($mpr);
                                 } catch (\Exception $e) {
                                     \Log::error('Error in auto migration after approval: ' . $e->getMessage(), [
                                         'mpr_id' => $mpr->id,
@@ -885,7 +886,7 @@ class vgMprCtrlTemp extends Controller
                                     $newMpr = $this->duplicateForNewYear($mpr);
                                     if ($newMpr) {
                                         try {
-                                            // $this->migrateCompletedMprToDemandSingle($newMpr);
+                                            $this->migrateCompletedMprToDemandSingle($newMpr);
                                             \Log::info('Successfully migrated NEW CLONED MPR to Demand', [
                                                 'original_req_id' => $mpr->req_id,
                                                 'new_req_id' => $newMpr->req_id
@@ -950,16 +951,16 @@ class vgMprCtrlTemp extends Controller
                         {
                             try {
                                 $client = new \GuzzleHttp\Client();
-                            
+                                
                                 $formData = http_build_query($params);
-                            
+                                
                                 $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
                                     'headers' => [
                                         'Content-Type' => 'application/x-www-form-urlencoded'
                                     ],
                                     'body' => $formData 
                                 ]);
-                            
+                                
                                 return json_decode($response->getBody()->getContents(), true);
                             } catch (\Exception $e) {
                                 throw $e;
@@ -2796,6 +2797,8 @@ class vgMprCtrlTemp extends Controller
                                                                                         }
                                                                                         
                                                                                         $cancelData = ['date' => $denyTemp['fullfilldate'], 'reason' => $reason];
+                                                                                        $demand->dem_amount = $denyTemp['recruited']; 
+                                                                                        $demand->dem_recruited = $denyTemp['recruited'];
                                                                                         $demand->dem_cancel_date = json_encode($cancelData);
                                                                                         $demand->stocknumber = 0; // Đóng đơn
                                                                                         $demand->dem_fulfilled = 'yes';
@@ -2830,6 +2833,8 @@ class vgMprCtrlTemp extends Controller
                                                                                         ];
                                                                                         
                                                                                         $existingDemand->dem_cancel_date = json_encode($cancelData);
+                                                                                        $existingDemand->dem_amount = $denyTemp['recruited'];
+                                                                                        $existingDemand->dem_recruited = $denyTemp['recruited'];
                                                                                         $existingDemand->stocknumber = 0; // Set stock về 0
                                                                                         $existingDemand->dem_fulfilled = 'yes';
                                                                                         $existingDemand->dem_fullfilldate = $denyTemp['fullfilldate'];
@@ -3112,380 +3117,423 @@ class vgMprCtrlTemp extends Controller
                                                                                 }
                                                                             }
                                                                             $uniqueEmailList = array_values(array_unique(array_filter(array_map('strtolower', $emailList))));
+                                                                            
                                                                             if (empty($uniqueEmailList)) {
                                                                                 return response()->json([
                                                                                     'success' => false,
-                                                                                    'message' => 'No relevant Level 1 approvers found.' // Cập nhật thông báo
+                                                                                    'message' => 'No relevant Level 1 approvers found.'
                                                                                 ]);
                                                                             }
                                                                             
-                                                                            // 4. Gửi email (giữ nguyên)
-                                                                            $emailContent = view('VgMpr-yearEndNotice')->render();
-                                                                            $emailSubject = "年度招募結算時程作業通知";
+                                                                            $currentYear = date('Y'); // Hoặc 2025 tùy logic
+                                                                            $yearSetting = MprEndYear::where('year', $currentYear)->first();
+                                                                            if (!$yearSetting) {
+                                                                                $yearSetting = MprEndYear::orderBy('year', 'desc')->first();
+                                                                            }
                                                                             
-                                                                            $mailData = [
-                                                                                'to' => $uniqueEmailList,
-                                                                                'subject' => $emailSubject,
-                                                                                'msgBody' => $emailContent,
-                                                                            ];
+                                                                            $emailDateText = ""; // Giá trị mặc định (fallback)
                                                                             
-                                                                            $params = [
-                                                                                'target' => 'VG-MPR',
-                                                                                'body' => $emailContent,
-                                                                                'msg_type' => "m",
-                                                                                'msg_method' => "both",
-                                                                                'msg_subject' => $emailSubject,
-                                                                                'mail_template' => "msgCenterMailTemplate",
-                                                                                'mail_data' => json_encode($mailData),
-                                                                            ];
-                                                                            
-                                                                            $this->sendMsg($params);
-                                                                            
-                                                                            return response()->json([
-                                                                                'success' => true,
-                                                                                'message' => 'Year-end notice sent successfully.',
-                                                                                'recipients_count' => count($uniqueEmailList)
-                                                                            ]);
-                                                                            
-                                                                        } catch (\Exception $e) {
-                                                                            \Log::error('Error sending year-end notice: ' . $e->getMessage());
-                                                                            return response()->json([
-                                                                                'success' => false,
-                                                                                'message' => 'Error: ' . $e->getMessage()
-                                                                            ], 500);
-                                                                        }
-                                                                    }
-                                                                    public function getCompletedMprGroupedByDeptEmail()
-                                                                    {
-                                                                        try {
-                                                                            // 1. Lấy dữ liệu từ DB (thêm trường 'submitter' để lấy unit)
-                                                                            $mprs = MprTemp::select([
-                                                                                'req_id',
-                                                                                'recruited',
-                                                                                'resign',
-                                                                                'stocknumber',
-                                                                                'candidates',
-                                                                                'qty_req',
-                                                                                'approval',
-                                                                                'submitter'
-                                                                                ])
-                                                                                ->where('stocknumber', '>', 0)
-                                                                                ->whereNull('deny_temp')
-                                                                                ->where(function($q) {
-                                                                                    $q->where('status', 'completed')
-                                                                                    ->orWhere('status_amendent', 'completed');
-                                                                                })
-                                                                                ->whereNull('req_id_oldyear')
-                                                                                ->orderBy('id', 'desc')
-                                                                                ->get();
-                                                                                
-                                                                                $groupedData = [];
-                                                                                
-                                                                                foreach ($mprs as $item) {
-                                                                                    // a. Tìm email người duyệt cấp 1 (Dept)
-                                                                                    $deptEmail = null;
-                                                                                    if (!empty($item->approval)) {
-                                                                                        $approvalData = json_decode($item->approval, true);
-                                                                                        if (is_array($approvalData)) {
-                                                                                            foreach ($approvalData as $level) {
-                                                                                                if (isset($level['level']) && $level['level'] == 1 &&
-                                                                                                isset($level['status']) && $level['status'] === 'approved' &&
-                                                                                                !empty($level['approver']['email'])) {
-                                                                                                    $deptEmail = strtolower(trim($level['approver']['email']));
-                                                                                                    break;
-                                                                                                }
-                                                                                            }
-                                                                                        }
-                                                                                    }
+                                                                            if ($yearSetting && !empty($yearSetting->email_date)) {
+                                                                                try {
+                                                                                    $date = \Carbon\Carbon::parse($yearSetting->email_date);
+                                                                                    $weekMap = [0 => '日', 1 => '一', 2 => '二', 3 => '三', 4 => '四', 5 => '五', 6 => '六'];
+                                                                                    $dayOfWeek = $weekMap[$date->dayOfWeek];
                                                                                     
-                                                                                    if (!$deptEmail) continue;
-                                                                                    
-                                                                                    // b. Lấy thông tin Unit từ Submitter
-                                                                                    $unit = '';
-                                                                                    if (!empty($item->submitter)) {
-                                                                                        $submitterData = json_decode($item->submitter, true);
-                                                                                        if (is_array($submitterData)) {
-                                                                                            $unit = $submitterData['unit'] ?? '';
-                                                                                        }
-                                                                                    }
-                                                                                    
-                                                                                    // c. Tính toán số liệu
-                                                                                    $candidatesCount = 0;
-                                                                                    if (!empty($item->candidates)) {
-                                                                                        $cArr = json_decode($item->candidates, true);
-                                                                                        if (is_array($cArr)) $candidatesCount = count($cArr);
-                                                                                    }
-                                                                                    
-                                                                                    $totalQtyReq = 0;
-                                                                                    if (!empty($item->qty_req)) {
-                                                                                        $qArr = json_decode($item->qty_req, true);
-                                                                                        if (is_array($qArr)) {
-                                                                                            $totalQtyReq = array_sum(array_filter([
-                                                                                                $qArr['workers'] ?? 0, $qArr['staff'] ?? 0,
-                                                                                                $qArr['engineers'] ?? 0, $qArr['leader'] ?? 0,
-                                                                                                $qArr['tranlator'] ?? 0
-                                                                                            ], 'is_numeric'));
-                                                                                        }
-                                                                                    }
-                                                                                    
-                                                                                    // d. Thêm vào mảng nhóm
-                                                                                    $groupedData[$deptEmail][] = [
-                                                                                        'req_id' => $item->req_id,
-                                                                                        'unit' => $unit, // <--- Đã thêm Unit vào kết quả trả về
-                                                                                        'recruited' => $item->recruited,
-                                                                                        'resign' => $item->resign,
-                                                                                        'stocknumber' => $item->stocknumber,
-                                                                                        'candidates_count' => $candidatesCount,
-                                                                                        'total_qty_req' => $totalQtyReq,
-                                                                                    ];
+                                                                                    $emailDateText = $date->format('m/d') . "（" . $dayOfWeek . "）";
+                                                                                } catch (\Exception $e) {
+                                                                                    \Log::error("Date parsing error in notice: " . $e->getMessage());
                                                                                 }
-                                                                                
+                                                                            }
+                                                                            $emailContent = view('VgMpr-yearEndNotice', [
+                                                                                'email_date' => $emailDateText 
+                                                                                ])->render();
+                                                                                $emailSubject = "年度招募結算時程作業通知";
+                                                                                $mailData = [
+                                                                                    'to' => $uniqueEmailList,
+                                                                                    'subject' => $emailSubject,
+                                                                                    'msgBody' => $emailContent,
+                                                                                ];
+                                                                                $params = [
+                                                                                    'target' => 'VG-MPR',
+                                                                                    'body' => $emailContent,
+                                                                                    'msg_type' => "m",
+                                                                                    'msg_method' => "both",
+                                                                                    'msg_subject' => $emailSubject,
+                                                                                    'mail_template' => "msgCenterMailTemplate",
+                                                                                    'mail_data' => json_encode($mailData),
+                                                                                ];
+                                                                                $this->sendMsg($params);
                                                                                 return response()->json([
                                                                                     'success' => true,
-                                                                                    'total_emails' => count($groupedData),
-                                                                                    'data' => $groupedData
+                                                                                    'message' => 'Year-end notice sent successfully.',
+                                                                                    'recipients_count' => count($uniqueEmailList)
                                                                                 ]);
-                                                                                
                                                                             } catch (\Exception $e) {
-                                                                                return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
-                                                                            }
-                                                                        }
-                                                                        public function sendYearEndConfirmationEmails()
-                                                                        {
-                                                                            $groupedDataResponse = $this->getCompletedMprGroupedByDeptEmail();
-                                                                            $groupedData = json_decode(json_encode($groupedDataResponse->getData()->data), true);
-                                                                            
-                                                                            if (!is_array($groupedData) || empty($groupedData)) {
+                                                                                \Log::error('Error sending year-end notice: ' . $e->getMessage());
                                                                                 return response()->json([
                                                                                     'success' => false,
-                                                                                    'message' => 'No data found to send.',
-                                                                                ]);
+                                                                                    'message' => 'Error: ' . $e->getMessage()
+                                                                                ], 500);
                                                                             }
-                                                                            
-                                                                            $sentCount = 0;
-                                                                            $errorCount = 0;
-                                                                            
-                                                                            foreach ($groupedData as $email => $requests) {
-                                                                                // Bỏ qua nếu email không hợp lệ hoặc không có requests
-                                                                                if (empty($email) || empty($requests)) continue;
-                                                                                
-                                                                                try {
-                                                                                    \Log::info("Processing year-end confirmation for: $email with " . count($requests) . " requests");
-                                                                                    $emailContent = view('VgMpr-yearEndConfirmationList', [
-                                                                                        'requests' => $requests
-                                                                                        ])->render();
+                                                                        }
+                                                                        public function getCompletedMprGroupedByDeptEmail()
+                                                                        {
+                                                                            try {
+                                                                                // 1. Lấy dữ liệu từ DB (thêm trường 'submitter' để lấy unit)
+                                                                                $mprs = MprTemp::select([
+                                                                                    'req_id',
+                                                                                    'recruited',
+                                                                                    'resign',
+                                                                                    'stocknumber',
+                                                                                    'candidates',
+                                                                                    'qty_req',
+                                                                                    'approval',
+                                                                                    'submitter'
+                                                                                    ])
+                                                                                    ->where('stocknumber', '>', 0)
+                                                                                    ->whereNull('deny_temp')
+                                                                                    ->where(function($q) {
+                                                                                        $q->where('status', 'completed')
+                                                                                        ->orWhere('status_amendent', 'completed');
+                                                                                    })
+                                                                                    ->whereNull('req_id_oldyear')
+                                                                                    ->orderBy('id', 'desc')
+                                                                                    ->get();
+                                                                                    
+                                                                                    $groupedData = [];
+                                                                                    
+                                                                                    foreach ($mprs as $item) {
+                                                                                        // a. Tìm email người duyệt cấp 1 (Dept)
+                                                                                        $deptEmail = null;
+                                                                                        if (!empty($item->approval)) {
+                                                                                            $approvalData = json_decode($item->approval, true);
+                                                                                            if (is_array($approvalData)) {
+                                                                                                foreach ($approvalData as $level) {
+                                                                                                    if (isset($level['level']) && $level['level'] == 1 &&
+                                                                                                    isset($level['status']) && $level['status'] === 'approved' &&
+                                                                                                    !empty($level['approver']['email'])) {
+                                                                                                        $deptEmail = strtolower(trim($level['approver']['email']));
+                                                                                                        break;
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        }
                                                                                         
-                                                                                        $emailSubject = "[MPR] 人員增補單年度結算，請於 12/27（六）前完成作業。";
+                                                                                        if (!$deptEmail) continue;
                                                                                         
-                                                                                        $mailData = [
-                                                                                            'to' => [$email],
-                                                                                            'subject' => $emailSubject,
-                                                                                            'msgBody' => $emailContent,
+                                                                                        // b. Lấy thông tin Unit từ Submitter
+                                                                                        $unit = '';
+                                                                                        if (!empty($item->submitter)) {
+                                                                                            $submitterData = json_decode($item->submitter, true);
+                                                                                            if (is_array($submitterData)) {
+                                                                                                $unit = $submitterData['unit'] ?? '';
+                                                                                            }
+                                                                                        }
+                                                                                        
+                                                                                        // c. Tính toán số liệu
+                                                                                        $candidatesCount = 0;
+                                                                                        if (!empty($item->candidates)) {
+                                                                                            $cArr = json_decode($item->candidates, true);
+                                                                                            if (is_array($cArr)) $candidatesCount = count($cArr);
+                                                                                        }
+                                                                                        
+                                                                                        $totalQtyReq = 0;
+                                                                                        if (!empty($item->qty_req)) {
+                                                                                            $qArr = json_decode($item->qty_req, true);
+                                                                                            if (is_array($qArr)) {
+                                                                                                $totalQtyReq = array_sum(array_filter([
+                                                                                                    $qArr['workers'] ?? 0, $qArr['staff'] ?? 0,
+                                                                                                    $qArr['engineers'] ?? 0, $qArr['leader'] ?? 0,
+                                                                                                    $qArr['tranlator'] ?? 0
+                                                                                                ], 'is_numeric'));
+                                                                                            }
+                                                                                        }
+                                                                                        
+                                                                                        // d. Thêm vào mảng nhóm
+                                                                                        $groupedData[$deptEmail][] = [
+                                                                                            'req_id' => $item->req_id,
+                                                                                            'unit' => $unit, // <--- Đã thêm Unit vào kết quả trả về
+                                                                                            'recruited' => $item->recruited,
+                                                                                            'resign' => $item->resign,
+                                                                                            'stocknumber' => $item->stocknumber,
+                                                                                            'candidates_count' => $candidatesCount,
+                                                                                            'total_qty_req' => $totalQtyReq,
                                                                                         ];
-                                                                                        
-                                                                                        $params = [
-                                                                                            'target' => 'VG-MPR',
-                                                                                            'body' => $emailContent,
-                                                                                            'msg_type' => "m",
-                                                                                            'msg_method' => "both",
-                                                                                            'msg_subject' => $emailSubject,
-                                                                                            'mail_template' => "msgCenterMailTemplate",
-                                                                                            'mail_data' => json_encode($mailData),
-                                                                                        ];
-                                                                                        $this->sendMsg($params);
-                                                                                        $sentCount++;
-                                                                                        \Log::info("Successfully sent to: $email");
-                                                                                        
-                                                                                    } catch (\Exception $e) {
-                                                                                        $errorCount++;
-                                                                                        \Log::error("Failed to send year-end confirmation to $email. Error: " . $e->getMessage());
-                                                                                        // \Log::error("Trace: " . $e->getTraceAsString()); // Bỏ comment nếu cần debug sâu hơn
-                                                                                        continue;
                                                                                     }
+                                                                                    
+                                                                                    return response()->json([
+                                                                                        'success' => true,
+                                                                                        'total_emails' => count($groupedData),
+                                                                                        'data' => $groupedData
+                                                                                    ]);
+                                                                                    
+                                                                                } catch (\Exception $e) {
+                                                                                    return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
                                                                                 }
+                                                                            }
+                                                                            public function sendYearEndConfirmationEmails()
+                                                                            {
+                                                                                $groupedDataResponse = $this->getCompletedMprGroupedByDeptEmail();
+                                                                                $groupedData = json_decode(json_encode($groupedDataResponse->getData()->data), true);
                                                                                 
-                                                                                return response()->json([
-                                                                                    'success' => $sentCount > 0,
-                                                                                    'message' => "Process completed. Sent: $sentCount, Failed: $errorCount.",
-                                                                                    'details' => [
-                                                                                        'total_managers' => count($groupedData),
-                                                                                        'sent_count' => $sentCount,
-                                                                                        'error_count' => $errorCount
-                                                                                        ]
+                                                                                if (!is_array($groupedData) || empty($groupedData)) {
+                                                                                    return response()->json([
+                                                                                        'success' => false,
+                                                                                        'message' => 'No data found to send.',
                                                                                     ]);
                                                                                 }
-                                                                                public function saveYearSetting(Request $request)
-                                                                                {
+                                                                                $currentYear = date('Y'); // Hoặc lấy theo logic năm của bạn (ví dụ 2025)
+                                                                                $yearSetting = MprEndYear::where('year', $currentYear)->first();
+                                                                                if (!$yearSetting) {
+                                                                                    $yearSetting = MprEndYear::orderBy('year', 'desc')->first();
+                                                                                }
+                                                                                $deadlineText = ""; 
+                                                                                
+                                                                                if ($yearSetting && !empty($yearSetting->deadline_date)) {
                                                                                     try {
-                                                                                        $validator = Validator::make($request->all(), [
-                                                                                            'year' => 'required|integer|digits:4',
-                                                                                            'email_date' => 'required|date',
-                                                                                            'reply_deadline' => 'required|date|after_or_equal:email_date',
-                                                                                            'system_update_date' => 'required|date|after_or_equal:reply_deadline',
-                                                                                        ]);
-                                                                                        
-                                                                                        if ($validator->fails()) {
-                                                                                            return response()->json([
-                                                                                                'success' => false,
-                                                                                                'message' => 'Validation failed',
-                                                                                                'errors' => $validator->errors()
-                                                                                            ], 400);
-                                                                                        }
-                                                                                        $setting = MprEndYear::updateOrCreate(
-                                                                                            ['year' => $request->year], 
-                                                                                            [
-                                                                                                'email_date' => $request->email_date,
-                                                                                                'deadline_date' => $request->reply_deadline, 
-                                                                                                'update_date' => $request->system_update_date
-                                                                                                ]
-                                                                                            );
-                                                                                            
-                                                                                            return response()->json([
-                                                                                                'success' => true,
-                                                                                                'message' => 'Year setting saved successfully',
-                                                                                                'data' => $setting
-                                                                                            ]);
+                                                                                        $date = \Carbon\Carbon::parse($yearSetting->deadline_date);
+                                                                                        $weekMap = [0 => '日', 1 => '一', 2 => '二', 3 => '三', 4 => '四', 5 => '五', 6 => '六'];
+                                                                                        $dayOfWeek = $weekMap[$date->dayOfWeek];
+                                                                                        $deadlineText = $date->format('m/d');
+                                                                                    } catch (\Exception $e) {
+                                                                                        \Log::error("Date parsing error: " . $e->getMessage());
+                                                                                    }
+                                                                                }
+                                                                                $sentCount = 0;
+                                                                                $errorCount = 0;
+                                                                                
+                                                                                foreach ($groupedData as $email => $requests) {
+                                                                                    if (empty($email) || empty($requests)) continue;
+                                                                                    
+                                                                                    try {
+                                                                                        \Log::info("Processing year-end confirmation for: $email");
+                                                                                        $emailContent = view('VgMpr-yearEndConfirmationList', [
+                                                                                            'requests' => $requests,
+                                                                                            'deadline' => $deadlineText // <--- Truyền biến vào đây
+                                                                                            ])->render();
+                                                                                            $emailSubject = "[MPR] 人員增補單年度結算，請於 {$deadlineText} 前完成作業。"; // Có thể thay ngày vào Subject luôn nếu muốn
+                                                                                            $mailData = [
+                                                                                                'to' => [$email],
+                                                                                                'subject' => $emailSubject,
+                                                                                                'msgBody' => $emailContent,
+                                                                                            ];
+                                                                                            $params = [
+                                                                                                'target' => 'VG-MPR',
+                                                                                                'body' => $emailContent,
+                                                                                                'msg_type' => "m",
+                                                                                                'msg_method' => "both",
+                                                                                                'msg_subject' => $emailSubject,
+                                                                                                'mail_template' => "msgCenterMailTemplate",
+                                                                                                'mail_data' => json_encode($mailData),
+                                                                                            ];
+                                                                                            $this->sendMsg($params);
+                                                                                            $sentCount++;
                                                                                             
                                                                                         } catch (\Exception $e) {
-                                                                                            \Log::error('Error saving year setting: ' . $e->getMessage());
-                                                                                            return response()->json([
-                                                                                                'success' => false,
-                                                                                                'message' => 'Error: ' . $e->getMessage()
-                                                                                            ], 500);
+                                                                                            $errorCount++;
+                                                                                            \Log::error("Failed to send to $email: " . $e->getMessage());
+                                                                                            continue;
                                                                                         }
                                                                                     }
-                                                                                    
-                                                                                    private function sendGroupedYearEndAutoCloseEmail($email, $requests)
+                                                                                    return response()->json([
+                                                                                        'success' => $sentCount > 0,
+                                                                                        'message' => "Process completed. Sent: $sentCount, Failed: $errorCount.",
+                                                                                        'details' => [
+                                                                                            'total_managers' => count($groupedData),
+                                                                                            'sent_count' => $sentCount,
+                                                                                            'error_count' => $errorCount
+                                                                                            ]
+                                                                                        ]);
+                                                                                    }
+                                                                                    public function saveYearSetting(Request $request)
                                                                                     {
                                                                                         try {
-                                                                                            $emailContent = view('VgMpr-yearEndAutoClose', [
-                                                                                                'requests' => $requests
-                                                                                                ])->render();
+                                                                                            $validator = Validator::make($request->all(), [
+                                                                                                'year' => 'required|integer|digits:4',
+                                                                                                'email_date' => 'required|date',
+                                                                                                'reply_deadline' => 'required|date|after_or_equal:email_date',
+                                                                                                'system_update_date' => 'required|date|after_or_equal:reply_deadline',
+                                                                                            ]);
+                                                                                            if ($validator->fails()) {
+                                                                                                return response()->json([
+                                                                                                    'success' => false,
+                                                                                                    'message' => 'Validation failed',
+                                                                                                    'errors' => $validator->errors()
+                                                                                                ], 400);
+                                                                                            }
+                                                                                            $setting = MprEndYear::updateOrCreate(
+                                                                                                ['year' => $request->year], 
+                                                                                                [
+                                                                                                    'email_date' => $request->email_date,
+                                                                                                    'deadline_date' => $request->reply_deadline, 
+                                                                                                    'update_date' => $request->system_update_date
+                                                                                                    ]
+                                                                                                );
                                                                                                 
-                                                                                                $emailSubject = "[MPR] 增補單自動結案通知";
-                                                                                                
-                                                                                                $mailData = [
-                                                                                                    'to' => [$email], 
-                                                                                                    'subject' => $emailSubject,
-                                                                                                    'msgBody' => $emailContent,
-                                                                                                ];
-                                                                                                
-                                                                                                $params = [
-                                                                                                    'target' => 'VG-MPR',
-                                                                                                    'body' => $emailContent,
-                                                                                                    'msg_type' => "m",
-                                                                                                    'msg_method' => "both",
-                                                                                                    'msg_subject' => $emailSubject,
-                                                                                                    'mail_template' => "msgCenterMailTemplate",
-                                                                                                    'mail_data' => json_encode($mailData),
-                                                                                                ];
-                                                                                                
-                                                                                                $this->sendMsg($params);
+                                                                                                return response()->json([
+                                                                                                    'success' => true,
+                                                                                                    'message' => 'Year setting saved successfully',
+                                                                                                    'data' => $setting
+                                                                                                ]);
                                                                                                 
                                                                                             } catch (\Exception $e) {
-                                                                                                \Log::error("Error sending GROUPED year-end auto-close email to $email: " . $e->getMessage());
-                                                                                                throw $e;
+                                                                                                \Log::error('Error saving year setting: ' . $e->getMessage());
+                                                                                                return response()->json([
+                                                                                                    'success' => false,
+                                                                                                    'message' => 'Error: ' . $e->getMessage()
+                                                                                                ], 500);
                                                                                             }
                                                                                         }
-                                                                                        public function runYearEndAutoClose()
+                                                                                        
+                                                                                        private function sendGroupedYearEndAutoCloseEmail($email, $requests)
                                                                                         {
-                                                                                            \Log::info('[SCHEDULE] Running Year-End Auto-Close process...');
-                                                                                            $dbUpdateSuccessCount = 0;
-                                                                                            $dbUpdateFailedCount = 0;
-                                                                                            $groupedForEmail = []; // Mảng để nhóm các đơn theo email
-                                                                                            
-                                                                                            // 1. Tìm tất cả các đơn đủ điều kiện
-                                                                                            $mprsToClose = MprTemp::where(function($q) {
-                                                                                                $q->where('status', 'completed')
-                                                                                                ->orWhere('status_amendent', 'completed');
-                                                                                            })
-                                                                                            ->where('stocknumber', '>', 0)
-                                                                                            ->whereNull('deny_temp')
-                                                                                            ->whereNull('activeRct') // Chỉ những đơn chưa có hành động
-                                                                                            ->whereNull('req_id_oldyear')
-                                                                                            ->get();
-                                                                                            
-                                                                                            if ($mprsToClose->isEmpty()) {
-                                                                                                \Log::info('[SCHEDULE] No MPRs found requiring year-end auto-close.');
-                                                                                                return response()->json(['success' => true, 'message' => 'No requests found to auto-close.']);
+                                                                                            try {
+                                                                                                $emailContent = view('VgMpr-yearEndAutoClose', [
+                                                                                                    'requests' => $requests
+                                                                                                    ])->render();
+                                                                                                    
+                                                                                                    $emailSubject = "[MPR] 增補單自動結案通知";
+                                                                                                    
+                                                                                                    $mailData = [
+                                                                                                        'to' => [$email], 
+                                                                                                        'subject' => $emailSubject,
+                                                                                                        'msgBody' => $emailContent,
+                                                                                                    ];
+                                                                                                    
+                                                                                                    $params = [
+                                                                                                        'target' => 'VG-MPR',
+                                                                                                        'body' => $emailContent,
+                                                                                                        'msg_type' => "m",
+                                                                                                        'msg_method' => "both",
+                                                                                                        'msg_subject' => $emailSubject,
+                                                                                                        'mail_template' => "msgCenterMailTemplate",
+                                                                                                        'mail_data' => json_encode($mailData),
+                                                                                                    ];
+                                                                                                    
+                                                                                                    $this->sendMsg($params);
+                                                                                                    
+                                                                                                } catch (\Exception $e) {
+                                                                                                    \Log::error("Error sending GROUPED year-end auto-close email to $email: " . $e->getMessage());
+                                                                                                    throw $e;
+                                                                                                }
                                                                                             }
-                                                                                            
-                                                                                            // 2. Vòng lặp: Cập nhật DB VÀ Nhóm email
-                                                                                            foreach ($mprsToClose as $mpr) {
-                                                                                                try {
-                                                                                                    // --- A. Chuẩn bị dữ liệu cho email TRƯỚC KHI thay đổi $mpr ---
-                                                                                                    $submitter = json_decode($mpr->submitter, true) ?: [];
-                                                                                                    $email = $submitter['email'] ?? null;
-                                                                                                    
-                                                                                                    $totalQtyReq = 0;
-                                                                                                    if (!empty($mpr->qty_req)) {
-                                                                                                        $qArr = json_decode($mpr->qty_req, true);
-                                                                                                        if (is_array($qArr)) {
-                                                                                                            $totalQtyReq = array_sum(array_filter([
-                                                                                                                $qArr['workers'] ?? 0, $qArr['staff'] ?? 0,
-                                                                                                                $qArr['engineers'] ?? 0, $qArr['leader'] ?? 0,
-                                                                                                                $qArr['tranlator'] ?? 0
-                                                                                                            ], 'is_numeric'));
-                                                                                                        }
-                                                                                                    }
-                                                                                                    
-                                                                                                    $requestDataRow = [
-                                                                                                        'req_id' => $mpr->req_id,
-                                                                                                        'unit' => $submitter['unit'] ?? '',
-                                                                                                        'total_qty_req' => $totalQtyReq,
-                                                                                                        'recruited' => $mpr->recruited ?? 0,
-                                                                                                        'resign' => $mpr->resign ?? 0,
-                                                                                                        'stocknumber' => $mpr->stocknumber, 
-                                                                                                    ];
-                                                                                                    
-                                                                                                    // --- B. Cập nhật cơ sở dữ liệu (Bảng MprTemp) ---
-                                                                                                    $denyTempData = [
-                                                                                                        'fullfilldate' => now()->format('Y-m-d'),
-                                                                                                        'fulfilled' => 'yes',
-                                                                                                        'recruited' => intval($mpr->recruited ?? 0),
-                                                                                                        'stocknumber' => 0,
-                                                                                                        // 'reason' => 'Auto-closed due to no confirmation for new year.'
-                                                                                                    ];
-                                                                                                    
-                                                                                                    $mpr->deny_temp = json_encode($denyTempData);
-                                                                                                    $mpr->stocknumber = 0; 
-                                                                                                    $mpr->fulfilled = 'yes';
-                                                                                                    $mpr->fullfilldate = now()->format('Y-m-d');
-                                                                                                    $mpr->activeRct = 0; // Đánh dấu là "Đã hủy"
-                                                                                                    $mpr->save(); // <-- MprTemp được cập nhật tại đây
-                                                                                                    $dbUpdateSuccessCount++;
-                                                                                                    
+                                                                                            public function runYearEndAutoClose()
+                                                                                            {
+                                                                                                \Log::info('[SCHEDULE] Running Year-End Auto-Close process (Send to Level 1)...');
+                                                                                                $dbUpdateSuccessCount = 0;
+                                                                                                $dbUpdateFailedCount = 0;
+                                                                                                $groupedForEmail = []; // Mảng để nhóm các đơn theo email
+                                                                                                
+                                                                                                // 1. Tìm tất cả các đơn đủ điều kiện
+                                                                                                $mprsToClose = MprTemp::where(function($q) {
+                                                                                                    $q->where('status', 'completed')
+                                                                                                    ->orWhere('status_amendent', 'completed');
+                                                                                                })
+                                                                                                ->where('stocknumber', '>', 0)
+                                                                                                ->whereNull('deny_temp')
+                                                                                                ->whereNull('activeRct') // Chỉ những đơn chưa có hành động
+                                                                                                ->whereNull('req_id_oldyear')
+                                                                                                ->get();
+                                                                                                
+                                                                                                if ($mprsToClose->isEmpty()) {
+                                                                                                    \Log::info('[SCHEDULE] No MPRs found requiring year-end auto-close.');
+                                                                                                    return response()->json(['success' => true, 'message' => 'No requests found to auto-close.']);
+                                                                                                }
+                                                                                                
+                                                                                                // 2. Vòng lặp: Cập nhật DB VÀ Nhóm email
+                                                                                                foreach ($mprsToClose as $mpr) {
                                                                                                     try {
-                                                                                                        \Log::info('[SCHEDULE] Successfully migrated auto-closed MPR to Demand: ' . $mpr->req_id);
+                                                                                                        // --- A. Chuẩn bị dữ liệu cho email TRƯỚC KHI thay đổi $mpr ---
+                                                                                                        
+                                                                                                        // [THAY ĐỔI QUAN TRỌNG] Tìm email của Người duyệt Level 1 thay vì Submitter
+                                                                                                        $email = null;
+                                                                                                        $approvalData = json_decode($mpr->approval, true);
+                                                                                                        
+                                                                                                        if (is_array($approvalData)) {
+                                                                                                            foreach ($approvalData as $level) {
+                                                                                                                // Tìm Level 1, trạng thái approved và có email
+                                                                                                                if (isset($level['level']) && $level['level'] == 1 &&
+                                                                                                                isset($level['status']) && $level['status'] === 'approved' &&
+                                                                                                                !empty($level['approver']['email'])) {
+                                                                                                                    
+                                                                                                                    $email = strtolower(trim($level['approver']['email']));
+                                                                                                                    break; 
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                        
+                                                                                                        // Lấy thông tin phụ để hiển thị trong email
+                                                                                                        $submitter = json_decode($mpr->submitter, true) ?: [];
+                                                                                                        
+                                                                                                        $totalQtyReq = 0;
+                                                                                                        if (!empty($mpr->qty_req)) {
+                                                                                                            $qArr = json_decode($mpr->qty_req, true);
+                                                                                                            if (is_array($qArr)) {
+                                                                                                                $totalQtyReq = array_sum(array_filter([
+                                                                                                                    $qArr['workers'] ?? 0, $qArr['staff'] ?? 0,
+                                                                                                                    $qArr['engineers'] ?? 0, $qArr['leader'] ?? 0,
+                                                                                                                    $qArr['tranlator'] ?? 0
+                                                                                                                ], 'is_numeric'));
+                                                                                                            }
+                                                                                                        }
+                                                                                                        
+                                                                                                        $requestDataRow = [
+                                                                                                            'req_id' => $mpr->req_id,
+                                                                                                            'unit' => $submitter['unit'] ?? '',
+                                                                                                            'total_qty_req' => $totalQtyReq,
+                                                                                                            'recruited' => $mpr->recruited ?? 0,
+                                                                                                            'resign' => $mpr->resign ?? 0,
+                                                                                                            'stocknumber' => $mpr->stocknumber, 
+                                                                                                        ];
+                                                                                                        
+                                                                                                        // --- B. Cập nhật cơ sở dữ liệu (Bảng MprTemp) ---
+                                                                                                        // Logic này giữ nguyên để đảm bảo đơn được đóng đúng quy trình
+                                                                                                        $denyTempData = [
+                                                                                                            'fullfilldate' => now()->format('Y-m-d'),
+                                                                                                            'fulfilled' => 'yes',
+                                                                                                            'recruited' => intval($mpr->recruited ?? 0),
+                                                                                                            'stocknumber' => 0,
+                                                                                                            // 'reason' => 'Auto-closed due to no confirmation for new year.'
+                                                                                                        ];
+                                                                                                        
+                                                                                                        $mpr->deny_temp = json_encode($denyTempData);
+                                                                                                        $mpr->stocknumber = 0; 
+                                                                                                        $mpr->fulfilled = 'yes';
+                                                                                                        $mpr->fullfilldate = now()->format('Y-m-d');
+                                                                                                        $mpr->activeRct = 0; // Đánh dấu là "Đã hủy/đóng"
+                                                                                                        $mpr->save(); 
+                                                                                                        $dbUpdateSuccessCount++;
+                                                                                                        $this->migrateCompletedMprToDemandSingle($mpr);
+                                                                                                        
+                                                                                                        // Chỉ thêm vào danh sách gửi email nếu tìm thấy email người duyệt Level 1
+                                                                                                        if (!empty($email)) {
+                                                                                                            $groupedForEmail[$email][] = $requestDataRow;
+                                                                                                        } else {
+                                                                                                            \Log::warning('[SCHEDULE] Auto-close success but NO Level 1 Email found for req_id ' . $mpr->req_id);
+                                                                                                        }
+                                                                                                        
                                                                                                     } catch (\Exception $e) {
-                                                                                                        \Log::error('[SCHEDULE] Failed to migrate auto-closed MPR ID ' . $mpr->id . ' to Demand: ' . $e->getMessage());
+                                                                                                        $dbUpdateFailedCount++;
+                                                                                                        \Log::error('[SCHEDULE] Failed to auto-close MPR ID ' . $mpr->id . ': ' . $e->getMessage());
                                                                                                     }
-                                                                                                    if (!empty($email)) {
-                                                                                                        $groupedForEmail[$email][] = $requestDataRow;
-                                                                                                    } else {
-                                                                                                        \Log::warning('[SCHEDULE] Auto-close success but no email for req_id ' . $mpr->req_id);
+                                                                                                }
+                                                                                                
+                                                                                                // 3. Gửi email theo nhóm
+                                                                                                $emailSentCount = 0;
+                                                                                                $emailFailedCount = 0;
+                                                                                                foreach ($groupedForEmail as $email => $requests) {
+                                                                                                    try {
+                                                                                                        $this->sendGroupedYearEndAutoCloseEmail($email, $requests);
+                                                                                                        $emailSentCount++;
+                                                                                                    } catch (\Exception $e) {
+                                                                                                        $emailFailedCount++;
+                                                                                                        \Log::error("[SCHEDULE] Failed to send grouped auto-close email to $email: " . $e->getMessage());
                                                                                                     }
-                                                                                                    
-                                                                                                } catch (\Exception $e) {
-                                                                                                    $dbUpdateFailedCount++;
-                                                                                                    \Log::error('[SCHEDULE] Failed to auto-close MPR ID ' . $mpr->id . ': ' . $e->getMessage());
                                                                                                 }
+                                                                                                
+                                                                                                $message = "Year-End Auto-Close process finished. DB Updates: $dbUpdateSuccessCount successful, $dbUpdateFailedCount failed. Grouped emails sent to $emailSentCount Level 1 Managers ($emailFailedCount failed).";
+                                                                                                \Log::info("[SCHEDULE] $message");
+                                                                                                return response()->json(['success' => true, 'message' => $message]);
                                                                                             }
-                                                                                            $emailSentCount = 0;
-                                                                                            $emailFailedCount = 0;
-                                                                                            foreach ($groupedForEmail as $email => $requests) {
-                                                                                                try {
-                                                                                                    $this->sendGroupedYearEndAutoCloseEmail($email, $requests);
-                                                                                                    $emailSentCount++;
-                                                                                                } catch (\Exception $e) {
-                                                                                                    $emailFailedCount++;
-                                                                                                    \Log::error("[SCHEDULE] Failed to send grouped auto-close email to $email: " . $e->getMessage());
-                                                                                                }
-                                                                                            }
-                                                                                            
-                                                                                            $message = "Year-End Auto-Close process finished. DB Updates: $dbUpdateSuccessCount successful, $dbUpdateFailedCount failed. Grouped emails sent to $emailSentCount managers ($emailFailedCount failed).";
-                                                                                            \Log::info("[SCHEDULE] $message");
-                                                                                            return response()->json(['success' => true, 'message' => $message]);
                                                                                         }
-                                                                                    }
-                                                                                    
+                                                                                        
