@@ -3442,7 +3442,6 @@ class vgMprCtrl extends Controller
                                                                                             }
                                                                                             public function runYearEndAutoClose()
                                                                                             {
-                                                                                                \Log::info('[SCHEDULE] Running Year-End Auto-Close process (Send to Level 1)...');
                                                                                                 $dbUpdateSuccessCount = 0;
                                                                                                 $dbUpdateFailedCount = 0;
                                                                                                 $groupedForEmail = []; // Mảng để nhóm các đơn theo email
@@ -3454,7 +3453,7 @@ class vgMprCtrl extends Controller
                                                                                                 })
                                                                                                 ->where('stocknumber', '>', 0)
                                                                                                 ->whereNull('deny_temp')
-                                                                                                ->whereNull('activeRct') // Chỉ những đơn chưa có hành động
+                                                                                                ->whereNull('activeRct') 
                                                                                                 ->whereNull('req_id_oldyear')
                                                                                                 ->get();
                                                                                                 
@@ -3465,20 +3464,21 @@ class vgMprCtrl extends Controller
                                                                                                 foreach ($mprsToClose as $mpr) {
                                                                                                     try {
                                                                                                         $email = null;
-                                                                                                        $approvalData = json_decode($mpr->approval, true);
-                                                                                                        
-                                                                                                        if (is_array($approvalData)) {
-                                                                                                            foreach ($approvalData as $level) {
-                                                                                                                // Tìm Level 1, trạng thái approved và có email
-                                                                                                                if (isset($level['level']) && $level['level'] == 1 &&
-                                                                                                                isset($level['status']) && $level['status'] === 'approved' &&
-                                                                                                                !empty($level['approver']['email'])) {
-                                                                                                                    
-                                                                                                                    $email = strtolower(trim($level['approver']['email']));
-                                                                                                                    break; 
+                                                                                                        if (!empty($mpr->approval)) {
+                                                                                                            $approvalData = json_decode($mpr->approval, true);
+                                                                                                            if (is_array($approvalData)) {
+                                                                                                                foreach ($approvalData as $level) {
+                                                                                                                    if (isset($level['level']) && $level['level'] == 1 &&
+                                                                                                                    isset($level['status']) && $level['status'] === 'approved' &&
+                                                                                                                    !empty($level['approver']['email'])) {
+                                                                                                                        $email = strtolower(trim($level['approver']['email']));
+                                                                                                                        break; 
+                                                                                                                    }
                                                                                                                 }
                                                                                                             }
                                                                                                         }
+                                                                                                        
+                                                                                                        // --- B. Tính toán số liệu (Thực hiện kể cả khi không có email/approval rỗng) ---
                                                                                                         $submitter = json_decode($mpr->submitter, true) ?: [];
                                                                                                         $totalQtyReq = 0;
                                                                                                         if (!empty($mpr->qty_req)) {
@@ -3491,7 +3491,6 @@ class vgMprCtrl extends Controller
                                                                                                                 ], 'is_numeric'));
                                                                                                             }
                                                                                                         }
-                                                                                                        
                                                                                                         $requestDataRow = [
                                                                                                             'req_id' => $mpr->req_id,
                                                                                                             'unit' => $submitter['unit'] ?? '',
@@ -3500,12 +3499,14 @@ class vgMprCtrl extends Controller
                                                                                                             'resign' => $mpr->resign ?? 0,
                                                                                                             'stocknumber' => $mpr->stocknumber, 
                                                                                                         ];
+                                                                                                        
+                                                                                                        // Logic này sẽ luôn chạy để đóng đơn dù có email hay không
                                                                                                         $denyTempData = [
                                                                                                             'fullfilldate' => now()->format('Y-m-d'),
                                                                                                             'fulfilled' => 'yes',
                                                                                                             'recruited' => intval($mpr->recruited ?? 0),
                                                                                                             'stocknumber' => 0,
-                                                                                                            // 'reason' => 'Auto-closed due to no confirmation for new year.'
+                                                                                                            'reason' => 'Auto-closed by system (Year End)'
                                                                                                         ];
                                                                                                         
                                                                                                         $mpr->deny_temp = json_encode($denyTempData);
@@ -3514,12 +3515,19 @@ class vgMprCtrl extends Controller
                                                                                                         $mpr->fullfilldate = now()->format('Y-m-d');
                                                                                                         $mpr->activeRct = 0; // Đánh dấu là "Đã hủy/đóng"
                                                                                                         $mpr->save(); 
+                                                                                                        
                                                                                                         $dbUpdateSuccessCount++;
+                                                                                                        
+                                                                                                        // Đồng bộ sang bảng Demand
                                                                                                         $this->migrateCompletedMprToDemandSingle($mpr);
+                                                                                                        
+                                                                                                        // --- D. Xử lý gửi mail hoặc Log ---
                                                                                                         if (!empty($email)) {
+                                                                                                            // Nếu có email thì thêm vào danh sách gửi
                                                                                                             $groupedForEmail[$email][] = $requestDataRow;
                                                                                                         } else {
-                                                                                                            \Log::warning('[SCHEDULE] Auto-close success but NO Level 1 Email found for req_id ' . $mpr->req_id);
+                                                                                                            // Nếu approval rỗng hoặc không tìm thấy email cấp 1, chỉ ghi log warning
+                                                                                                            \Log::warning('[SCHEDULE] Auto-close success (DB Updated) but NO Level 1 Email found for req_id ' . $mpr->req_id);
                                                                                                         }
                                                                                                         
                                                                                                     } catch (\Exception $e) {
@@ -3527,6 +3535,8 @@ class vgMprCtrl extends Controller
                                                                                                         \Log::error('[SCHEDULE] Failed to auto-close MPR ID ' . $mpr->id . ': ' . $e->getMessage());
                                                                                                     }
                                                                                                 }
+                                                                                                
+                                                                                                // 3. Gửi email theo nhóm (chỉ gửi cho những đơn tìm được email)
                                                                                                 $emailSentCount = 0;
                                                                                                 $emailFailedCount = 0;
                                                                                                 foreach ($groupedForEmail as $email => $requests) {
