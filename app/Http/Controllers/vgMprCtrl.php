@@ -875,7 +875,7 @@ class vgMprCtrlTemp extends Controller
                             
                             if ($nextStatus === 'completed') {
                                 try {
-                                    $this->migrateCompletedMprToDemandSingle($mpr);
+                                    // $this->migrateCompletedMprToDemandSingle($mpr);
                                 } catch (\Exception $e) {
                                     \Log::error('Error in auto migration after approval: ' . $e->getMessage(), [
                                         'mpr_id' => $mpr->id,
@@ -886,7 +886,7 @@ class vgMprCtrlTemp extends Controller
                                     $newMpr = $this->duplicateForNewYear($mpr);
                                     if ($newMpr) {
                                         try {
-                                            $this->migrateCompletedMprToDemandSingle($newMpr);
+                                            // $this->migrateCompletedMprToDemandSingle($newMpr);
                                             \Log::info('Successfully migrated NEW CLONED MPR to Demand', [
                                                 'original_req_id' => $mpr->req_id,
                                                 'new_req_id' => $newMpr->req_id
@@ -949,22 +949,22 @@ class vgMprCtrlTemp extends Controller
                         }
                         private function sendMsg($params) 
                         {
-                            try {
-                                $client = new \GuzzleHttp\Client();
+                            // try {
+                            //     $client = new \GuzzleHttp\Client();
                                 
-                                $formData = http_build_query($params);
+                            //     $formData = http_build_query($params);
                                 
-                                $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
-                                    'headers' => [
-                                        'Content-Type' => 'application/x-www-form-urlencoded'
-                                    ],
-                                    'body' => $formData 
-                                ]);
+                            //     $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
+                            //         'headers' => [
+                            //             'Content-Type' => 'application/x-www-form-urlencoded'
+                            //         ],
+                            //         'body' => $formData 
+                            //     ]);
                                 
-                                return json_decode($response->getBody()->getContents(), true);
-                            } catch (\Exception $e) {
-                                throw $e;
-                            }
+                            //     return json_decode($response->getBody()->getContents(), true);
+                            // } catch (\Exception $e) {
+                            //     throw $e;
+                            // }
                         }
                         public function denyRequest(Request $req)
                         {
@@ -3366,7 +3366,9 @@ class vgMprCtrlTemp extends Controller
                                                                                                 [
                                                                                                     'email_date' => $request->email_date,
                                                                                                     'deadline_date' => $request->reply_deadline, 
-                                                                                                    'update_date' => $request->system_update_date
+                                                                                                    'update_date' => $request->system_update_date,
+                                                                                                    'ey_date_req' => $request->ey_date_req,
+                                                                                                    'key_in_newyear' => $request->key_in_new_year,
                                                                                                     ]
                                                                                                 );
                                                                                                 
@@ -3419,7 +3421,6 @@ class vgMprCtrlTemp extends Controller
                                                                                             }
                                                                                             public function runYearEndAutoClose()
                                                                                             {
-                                                                                                \Log::info('[SCHEDULE] Running Year-End Auto-Close process (Send to Level 1)...');
                                                                                                 $dbUpdateSuccessCount = 0;
                                                                                                 $dbUpdateFailedCount = 0;
                                                                                                 $groupedForEmail = []; // Mảng để nhóm các đơn theo email
@@ -3439,32 +3440,25 @@ class vgMprCtrlTemp extends Controller
                                                                                                     \Log::info('[SCHEDULE] No MPRs found requiring year-end auto-close.');
                                                                                                     return response()->json(['success' => true, 'message' => 'No requests found to auto-close.']);
                                                                                                 }
-                                                                                                
-                                                                                                // 2. Vòng lặp: Cập nhật DB VÀ Nhóm email
                                                                                                 foreach ($mprsToClose as $mpr) {
                                                                                                     try {
-                                                                                                        // --- A. Chuẩn bị dữ liệu cho email TRƯỚC KHI thay đổi $mpr ---
-                                                                                                        
-                                                                                                        // [THAY ĐỔI QUAN TRỌNG] Tìm email của Người duyệt Level 1 thay vì Submitter
                                                                                                         $email = null;
-                                                                                                        $approvalData = json_decode($mpr->approval, true);
-                                                                                                        
-                                                                                                        if (is_array($approvalData)) {
-                                                                                                            foreach ($approvalData as $level) {
-                                                                                                                // Tìm Level 1, trạng thái approved và có email
-                                                                                                                if (isset($level['level']) && $level['level'] == 1 &&
-                                                                                                                isset($level['status']) && $level['status'] === 'approved' &&
-                                                                                                                !empty($level['approver']['email'])) {
-                                                                                                                    
-                                                                                                                    $email = strtolower(trim($level['approver']['email']));
-                                                                                                                    break; 
+                                                                                                        if (!empty($mpr->approval)) {
+                                                                                                            $approvalData = json_decode($mpr->approval, true);
+                                                                                                            if (is_array($approvalData)) {
+                                                                                                                foreach ($approvalData as $level) {
+                                                                                                                    if (isset($level['level']) && $level['level'] == 1 &&
+                                                                                                                    isset($level['status']) && $level['status'] === 'approved' &&
+                                                                                                                    !empty($level['approver']['email'])) {
+                                                                                                                        $email = strtolower(trim($level['approver']['email']));
+                                                                                                                        break; 
+                                                                                                                    }
                                                                                                                 }
                                                                                                             }
                                                                                                         }
                                                                                                         
-                                                                                                        // Lấy thông tin phụ để hiển thị trong email
+                                                                                                        // --- B. Tính toán số liệu (Thực hiện kể cả khi không có email/approval rỗng) ---
                                                                                                         $submitter = json_decode($mpr->submitter, true) ?: [];
-                                                                                                        
                                                                                                         $totalQtyReq = 0;
                                                                                                         if (!empty($mpr->qty_req)) {
                                                                                                             $qArr = json_decode($mpr->qty_req, true);
@@ -3476,7 +3470,6 @@ class vgMprCtrlTemp extends Controller
                                                                                                                 ], 'is_numeric'));
                                                                                                             }
                                                                                                         }
-                                                                                                        
                                                                                                         $requestDataRow = [
                                                                                                             'req_id' => $mpr->req_id,
                                                                                                             'unit' => $submitter['unit'] ?? '',
@@ -3486,14 +3479,13 @@ class vgMprCtrlTemp extends Controller
                                                                                                             'stocknumber' => $mpr->stocknumber, 
                                                                                                         ];
                                                                                                         
-                                                                                                        // --- B. Cập nhật cơ sở dữ liệu (Bảng MprTemp) ---
-                                                                                                        // Logic này giữ nguyên để đảm bảo đơn được đóng đúng quy trình
+                                                                                                        // Logic này sẽ luôn chạy để đóng đơn dù có email hay không
                                                                                                         $denyTempData = [
                                                                                                             'fullfilldate' => now()->format('Y-m-d'),
                                                                                                             'fulfilled' => 'yes',
                                                                                                             'recruited' => intval($mpr->recruited ?? 0),
                                                                                                             'stocknumber' => 0,
-                                                                                                            // 'reason' => 'Auto-closed due to no confirmation for new year.'
+                                                                                                            'reason' => 'Auto-closed by system (Year End)'
                                                                                                         ];
                                                                                                         
                                                                                                         $mpr->deny_temp = json_encode($denyTempData);
@@ -3502,14 +3494,19 @@ class vgMprCtrlTemp extends Controller
                                                                                                         $mpr->fullfilldate = now()->format('Y-m-d');
                                                                                                         $mpr->activeRct = 0; // Đánh dấu là "Đã hủy/đóng"
                                                                                                         $mpr->save(); 
-                                                                                                        $dbUpdateSuccessCount++;
-                                                                                                        $this->migrateCompletedMprToDemandSingle($mpr);
                                                                                                         
-                                                                                                        // Chỉ thêm vào danh sách gửi email nếu tìm thấy email người duyệt Level 1
+                                                                                                        $dbUpdateSuccessCount++;
+                                                                                                        
+                                                                                                        // Đồng bộ sang bảng Demand
+                                                                                                        // $this->migrateCompletedMprToDemandSingle($mpr);
+                                                                                                        
+                                                                                                        // --- D. Xử lý gửi mail hoặc Log ---
                                                                                                         if (!empty($email)) {
+                                                                                                            // Nếu có email thì thêm vào danh sách gửi
                                                                                                             $groupedForEmail[$email][] = $requestDataRow;
                                                                                                         } else {
-                                                                                                            \Log::warning('[SCHEDULE] Auto-close success but NO Level 1 Email found for req_id ' . $mpr->req_id);
+                                                                                                            // Nếu approval rỗng hoặc không tìm thấy email cấp 1, chỉ ghi log warning
+                                                                                                            \Log::warning('[SCHEDULE] Auto-close success (DB Updated) but NO Level 1 Email found for req_id ' . $mpr->req_id);
                                                                                                         }
                                                                                                         
                                                                                                     } catch (\Exception $e) {
@@ -3518,7 +3515,7 @@ class vgMprCtrlTemp extends Controller
                                                                                                     }
                                                                                                 }
                                                                                                 
-                                                                                                // 3. Gửi email theo nhóm
+                                                                                                // 3. Gửi email theo nhóm (chỉ gửi cho những đơn tìm được email)
                                                                                                 $emailSentCount = 0;
                                                                                                 $emailFailedCount = 0;
                                                                                                 foreach ($groupedForEmail as $email => $requests) {

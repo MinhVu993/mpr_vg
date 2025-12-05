@@ -394,9 +394,18 @@
             :label="$t('Remark')" rows="1" hide-details auto-grow></v-textarea>
         </v-col>
         <v-col cols="12">
-            <v-text-field outlined disabled dense
+            <v-text-field 
+            outlined 
+            readonly 
+            dense
             :label="$t('Note')" 
-            :value="noteText"  hide-details>
+            :value="noteText" 
+            hide-details
+            :append-icon="(form.req_id_oldyear || (editData && editData.req_id_oldyear)) ? 'mdi-open-in-new' : ''"
+            @click:append="viewOriginalRequest"
+            color="primary"
+            style="cursor: pointer;"
+            >
         </v-text-field>
     </v-col>
 </div>
@@ -641,7 +650,15 @@
         </v-card-actions>
     </v-card>
 </v-dialog>
+<RequestDialog 
+v-if="viewOriginal" 
+v-model="viewOriginal" 
+:edit-data="originalData" 
+:is-edit="true" 
+:is-change="false" 
+/>
 </v-dialog>
+
 </template>
 <script>
 //  import VfaAppFlow from "../../../@global-component/vfa-comp";
@@ -882,7 +899,9 @@ export default {
             programmaticUpdating: { vi: false, en: false, cn: false },
             lastEditedOtherReason: null,
             otherReasonDebounceMs: 800,
-            otherReason: []
+            otherReason: [],
+            viewOriginal: false, 
+            originalData: null,
         };
     },
     watch: {
@@ -1101,6 +1120,33 @@ export default {
         },
     },
     methods: {
+        async viewOriginalRequest() {
+            const oldReqId = this.form.req_id_oldyear || (this.editData && this.editData.req_id_oldyear);
+            if (!oldReqId) return;
+            try {
+                this.loading = true;
+                const res = await this.$axios.get(`${this.api}getDataByReqId/${oldReqId}`);
+                if (res.data && res.data.success && res.data.data) {
+                    this.originalData = res.data.data;
+                    this.viewOriginal = true;
+                } else {
+                    this.$notify({
+                        title: "Error",
+                        text: this.$t("Original request not found"),
+                        type: "error",
+                    });
+                }
+            } catch (e) {
+                console.error(e);
+                this.$notify({
+                    title: "Error",
+                    text: this.$t("Error opening original request"),
+                    type: "error",
+                });
+            } finally {
+                this.loading = false;
+            }
+        },
         handleOtherReasonSelect(id) {
             if (!id) {
                 this.form.recruitment.otherReasonSelected = '';
@@ -3491,22 +3537,22 @@ export default {
             return "";
         },
         showSaveButton() {
-           if (this.showNewYearSection) {
-        // Kiểm tra xem đã có dữ liệu activeRct chưa
-        const hasNewYearData = this.editData && 
-                               this.editData.activeRct !== null && 
-                               this.editData.activeRct !== undefined && 
-                               this.editData.activeRct !== '';
-        
-        // Nếu ĐÃ CÓ dữ liệu (đã submit rồi) -> ẨN nút Submit (return false)
-        // Để nhường chỗ cho các nút Accept/Deny hiện ra
-        if (hasNewYearData) {
-            return false;
-        }
-
-        // Nếu CHƯA CÓ dữ liệu (lần đầu vào chọn) -> HIỆN nút Submit
-        return true;
-    }
+            if (this.showNewYearSection) {
+                // Kiểm tra xem đã có dữ liệu activeRct chưa
+                const hasNewYearData = this.editData && 
+                this.editData.activeRct !== null && 
+                this.editData.activeRct !== undefined && 
+                this.editData.activeRct !== '';
+                
+                // Nếu ĐÃ CÓ dữ liệu (đã submit rồi) -> ẨN nút Submit (return false)
+                // Để nhường chỗ cho các nút Accept/Deny hiện ra
+                if (hasNewYearData) {
+                    return false;
+                }
+                
+                // Nếu CHƯA CÓ dữ liệu (lần đầu vào chọn) -> HIỆN nút Submit
+                return true;
+            }
             if (!this.editData) {
                 return true;
             }

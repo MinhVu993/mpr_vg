@@ -853,7 +853,8 @@ export default {
             otherReasonDialog: false,
             otherReasonText: '',
             approvalPanelsActive:null,
-            otherReason:[]
+            otherReason:[],
+            settingHistory:[]
         }
     },
     computed: {
@@ -1133,17 +1134,62 @@ export default {
         
         filteredData() {
             let result = this.dataFilteredByYear;
+            
+            // 1. Lọc theo role và quyền truy cập
+            if (this.activeUser) {
+                if (!['hr', 'admin'].includes(this.activeUser.role?.toLowerCase())) {
+                    result = result.filter(item => {
+                        const currentStatus = item.status_amendent || item.status;
+                        if (['completed', 'declined'].includes(currentStatus)) {
+                            return item.submiterInfo?.empno === this.activeUser.empno;
+                        }
+                        return item.submiterInfo?.empno === this.activeUser.empno || 
+                        this.canApproveItemForTodo(item);
+                    });
+                }
+            }
+            
+            // 2. Lọc theo tab status
             if (this.statusFilter === 1) { 
                 result = result.filter(item => this.canApproveItemForTodo(item));
             } else if (this.statusFilter === 2) { 
-                result = result.filter(item => 
-                ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
-                ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)
-                );
+                // === TAB PENDING ===
+                result = result.filter(item => {
+                    // Điều kiện 1: Các trạng thái waiting thông thường
+                    const isNormalPending = ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
+                    ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent);
+                    
+                    if (this.settingHistory && Array.isArray(this.settingHistory)) {
+                        const currentYear = new Date().getFullYear();
+                        const today = dayjs().format('YYYY-MM-DD');
+                        const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
+                        
+                        if (setting && setting.email_date === today) {
+                             if (item.fulfilled === 'no' && item.activeRct=== null && item.req_id_oldyear === "") {
+                                // Check 1: Là Submitter
+                                const isSubmitter = this.activeUser && item.submiterInfo && item.submiterInfo.empno === this.activeUser.empno;
+                                if (isSubmitter) return true;
+                                
+                                // Check 2: Là Level 1 Approver
+                                if (item.approval) {
+                                    try {
+                                        const approvalData = JSON.parse(item.approval);
+                                        const level1 = approvalData.find(lvl => lvl.level === 1);
+                                        if (level1 && level1.approver && this.activeUser && level1.approver.empno === this.activeUser.empno) {
+                                            return true;
+                                        }
+                                    } catch (e) { console.error(e); }
+                                }
+                            }
+                        }
+                    }
+                    
+                    return false;
+                });
             } else if (this.statusFilter === 3) { 
                 result = result.filter(item => 
                 (item.status === 'waiting_dept' || 
-                item.status_amendent === 'waiting_dept' )&&
+                item.status_amendent === 'waiting_dept') &&
                 this.hasReturnedLevel(item)
                 );
             } else if (this.statusFilter === 4) { // Approved tab
@@ -1151,33 +1197,38 @@ export default {
                 item.status === 'completed' || item.status_amendent === 'completed'
                 );
             } else if (this.statusFilter === 5) {
+                // Tab Rejected
                 result = result.filter(item =>  
                 ['declined', 'cancelled'].includes(item.status) ||
                 ['declined', 'cancelled'].includes(item.status_amendent)
                 );
             }
             
-            
+            // 3. Lọc theo các filter values
             Object.entries(this.filterValues).forEach(([key, values]) => {
                 if (values && values.length) {
                     result = result.filter(item => {
                         switch(key) {
                             case 'req_id':
                             return values.includes(item.req_id);
+                            
                             case 'submitter':
-                            return values.includes(item.submiterInfo?.name);
+                            return values.some(value => {
+                                const empno = value.split(' - ')[0]; // Lấy phần empno từ chuỗi "empno - name"
+                                return item.submiterInfo?.empno === empno;
+                            });
+                            
                             case 'date_req':
                             return values.includes(this.formatDate(item.date_req));
+                            
                             case 'unit':
                             return values.includes(item.unit);
                             case 'unit_name':
                             return values.includes(item.unit_name);
-                            case 'division': 
-                            return values.includes(item.division);
+                            
                             case 'pos':
                             return values.includes(this.getPositionName(item.pos));
-                            case 'language':
-                            return values.includes(item.language);
+                            
                             case 'reason':
                             return values.some(v => {
                                 // match normal reason label
@@ -1193,22 +1244,31 @@ export default {
                                 }
                                 return false;
                             });
+                            
                             case 'status':
                             return values.includes(this.getStatusText(item.status)) ||
                             values.includes(this.getStatusText(item.status_amendent));
+                            
+                            case 'sub_pos':
+                            const subPosName = this.getSubPositionName(item.sub_pos, true);
+                            return values.some(subPos => subPosName.includes(subPos));
+                            
                             case 'recruited':
                             return values.includes(item.recruited);
+                            
                             case 'resign':
                             return values.includes(item.resign);
+                            
                             case 'qty_req':
-                            return values.includes(item.qtyInfo.total) ||
-                            values.includes(item.qtyInfo.details);
+                            return values.includes(item.qtyInfo.total);
+                            
                             case 'recruited_status':
                             const status = this.getRecruitmentStatus(item);
                             return status.show && values.includes(status.text);
+                            
                             case 'key_in_date':
                             // so sánh với formatDate của key_in_date (fallback sang date_req)
-                            return values.includes(this.formatDate(item.key_in_date || item.date_req));
+                            return values.includes(this.formatDate(item.key_in_date ));
                             
                             default:
                             return true;
@@ -1217,7 +1277,7 @@ export default {
                 }
             });
             
-            // Áp dụng tìm kiếm text nếu có
+            // 4. Lọc theo search query
             if (this.search) {
                 const searchTerm = this.search.toLowerCase();
                 result = result.filter(item => {
@@ -1236,10 +1296,10 @@ export default {
                     String(item.recruited || '').toLowerCase().includes(searchTerm) || 
                     String(item.resign || '').toLowerCase().includes(searchTerm) ||
                     String(item.qtyInfo?.total || '').toLowerCase().includes(searchTerm) ||
-                    String(item.qtyInfo?.details || '').toLowerCase().includes(searchTerm)
+                    String(item.qtyInfo?.details || '').toLowerCase().includes(searchTerm) ||
+                    (item.sub_pos ? this.getSubPositionName(item.sub_pos, true).toLowerCase().includes(searchTerm) : false)
                     );
                 });
-                
             }
             
             return result;
@@ -1310,8 +1370,8 @@ export default {
                     return item.reason;
                 }))].filter(Boolean),
                 status: [...new Set(this.formattedData.flatMap(item => [
-                this.getStatusText(item.status),
-                this.getStatusText(item.status_amendent)
+                this.getStatusText(item.status,item),
+                this.getStatusText(item.status_amendent,item)
                 ]))].filter(Boolean),
                 recruited: [...new Set(this.formattedData.map(item => item.recruited))].filter(Boolean),
                 resign: [...new Set(this.formattedData.map(item => item.resign))].filter(Boolean),
@@ -1336,19 +1396,56 @@ export default {
             };
         },
         statusCounts() {
-            this.approvalFlowDependency;
-            
             const all = this.dataFilteredByYear.length;
             let todo = 0, completed = 0, processing = 0, returned = 0, declined = 0;
             
+            // --- CHECK YEAR-END CONDITION ---
+            let isYearEndActive = false;
+            if (this.settingHistory && Array.isArray(this.settingHistory)) {
+                const currentYear = new Date().getFullYear();
+                const today = dayjs().format('YYYY-MM-DD');
+                const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
+                if (setting && setting.email_date === today) {
+                    isYearEndActive = true;
+                }
+            }
             this.dataFilteredByYear.forEach(item => {
+                // Tính Todo (Giữ nguyên logic cũ)
                 if (this.canApproveItemForTodo(item)) {
                     todo++;
                 }
+                let isPending = false;
                 if ([ 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
                 ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)) {
+                    isPending = true;
+                }
+                // 2. Pending theo Year-End (email_date + fulfilled='no')
+                // Dành cho: Submitter HOẶC Level 1 Approver
+               if (!isPending && isYearEndActive && item.fulfilled === 'no' && item.activeRct=== null && item.req_id_oldyear === "") {
+                    const isSubmitter = this.activeUser && item.submiterInfo && item.submiterInfo.empno === this.activeUser.empno;
+                    
+                    let isLevel1Approver = false;
+                    if (item.approval) {
+                        try {
+                            const approvalData = JSON.parse(item.approval);
+                            const level1 = approvalData.find(lvl => lvl.level === 1);
+                            if (level1 && level1.approver && this.activeUser && level1.approver.empno === this.activeUser.empno) {
+                                isLevel1Approver = true;
+                            }
+                        } catch (e) {}
+                    }
+                    
+                    // Nếu là Submitter HOẶC Level 1 Approver thì tính là Pending
+                    if (isSubmitter || isLevel1Approver) {
+                        isPending = true;
+                    }
+                }
+                
+                if (isPending) {
                     processing++;
                 }
+                // ---------------------------------------
+                
                 if (item.status === 'completed' || item.status_amendent === 'completed') {
                     completed++;
                 }
@@ -1676,7 +1773,7 @@ export default {
             const activeRctVal = item?.activeRct;
             const activeRctInt = (activeRctVal === null || typeof activeRctVal === 'undefined') ? null : parseInt(activeRctVal);
             
-               if (activeRctInt === 1 && activeRctInt===0 && status !== 'completed' && status !== 'declined') {
+            if (activeRctInt === 1 && activeRctInt===0 && status !== 'completed' && status !== 'declined') {
                 return {
                     text: this.$t('Recruiting'),
                     // detail: this.$t('NY_Prefix') + ': ' + this.$t('Processing'), // Có thể thêm chi tiết nếu muốn
@@ -2114,6 +2211,7 @@ export default {
                     this.unitNames = res.data.dataDeptHrm;
                     this.pos = res.data.dataTypeApply;
                     this.otherReason = res.data.dataOtherReason;
+                    this.settingHistory = res.data.dataEndYear;
                     this.flowCache.clear();
                     // await this.preloadFlowData();
                     this.filteredItems = [];
@@ -2721,7 +2819,7 @@ export default {
             }
         },
         getReturnInfo(item) {
-            // if (!item.approval) return { returned: false, reason: '' };
+            if (!item.approval) return { returned: false, reason: '' };
             try {
                 const approvalData = JSON.parse(item.approval);
                 const returnedLevel = approvalData.find(level => level.status === 'returned');
@@ -3412,6 +3510,27 @@ export default {
         },
         canApproveItemForTodo(item)
         {
+            if (this.settingHistory && Array.isArray(this.settingHistory)) {
+                const currentYear = new Date().getFullYear();
+                const today = dayjs().format('YYYY-MM-DD'); 
+                
+                const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
+                if (setting && setting.email_date === today) {
+                       if (item.fulfilled === 'no' && item.activeRct === null && item.activeRct=== null)  {
+                        if (item.approval) {
+                            try {
+                                const approvalData = JSON.parse(item.approval);
+                                const level1 = approvalData.find(lvl => lvl.level === 1);
+                                if (level1 && level1.approver && this.activeUser && level1.approver.empno === this.activeUser.empno) {
+                                    return true; // Hiện trong tab To Do
+                                }
+                            } catch (e) {
+                                console.error('Error checking Level 1 approver:', e);
+                            }
+                        }
+                    }
+                }
+            }
             if (item.approval) {
                 try {
                     const approvalData = JSON.parse(item.approval);
@@ -4045,7 +4164,6 @@ export default {
             "declined": "已駁回",
             "rejected": "否決",
             "cancelled": "已取消",
-            
             "returned": "已退回",
             "processing": "處理中",
             "pending": "待處理",

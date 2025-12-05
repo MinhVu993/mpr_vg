@@ -759,109 +759,149 @@
     </v-card-text>
 </v-card>
 </v-dialog>
-<v-dialog v-model="dlogSetting" max-width="1000px">
+<v-dialog v-model="dlogSetting" max-width="1100px" scrollable>
     <v-card>
-        <v-card-title style="background-color: #00838F; color: white;">
-            <v-icon left dark>mdi-cog</v-icon>
-            {{ $t('Year-End Settings') }}
+        <v-card-title class="white--text py-3" style="background-color: #00838F;">
+            <v-icon left dark>mdi-cog-outline</v-icon>
+            <span class="font-weight-bold">{{ $t('Year-End Settings') }}</span>
             <v-spacer></v-spacer>
             <v-btn icon dark @click="dlogSetting = false">
                 <v-icon>mdi-close</v-icon>
             </v-btn>
         </v-card-title>
-        <v-card-text class="pt-2">
-            <v-row class="mb-2 mt-5" >
-                <v-col cols="12" sm="6" md="3">
-                    <v-text-field v-model="settingForm.year" :label="$t('year')" type="number" outlined dense hide-details ></v-text-field>
-                </v-col>
-                <v-col cols="12" sm="6" md="3">
-                    <v-menu v-model="menuEmailDate" :close-on-content-click="false" transition="scale-transition" offset-y min-width="auto" >
-                        <template v-slot:activator="{ on, attrs }">
-                            <v-text-field
-                            v-model="settingForm.emailDate"
-                            :label="$t('Email Notification Date')"
-                            prepend-inner-icon="mdi-calendar"
-                            readonly
-                            outlined
-                            dense
-                            hide-details
-                            background-color="white"
-                            v-bind="attrs"
-                            v-on="on"
-                            ></v-text-field>
-                        </template>
-                        <v-date-picker v-model="settingForm.emailDate" @input="menuEmailDate = false" no-title scrollable ></v-date-picker>
-                    </v-menu>
-                </v-col>
-                <v-col cols="12" sm="6" md="3">
-                    <v-menu v-model="menuReplyDate" :close-on-content-click="false" transition="scale-transition" offset-y min-width="auto" >
-                        <template v-slot:activator="{ on, attrs }">
-                            <v-text-field
-                            v-model="settingForm.replyDeadline"
-                            :label="$t('Reply Deadline')"
-                            prepend-inner-icon="mdi-calendar"
-                            readonly
-                            outlined
-                            dense
-                            hide-details
-                            background-color="white"
-                            v-bind="attrs"
-                            v-on="on"
-                            ></v-text-field>
-                        </template>
-                        <v-date-picker
-                        v-model="settingForm.replyDeadline"
-                        @input="menuReplyDate = false"
-                        no-title
-                        scrollable
-                        ></v-date-picker>
-                    </v-menu>
-                </v-col>
-                <v-col cols="12" sm="6" md="3">
-                    <v-menu
-                    v-model="menuUpdateDate"
-                    :close-on-content-click="false"
-                    transition="scale-transition"
-                    offset-y
-                    min-width="auto"
-                    >
-                    <template v-slot:activator="{ on, attrs }">
-                        <v-text-field
-                        v-model="settingForm.systemUpdateDate"
-                        :label="$t('System Update Date')"
-                        prepend-inner-icon="mdi-calendar"
-                        readonly
-                        outlined
-                        dense
-                        hide-details
-                        background-color="white"
-                        v-bind="attrs"
-                        v-on="on"
-                        ></v-text-field>
-                    </template>
-                    <v-date-picker
-                    v-model="settingForm.systemUpdateDate"
-                    @input="menuUpdateDate = false"
-                    no-title
-                    scrollable
-                    ></v-date-picker>
-                </v-menu>
-            </v-col>
-        </v-row>
         
-        <v-row class="mt-6">
-            <v-col cols="12">
-                <div class="text-h6 mb-2 text-center" style="background-color: #FFE0B2; padding: 5px; border-radius: 4px;">
-                    {{$t('Historical Settings')}}
-                </div>
+        <v-card-text class="pa-0">
+            <v-container fluid class="pa-4">
+                <v-card outlined class="mb-4">
+                    <v-card-text class="py-3">
+                        <v-row dense class="mt-2">
+                            <v-col cols="12" sm="6" md="2">
+                                <v-text-field 
+                                v-model="settingForm.year" 
+                                :label="$t('year')" 
+                                type="text" 
+                                outlined 
+                                dense 
+                                hide-details
+                                color="#00838F"
+                                class="fix-height-input"
+                                maxlength="4"
+                                onkeypress="return event.charCode >= 48 && event.charCode <= 57"
+                                ></v-text-field>
+                            </v-col>
+                            
+                            <v-col cols="12" sm="6" md="2">
+                                <v-menu v-model="menuEmailDate" :close-on-content-click="false" transition="scale-transition" offset-y min-width="auto">
+                                    <template v-slot:activator="{ on, attrs }">
+                                        <v-text-field
+                                        v-model="settingForm.emailDate"
+                                        :label="$t('Email Notify')"
+                                        readonly
+                                        outlined
+                                        dense
+                                        hide-details
+                                        v-bind="attrs"
+                                        v-on="on"
+                                        color="#00838F"
+                                        ></v-text-field>
+                                    </template>
+                                    <v-date-picker v-model="settingForm.emailDate" @input="menuEmailDate = false" no-title scrollable color="#00838F"></v-date-picker>
+                                </v-menu>
+                            </v-col>
+                            
+                            <v-col cols="12" sm="6" md="2">
+                                <v-menu v-model="menuReplyDate" :close-on-content-click="false" transition="scale-transition" offset-y min-width="auto">
+                                    <template v-slot:activator="{ on, attrs }">
+                                        <v-text-field
+                                        v-model="settingForm.replyDeadline"
+                                        :label="$t('Reply Deadline')"
+                                        readonly
+                                        outlined
+                                        dense
+                                        hide-details
+                                        v-bind="attrs"
+                                        v-on="on"
+                                        color="#00838F"
+                                        ></v-text-field>
+                                    </template>
+                                    <v-date-picker v-model="settingForm.replyDeadline" @input="menuReplyDate = false" no-title scrollable color="#00838F"></v-date-picker>
+                                </v-menu>
+                            </v-col>
+                            
+                            <v-col cols="12" sm="6" md="2">
+                                <v-menu v-model="menuUpdateDate" :close-on-content-click="false" transition="scale-transition" offset-y min-width="auto">
+                                    <template v-slot:activator="{ on, attrs }">
+                                        <v-text-field
+                                        v-model="settingForm.systemUpdateDate"
+                                        :label="$t('System Update')"
+                                        readonly
+                                        outlined
+                                        dense
+                                        hide-details
+                                        v-bind="attrs"
+                                        v-on="on"
+                                        color="#00838F"
+                                        ></v-text-field>
+                                    </template>
+                                    <v-date-picker v-model="settingForm.systemUpdateDate" @input="menuUpdateDate = false" no-title scrollable color="#00838F"></v-date-picker>
+                                </v-menu>
+                            </v-col>
+                            <v-col cols="12" sm="6" md="2">
+                                <v-menu v-model="menuKeyInNewYear" :close-on-content-click="false" transition="scale-transition" offset-y min-width="auto">
+                                    <template v-slot:activator="{ on, attrs }">
+                                        <v-text-field
+                                        v-model="settingForm.keyInNewYear"
+                                        :label="$t('Key In New Year')"
+                                        readonly
+                                        outlined
+                                        dense
+                                        hide-details
+                                        v-bind="attrs"
+                                        v-on="on"
+                                        color="#00838F"
+                                        ></v-text-field>
+                                    </template>
+                                    <v-date-picker v-model="settingForm.keyInNewYear" @input="menuKeyInNewYear = false" no-title scrollable color="#00838F"></v-date-picker>
+                                </v-menu>
+                            </v-col>
+                            <v-col cols="12" sm="6" md="2">
+                                <v-menu v-model="menuEyDateReq" :close-on-content-click="false" transition="scale-transition" offset-y min-width="auto">
+                                    <template v-slot:activator="{ on, attrs }">
+                                        <v-text-field
+                                        v-model="settingForm.eyDateReq"
+                                        :label="$t('NY Date Request')"
+                                        readonly
+                                        outlined
+                                        dense
+                                        hide-details
+                                        v-bind="attrs"
+                                        v-on="on"
+                                        color="#00838F"
+                                        ></v-text-field>
+                                    </template>
+                                    <v-date-picker v-model="settingForm.eyDateReq" @input="menuEyDateReq = false" no-title scrollable color="#00838F"></v-date-picker>
+                                </v-menu>
+                            </v-col>
+                            
+                        </v-row>
+                    </v-card-text>
+                    <v-divider></v-divider>
+                    <v-card-actions class="grey lighten-5">
+                        <v-spacer></v-spacer>
+                        <v-btn color="teal" dark small depressed @click="saveSetting">
+                            <v-icon left small>mdi-content-save</v-icon>  
+                            {{ $t('Confirm') }}
+                        </v-btn>
+                    </v-card-actions>
+                </v-card>
                 <v-data-table
                 :headers="settingHeaders"
-                :items="filteredSettingHistory" class="elevation-1"
+                :items="filteredSettingHistory"
+                class="elevation-1 rounded-lg"
+                fixed-header
+                height="350px"
+                :footer-props="{ 'items-per-page-options': [10, 20, 50] }"
                 >
-                <template v-slot:item.year="{ item }">
-                    <span class="font-weight-bold">{{ item.year }}</span>
-                </template>
-                
                 <template v-slot:header.year="{ header }">
                     <DsFilter :name="$t('year')" :in-items="computedSettingFilterItems.year" @changed="updateSettingFilter('year', $event)" />
                 </template>
@@ -874,24 +914,28 @@
                 <template v-slot:header.update_date="{ header }">
                     <DsFilter :name="$t('System Update Date')" :in-items="computedSettingFilterItems.update_date" @changed="updateSettingFilter('update_date', $event)" />
                 </template>
-                
-                <template v-slot:header.action="{ header }">
-                    
+                <template v-slot:header.ey_date_req="{ header }">
+                    <DsFilter :name="$t('NY Date Request')" :in-items="computedSettingFilterItems.ey_date_req" @changed="updateSettingFilter('ey_date_req', $event)" />
+                </template>
+                <template v-slot:header.key_in_newyear="{ header }">
+                    <DsFilter :name="$t('Key In New Year')" :in-items="computedSettingFilterItems.key_in_newyear" @changed="updateSettingFilter('key_in_newyear', $event)" />
+                </template>
+                <template v-slot:item.year="{ item }">
+                    <v-chip color="primary" small label outlined class="font-weight-bold">{{ item.year }}</v-chip>
                 </template>
                 <template v-slot:item.action="{ item }">
-                    <v-icon left color="primary" @click="editSetting(item)">mdi-pen</v-icon>  
+                    <v-tooltip top>
+                        <template v-slot:activator="{ on, attrs }">
+                            <v-btn icon  color="error" @click="editSetting(item)" v-bind="attrs" v-on="on">
+                                <v-icon >mdi-pencil</v-icon>
+                            </v-btn>
+                        </template>
+                        <span>{{ $t('Edit') }}</span>
+                    </v-tooltip>
                 </template>
             </v-data-table>
-        </v-col>
-    </v-row>
-</v-card-text>
-<v-card-actions>
-    <v-spacer></v-spacer>
-    <v-btn color="#009688" dark @click="saveSetting">
-        <v-icon left>mdi-content-save</v-icon>  
-        {{ $t('Confirm') }}
-    </v-btn>
-</v-card-actions>
+        </v-container>
+    </v-card-text>
 </v-card>
 </v-dialog>
 </v-row>
@@ -1029,17 +1073,23 @@ export default {
                 year: new Date().getFullYear(),
                 emailDate: '',
                 replyDeadline: '',
-                systemUpdateDate: ''
+                systemUpdateDate: '',
+                eyDateReq: '',
+                keyInNewYear: ''
             },
             settingHeaders: [
-            { text: 'Year', value: 'year', align: 'center', class: 'orange lighten-4' },
-            { text: 'Email Notification Date', value: 'email_date', align: 'center', class: 'orange lighten-4' },
-            { text: 'Reply Deadline', value: 'deadline_date', align: 'center', class: 'orange lighten-4' },
-            { text: 'System Update Date', value: 'update_date', align: 'center', class: 'orange lighten-4' },
-            {text:'',value:'action',align:'center',sortable:false,class:'orange lighten-4'}
+            { text: 'Year', value: 'year', align: 'center', width: '100px', class: 'grey lighten-4' },
+            { text: 'Email Notification Date', value: 'email_date', align: 'center', class: 'grey lighten-4' },
+            { text: 'Reply Deadline', value: 'deadline_date', align: 'center', class: 'grey lighten-4' },
+            { text: 'System Update Date', value: 'update_date', align: 'center', class: 'grey lighten-4' },
+            { text: 'Key In New Year', value: 'key_in_newyear', align: 'center', class: 'grey lighten-4' },
+            { text: 'NY Date Request', value: 'ey_date_req', align: 'center', class: 'grey lighten-4' },
+            { text: '', value: 'action', align: 'center', sortable: false, width: '80px', class: 'grey lighten-4' }
             ],
             settingHistory: [],
             settingFilterValues: {},
+            menuEyDateReq: false,
+            menuKeyInNewYear: false,
         }
     },
     computed: {
@@ -1049,6 +1099,8 @@ export default {
                 email_date: [...new Set(this.settingHistory.map(item => item.email_date))].filter(Boolean),
                 deadline_date: [...new Set(this.settingHistory.map(item => item.deadline_date))].filter(Boolean),
                 update_date: [...new Set(this.settingHistory.map(item => item.update_date))].filter(Boolean),
+                ey_date_req: [...new Set(this.settingHistory.map(item => item.ey_date_req))].filter(Boolean),
+                key_in_newyear: [...new Set(this.settingHistory.map(item => item.key_in_newyear))].filter(Boolean),
             };
             // Sắp xếp các mục lọc
             Object.keys(items).forEach(key => items[key].sort());
@@ -1363,10 +1415,39 @@ export default {
             if (this.statusFilter === 1) { 
                 result = result.filter(item => this.canApproveItemForTodo(item));
             } else if (this.statusFilter === 2) { 
-                result = result.filter(item => 
-                ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
-                ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)
-                );
+                // === TAB PENDING ===
+                result = result.filter(item => {
+                    // Điều kiện 1: Các trạng thái waiting thông thường
+                    const isNormalPending = ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
+                    ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent);
+                    
+                    if (this.settingHistory && Array.isArray(this.settingHistory)) {
+                        const currentYear = new Date().getFullYear();
+                        const today = dayjs().format('YYYY-MM-DD');
+                        const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
+                        
+                        if (setting && setting.email_date === today) {
+                            if (item.fulfilled === 'no' && item.activeRct=== null && item.req_id_oldyear === "") {
+                                // Check 1: Là Submitter
+                                const isSubmitter = this.activeUser && item.submiterInfo && item.submiterInfo.empno === this.activeUser.empno;
+                                if (isSubmitter) return true;
+                                
+                                // Check 2: Là Level 1 Approver
+                                if (item.approval) {
+                                    try {
+                                        const approvalData = JSON.parse(item.approval);
+                                        const level1 = approvalData.find(lvl => lvl.level === 1);
+                                        if (level1 && level1.approver && this.activeUser && level1.approver.empno === this.activeUser.empno) {
+                                            return true;
+                                        }
+                                    } catch (e) { console.error(e); }
+                                }
+                            }
+                        }
+                    }
+                    
+                    return false;
+                });
             } else if (this.statusFilter === 3) { 
                 result = result.filter(item => 
                 (item.status === 'waiting_dept' || 
@@ -1624,7 +1705,9 @@ export default {
                 year: item.year,
                 emailDate: item.email_date,     
                 replyDeadline: item.deadline_date, 
-                systemUpdateDate: item.update_date
+                systemUpdateDate: item.update_date,
+                eyDateReq: item.ey_date_req,
+                keyInNewYear: item.key_in_newyear
             };
         },
         resetSettingForm() {
@@ -1632,7 +1715,10 @@ export default {
                 year: new Date().getFullYear(),
                 emailDate: '',
                 replyDeadline: '',
-                systemUpdateDate: ''
+                systemUpdateDate: '',
+                eyDateReq: '',
+                keyInNewYear: ''
+                
             };
         },
         async saveSetting() {
@@ -1644,6 +1730,8 @@ export default {
             const emailDate = new Date(this.settingForm.emailDate);
             const replyDate = new Date(this.settingForm.replyDeadline);
             const updateDate = new Date(this.settingForm.systemUpdateDate);
+            const eyDate = new Date(this.settingForm.eyDateReq);
+            const keyInNewYearDate = new Date(this.settingForm.keyInNewYear);
             if (replyDate < emailDate) {
                 alert(this.$t('Reply Deadline must be after or equal to Email Notification Date'));
                 return;
@@ -1652,13 +1740,19 @@ export default {
                 alert(this.$t('System Update Date must be after or equal to Reply Deadline'));
                 return;
             }
+            if (eyDate < updateDate) {
+                alert(this.$t('EY Date Req must be after or equal to System Update Date'));
+                return;
+            }
             try {
                 this.loading = true; 
                 const payload = {
                     year: this.settingForm.year,
                     email_date: this.settingForm.emailDate,
                     reply_deadline: this.settingForm.replyDeadline,
-                    system_update_date: this.settingForm.systemUpdateDate
+                    system_update_date: this.settingForm.systemUpdateDate,
+                    ey_date_req: this.settingForm.eyDateReq,
+                    key_in_new_year: this.settingForm.keyInNewYear
                 };
                 const res = await this.$axios.post(this.api + 'saveYearSetting', payload);
                 
@@ -2245,14 +2339,60 @@ export default {
             const all = this.dataFilteredByYear.length;
             let todo = 0, completed = 0, processing = 0, returned = 0, declined = 0;
             
+            // --- CHECK YEAR-END CONDITION ---
+            let isYearEndActive = false;
+            if (this.settingHistory && Array.isArray(this.settingHistory)) {
+                const currentYear = new Date().getFullYear();
+                const today = dayjs().format('YYYY-MM-DD');
+                const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
+                if (setting && setting.email_date === today) {
+                    isYearEndActive = true;
+                }
+            }
+            // --------------------------------
+            
             this.dataFilteredByYear.forEach(item => {
+                // Tính Todo (Giữ nguyên logic cũ)
                 if (this.canApproveItemForTodo(item)) {
                     todo++;
                 }
+                
+                // --- TÍNH PENDING (PROCESSING) ---
+                let isPending = false;
+                
+                // 1. Pending theo trạng thái bình thường (Waiting Dept/Div/HR...)
                 if ([ 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status) ||
                 ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status_amendent)) {
+                    isPending = true;
+                }
+                
+                // 2. Pending theo Year-End (email_date + fulfilled='no')
+                // Dành cho: Submitter HOẶC Level 1 Approver
+                if (!isPending && isYearEndActive && item.fulfilled === 'no' && item.activeRct=== null && item.req_id_oldyear === "") {
+                    const isSubmitter = this.activeUser && item.submiterInfo && item.submiterInfo.empno === this.activeUser.empno;
+                    
+                    let isLevel1Approver = false;
+                    if (item.approval) {
+                        try {
+                            const approvalData = JSON.parse(item.approval);
+                            const level1 = approvalData.find(lvl => lvl.level === 1);
+                            if (level1 && level1.approver && this.activeUser && level1.approver.empno === this.activeUser.empno) {
+                                isLevel1Approver = true;
+                            }
+                        } catch (e) {}
+                    }
+                    
+                    // Nếu là Submitter HOẶC Level 1 Approver thì tính là Pending
+                    if (isSubmitter || isLevel1Approver) {
+                        isPending = true;
+                    }
+                }
+                
+                if (isPending) {
                     processing++;
                 }
+                // ---------------------------------------
+                
                 if (item.status === 'completed' || item.status_amendent === 'completed') {
                     completed++;
                 }
@@ -2961,14 +3101,32 @@ export default {
                 return false;
             }
         },
-        canApproveItemForTodo(item)
-        {
+        canApproveItemForTodo(item) {
+            if (this.settingHistory && Array.isArray(this.settingHistory)) {
+                const currentYear = new Date().getFullYear();
+                const today = dayjs().format('YYYY-MM-DD'); // Lấy ngày hiện tại
+                const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
+                if (setting && setting.email_date === today) {
+                    if (item.fulfilled === 'no' && item.activeRct === null && item.req_id_oldyear === "") {
+                        if (item.approval) {
+                            try {
+                                const approvalData = JSON.parse(item.approval);
+                                const level1 = approvalData.find(lvl => lvl.level === 1);
+                                if (level1 && level1.approver && this.activeUser && level1.approver.empno === this.activeUser.empno) {
+                                    return true; // Hiện trong tab To Do
+                                }
+                            } catch (e) {
+                                console.error('Error checking Level 1 approver:', e);
+                            }
+                        }
+                    }
+                }
+            }
             if (item.approval) {
                 try {
                     const approvalData = JSON.parse(item.approval);
                     const hasReturnedStatus = approvalData.some(level => level.status === 'returned');
                     
-                    // If status is waiting_dept and has returned status, exclude from todo
                     if ((item.status === 'waiting_dept' || item.status_amendent === 'waiting_dept') && hasReturnedStatus) {
                         return false;
                     }
@@ -2977,24 +3135,12 @@ export default {
                 }
             }
             
-            
             if ((item.status === 'completed' || item.status === 'declined') && 
             (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined')) {
                 return false;
             }
-            const validStatuses = [
-            'waiting_dept', 
-            'waiting_div', 
-            'waiting_hr_rec_sf', 
-            'waiting_hr', 
-            'waiting_ad', 
-            'waiting_gm'
-            ];
             
             try {
-                const approval = JSON.parse(item.approval);
-                
-                // Nếu có status_amendent, sử dụng logic khác
                 if (item.status_amendent) {
                     const statusToLevelCode = {
                         'waiting_dept': 'dept_manager',
@@ -3027,7 +3173,7 @@ export default {
                     });
                 }
                 
-                // Logic cũ cho status thông thường
+                const approval = JSON.parse(item.approval);
                 const currentLevel = approval.find(level => level.status === 'waiting');
                 if (!currentLevel) return false;
                 
@@ -4020,13 +4166,14 @@ export default {
             await this.getAllData();
             await this.fetchFlowData();
             await this.fetchData();
-            const savedLocale = localStorage.getItem('preferred-locale');
-            if (savedLocale) {
-                this.$i18n.locale = savedLocale;
-            }
+            // const savedLocale = localStorage.getItem('preferred-locale');
+            // if (savedLocale) {
+            //     this.$i18n.locale = savedLocale;
+            // }
             // this.$nextTick(() => {
             //     this.setDefaultTab();
             // });
+            
         }
         catch (error) {
             console.error('Error in mounted hook:', error);
@@ -4219,7 +4366,11 @@ export default {
             "Historical Settings":"Historical Settings",
             "NY_Prefix":"Req for New Year ",
             "Reply Deadline must be after or equal to Email Notification Date": "Reply Deadline must be after or equal to Email Notification Date",
-            "System Update Date must be after or equal to Reply Deadline": "System Update Date must be after or equal to Reply Deadline"
+            "System Update Date must be after or equal to Reply Deadline": "System Update Date must be after or equal to Reply Deadline",
+            "Email Notify":"Email Notify",
+            "System Update":"System Update",
+            "Key In New Year":"Key In New Year",
+            "NY Date Request":"Expected start date"
         },
         "vi": {
             "ID": "Mã đơn",
@@ -4343,9 +4494,13 @@ export default {
             "System Update Date":"Ngày cập nhật hệ thống",
             "Historical Settings":"Lịch sử cài đặt",
             "Action":"Hành động",
-            "NY_Prefix":"Yêu cầu cho Năm Mới ",
+            "NY_Prefix":"Yêu cầu cho Năm Mới",
             "Reply Deadline must be after or equal to Email Notification Date": "Hạn chót phản hồi phải sau hoặc bằng Ngày gửi Email",
-            "System Update Date must be after or equal to Reply Deadline": "Ngày cập nhật hệ thống phải sau hoặc bằng Hạn chót phản hồi"
+            "System Update Date must be after or equal to Reply Deadline": "Ngày cập nhật hệ thống phải sau hoặc bằng Hạn chót phản hồi",
+            "Email Notify":"Ngày gửi email",
+            "System Update":"Ngày cập nhật hệ thống",
+            "Key In New Year":"Ngày tạo đơn năm mới",
+            "NY Date Request":"Ngày dự kiến bắt đầu"
         },
         "cn": {
             "ID": "表單編號",
@@ -4428,13 +4583,11 @@ export default {
             "Waiting for HR": "等待人事審核",
             "Waiting for Admin": "等待行政審核",
             "Waiting for General Manager": "等待總經理審核",
-            
             "approved": "已核准",
             "completed": "已完成",
             "declined": "已駁回",
             "rejected": "否決",
             "cancelled": "已取消",
-            
             "returned": "已退回",
             "processing": "處理中",
             "pending": "待處理",
@@ -4472,7 +4625,11 @@ export default {
             "Historical Settings":"歷年設定紀錄",
             "NY_Prefix":"新年度需求申請",
             "Reply Deadline must be after or equal to Email Notification Date": "回覆截止日期必須在電子郵件通知日期之後或相同",
-            "System Update Date must be after or equal to Reply Deadline": "系統更新日期必須在回覆截止日期之後或相同"
+            "System Update Date must be after or equal to Reply Deadline": "系統更新日期必須在回覆截止日期之後或相同",
+            "Email Notify":"Email通知日期",
+            "System Update":"系統更新日期",
+            "Key In New Year":"新年度表單申請日",
+            "NY Date Request":"新年度希望報到日期"
         }
     }  
 </i18n>     
