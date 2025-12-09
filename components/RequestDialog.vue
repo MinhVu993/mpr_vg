@@ -410,13 +410,15 @@
     </v-col>
 </div>
 </v-col>
+<!-- Tìm phần Approval History section và thay thế bằng: -->
+
 <v-card-text class="approval-history-section">
     <div class="d-flex align-center mb-2">
         <v-icon color="primary" class="mr-2">mdi-history</v-icon>
         <span class="text-subtitle-1 font-weight-medium">{{ $t("Approval History") }}</span>
     </div>
-    
     <v-expansion-panels flat>
+        <!-- Current Approval History -->
         <v-expansion-panel>
             <v-expansion-panel-header>
                 <div class="d-flex align-center">
@@ -501,7 +503,93 @@
 </v-stepper>
 </v-expansion-panel-content>
 </v-expansion-panel>
-</v-expansion-panels>
+
+        <!-- Previous Approval History - Hiển thị khi activeRct không rỗng -->
+        <v-expansion-panel v-if="showPreviousApprovalHistory">
+            <v-expansion-panel-header>
+                <div class="d-flex align-center">
+                    {{ $t("Previous Approval History") }}
+                </div>
+            </v-expansion-panel-header>
+            <v-expansion-panel-content>
+                <v-stepper v-model="previousApprovalStepper" class="approval-stepper" flat>
+                    <v-stepper-header>
+                        <v-stepper-step v-if="editData" :complete="true" :editable="true"
+                        color="primary" :step="0" :key="'previous-submitter-step'"
+                        class="submitter-step" style="pointer-events: none;">
+                        <div>
+                            <div class="caption font-weight-bold">
+                                {{ $t('Submitter') }}
+                            </div>
+                            <div class="caption">
+                                {{
+                                    (() => {
+                                        try {
+                                            let s = editData?.submitter;
+                                            if (typeof s === 'string') {
+                                                s = JSON.parse(s);
+                                            }
+                                            return s ? `${s.empno || ''} - ${s.name || ''} -
+                                                            ${s.dept_sumt || ''}` : '';
+                                        } catch (e) {
+                                            console.error('Error parsing submitter data:', e);
+                                            return '';
+                                        }
+                                    })()
+                                }}
+                            </div>
+                            <div class="caption">
+                                {{ editData.created_at || '' }}
+                            </div>
+                        </div>
+                    </v-stepper-step>
+                    <template v-for="(step, idx) in previousApprovalStepperSteps">
+                        <v-stepper-step :complete="step.status === 'approved'"
+                        :editable="false"
+                        :rules="step.shouldShowError ? [() => false] : []"
+                        :color="getApprovalStatusColor(step.status)" step
+                        :error-icon="step.shouldShowError ? 'mdi-cancel' : ''"
+                        complete-icon="mdi-check" :key="`prev-${idx}`">
+                        <template>
+                            <div class="caption">{{ step.levelName }}</div>
+                            <div class="caption">
+                                {{ step.approver?.empno }} - {{ step.approver?.name }} -
+                                {{ getApprovalStatusText(step.status) }}
+                            </div>
+                            <div class="caption">{{ step.processed_at }}</div>
+                            <div class="approval-record-container caption">
+                                <div v-if="step.reason_denied"
+                                class="record-item error--text">
+                                <v-icon small color="error"
+                                class="mr-1">mdi-close</v-icon>
+                                <span class="font-italic">{{ step.reason_denied
+                                }}</span>
+                            </div>
+                            <div v-if="step.return_reason"
+                            class="record-item warning--text">
+                            <v-icon small color="#FFA500"
+                            class="mr-1">mdi-undo-variant</v-icon>
+                            <span class="font-italic">{{ step.return_reason
+                            }}</span>
+                        </div>
+                        <div v-if="step.approval_record"
+                        class="record-item success--text">
+                        <v-icon small color="success"
+                        class="mr-1">mdi-check</v-icon>
+                        <span class="font-italic">{{ step.approval_record
+                        }}</span>
+                    </div>
+                </div>
+            </template>
+        </v-stepper-step>
+        <v-divider v-if="idx < previousApprovalStepperSteps.length - 1"
+        :key="`prev-div-${idx}`"></v-divider>
+    </template>
+</v-stepper-header>
+</v-stepper>
+</v-expansion-panel-content>
+</v-expansion-panel>
+    </v-expansion-panels>
 </v-card-text>
 
 <v-row class="dialog-actions">
@@ -3118,6 +3206,79 @@ export default {
         },
     },
     computed: {
+        showPreviousApprovalHistory() {
+    // Hiển thị khi activeRct không rỗng và có logs data
+    if (!this.editData) return false;
+    
+    const hasActiveRct = this.editData.activeRct !== null && 
+                         this.editData.activeRct !== undefined && 
+                         this.editData.activeRct !== '';
+    
+    if (!hasActiveRct) return false;
+    
+    // Kiểm tra xem có logs data không
+    if (!this.editData.logs) return false;
+    
+    try {
+        const logs = typeof this.editData.logs === 'string' ? 
+                     JSON.parse(this.editData.logs) : this.editData.logs;
+        return Array.isArray(logs) && logs.length > 0;
+    } catch (e) {
+        console.error('Error parsing logs:', e);
+        return false;
+    }
+},
+
+previousApprovalStepper() {
+    return 1;
+},
+
+previousApprovalStepperSteps() {
+    if (!this.editData || !this.editData.logs) return [];
+    
+    try {
+        let logs = typeof this.editData.logs === 'string' ? 
+                   JSON.parse(this.editData.logs) : this.editData.logs;
+        
+        // Lấy phần tử cuối cùng từ mảng logs
+        if (!Array.isArray(logs) || logs.length === 0) return [];
+        
+        const previousApprovalData = logs[logs.length - 1];
+        
+        if (!Array.isArray(previousApprovalData)) return [];
+        
+        const levelNames = {
+            1: this.$t("Department Manager"),
+            2: this.$t("Division Manager"),
+            3: this.$t("HR Recruitment Staff"),
+            4: this.$t("HR Manager"),
+            5: this.$t("AD Manager"),
+            6: this.$t("GM Manager")
+        };
+        
+        return previousApprovalData
+            .filter(lv => lv.status && ["waiting", "approved", "rejected", "returned"].includes(lv.status))
+            .map(lv => {
+                const reasonDeniedText = this.getLocalizedFromMultiLang(lv.reason_denied);
+                const returnReasonText = this.getLocalizedFromMultiLang(lv.return_reason);
+                
+                return {
+                    level: lv.level,
+                    levelName: levelNames[lv.level] || lv.type || "",
+                    approver: lv.approver || { empno: '', name: '', dept: '' },
+                    status: lv.status,
+                    processed_at: lv.processed_at,
+                    reason_denied: reasonDeniedText,
+                    return_reason: returnReasonText,
+                    shouldShowError: lv.status === "rejected",
+                    approval_record: lv.approval_record || ""
+                };
+            });
+    } catch (e) {
+        console.error("Error in previousApprovalStepperSteps:", e);
+        return [];
+    }
+},
         isNewYearProcessing() {
             // 1. Đang hiện khung radio
             if (this.showNewYearSection) return true;

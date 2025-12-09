@@ -3377,7 +3377,6 @@ class vgMprCtrl extends Controller
                                                                                                 'reply_deadline' => 'required|date|after_or_equal:email_date',
                                                                                                 'system_update_date' => 'required|date|after_or_equal:reply_deadline',
                                                                                             ]);
-                                                                                            
                                                                                             if ($validator->fails()) {
                                                                                                 return response()->json([
                                                                                                     'success' => false,
@@ -3390,7 +3389,9 @@ class vgMprCtrl extends Controller
                                                                                                 [
                                                                                                     'email_date' => $request->email_date,
                                                                                                     'deadline_date' => $request->reply_deadline, 
-                                                                                                    'update_date' => $request->system_update_date
+                                                                                                    'update_date' => $request->system_update_date,
+                                                                                                    'ey_date_req' => $request->ey_date_req,
+                                                                                                    'key_in_newyear' => $request->key_in_new_year,
                                                                                                     ]
                                                                                                 );
                                                                                                 
@@ -3408,6 +3409,7 @@ class vgMprCtrl extends Controller
                                                                                                 ], 500);
                                                                                             }
                                                                                         }
+
                                                                                         private function sendGroupedYearEndAutoCloseEmail($email, $requests)
                                                                                         {
                                                                                             try {

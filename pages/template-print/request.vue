@@ -319,7 +319,7 @@
                                                             layout: "print",
                                                             data() {
                                                                 return {
-                                                                    api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
+                                                                    api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
                                                                     formData: null,
                                                                     duty:[],
                                                                     otherReason: []
