@@ -759,7 +759,7 @@
     </v-card-text>
 </v-card>
 </v-dialog>
-<v-dialog v-model="dlogSetting" max-width="1100px" scrollable>
+<v-dialog v-model="dlogSetting" max-width="1250px" scrollable>
     <v-card>
         <v-card-title class="white--text py-3" style="background-color: #00838F;">
             <v-icon left dark>mdi-cog-outline</v-icon>
@@ -795,7 +795,7 @@
                                     <template v-slot:activator="{ on, attrs }">
                                         <v-text-field
                                         v-model="settingForm.emailDate"
-                                        :label="$t('Email Notify')"
+                                        :label="$t('Email Notification Date')"
                                         readonly
                                         outlined
                                         dense
@@ -833,7 +833,7 @@
                                     <template v-slot:activator="{ on, attrs }">
                                         <v-text-field
                                         v-model="settingForm.systemUpdateDate"
-                                        :label="$t('System Update')"
+                                        :label="$t('System Update Date')"
                                         readonly
                                         outlined
                                         dense
@@ -3083,7 +3083,6 @@
                 }
             },
             canApproveItemForTodo(item) {
-                // 1. Logic cũ: Nếu đơn bị trả lại (returned) tại bước dept, không hiển thị ở To Do chung
                 if (item.approval) {
                     try {
                         const approvalData = JSON.parse(item.approval);
@@ -3096,20 +3095,14 @@
                     }
                 }
                 
-                // 2. --- LOGIC YEAR END (KIỂM TRA NGÀY CHẶT CHẼ) ---
                 if (this.settingHistory && Array.isArray(this.settingHistory)) {
                     const currentYear = new Date().getFullYear();
                     const today = dayjs().format('YYYY-MM-DD');
                     const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
-                    
-                    // ĐIỀU KIỆN QUAN TRỌNG: 
-                    // Phải có setting VÀ hôm nay phải nằm TRONG KHOẢNG (email_date <= today <= deadline_date)
                     if (setting && setting.email_date && setting.deadline_date) {
-                        // Kiểm tra: Nếu hôm nay nhỏ hơn email_date HOẶC hôm nay lớn hơn deadline_date -> BỎ QUA logic này
                         const isWithinRange = (today >= setting.email_date) && (today <= setting.deadline_date);
                         
                         if (isWithinRange) {
-                            // Nếu trong khoảng ngày cho phép, kiểm tra tiếp các điều kiện của đơn
                             if (item.fulfilled === 'no' && 
                             !item.req_id_oldyear && 
                             !item.deny_temp && 
@@ -4329,9 +4322,9 @@
             "Loading approver info...":"Loading approver info...",
             "Current":"Current",
             "loadingData":"Loading data...please wait",
-            "Year-End Settings":"Year-End Settings",
-            "year":"Year",
-            "Email Notification Date":"Email Notification Date",
+            "Year-End Settings":"Annual Settlement Settings",
+            "year":"Fiscal Year",
+            "Email Notification Date":"Fiscal Year Settlement Mail Date",
             "Reply Deadline":"Reply Deadline",
             "System Update Date":"System Update Date",
             "Historical Settings":"Historical Settings",
@@ -4340,8 +4333,8 @@
             "System Update Date must be after or equal to Reply Deadline": "System Update Date must be after or equal to Reply Deadline",
             "Email Notify":"Email Notify",
             "System Update":"System Update",
-            "Key In New Year":"Key In New Year",
-            "NY Date Request":"Expected start date"
+            "Key In New Year":"New Year Form Apply Date",
+            "NY Date Request":"New Year Onboard Date"
         },
         "vi": {
             "ID": "Mã đơn",
@@ -4458,9 +4451,9 @@
             "Loading approver info...":"Đang tải thông tin người phê duyệt...",
             "Current":"Hiện tại",
             "loadingData":"Đang tải dữ liệu...vui lòng chờ",
-            "Year-End Settings":"Cài đặt kết toán",
-            "year":"Năm",
-            "Email Notification Date":"Ngày thông báo qua email",
+            "Year-End Settings":"Cài đặt quyết toán năm",
+            "year":"Năm tài chính",
+            "Email Notification Date":"Ngày gửi mail quyết toán năm",
             "Reply Deadline":"Hạn cuối phản hồi",
             "System Update Date":"Ngày cập nhật hệ thống",
             "Historical Settings":"Lịch sử cài đặt",
@@ -4470,8 +4463,8 @@
             "System Update Date must be after or equal to Reply Deadline": "Ngày cập nhật hệ thống phải sau hoặc bằng Hạn chót phản hồi",
             "Email Notify":"Ngày gửi email",
             "System Update":"Ngày cập nhật hệ thống",
-            "Key In New Year":"Ngày tạo đơn năm mới",
-            "NY Date Request":"Ngày dự kiến bắt đầu"
+            "Key In New Year":"Ngày nộp form năm mới",
+            "NY Date Request":"Ngày dự kiến nhận việc năm mới"
         },
         "cn": {
             "ID": "表單編號",
@@ -4590,9 +4583,9 @@
             "Loading approver info...":"正在加載審批人信息...",
             "Current":"當前",
             "loadingData":"正在加載數據...請稍候",
-            "Year-End Settings": "年度結算條件設定",
+            "Year-End Settings": "年度結算設定",
             "year":"年度",
-            "Email Notification Date":"年度結算email通知日期",
+            "Email Notification Date":"年度結算 email 通知日期",
             "Reply Deadline":"最後回覆期限日期",
             "System Update Date":"系統更新狀態日期",
             "Historical Settings":"歷年設定紀錄",
@@ -4602,7 +4595,7 @@
             "Email Notify":"Email通知日期",
             "System Update":"系統更新日期",
             "Key In New Year":"新年度表單申請日",
-            "NY Date Request":"新年度希望報到日期"
+            "NY Date Request":"新年度希望報到日"
         }
     }  
 </i18n>     
