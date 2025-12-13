@@ -315,260 +315,206 @@
                                                         </template>
                                                         
                                                         <script>
-                                                        export default {
-                                                            layout: "print",
-                                                            data() {
-                                                                return {
-                                                                    api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
-                                                                    formData: null,
-                                                                    duty:[],
-                                                                    otherReason: []
-                                                                };
-                                                            },
-                                                            async created() {
-                                                                await this.getDataModel();
-                                                                const id = this.$route.query.id;
-                                                                
-                                                                if (id) {
-                                                                    try {
-                                                                        const response = await this.$axios.get(`${this.api}getMprById/${id}`);
-                                                                        if (response.data && response.data.success) {
-                                                                            const data = response.data.data;
-                                                                            let qtyReqData;
-                                                                            try {
-                                                                                qtyReqData = data.qty_req ? JSON.parse(data.qty_req) : {};
-                                                                            } catch (e) {
-                                                                                console.error("Error parsing qty_req:", e);
-                                                                                qtyReqData = {};
-                                                                            }
-                                                                            
-                                                                            // Parse deny_temp for recruited value
-                                                                            let denyTempData = null;
-                                                                            try {
-                                                                                denyTempData = data.deny_temp ? JSON.parse(data.deny_temp) : null;
-                                                                            } catch (e) {
-                                                                                console.error("Error parsing deny_temp:", e);
-                                                                                denyTempData = null;
-                                                                            }
-                                                                            
-                                                                            if (data.req_id_change) {
-                                                                                let compSkill = data.comp_skill ? JSON.parse(data.comp_skill || '{}') : {};
-                                                                                if (data.computerSkills_change) {
-                                                                                    try {
-                                                                                        let computerChanges = JSON.parse(data.computerSkills_change);
-                                                                                        if (Array.isArray(computerChanges) && computerChanges.length > 0) {
-                                                                                            // Get the last change
-                                                                                            compSkill = computerChanges[computerChanges.length - 1];
-                                                                                        }
-                                                                                    } catch (e) {
-                                                                                        console.error("Error parsing computerSkills_change:", e);
-                                                                                    }
-                                                                                }
-                                                                                
-                                                                                // For language skills
-                                                                                let eitherSkill = data.either_skill;
-                                                                                if (data.either_change) {
-                                                                                    try {
-                                                                                        // Parse either_change properly
-                                                                                        if (data.either_change.includes('[')) {
-                                                                                            // It's a JSON string array
-                                                                                            eitherSkill = JSON.parse(data.either_change);
-                                                                                        } else {
-                                                                                            // It's a single value
-                                                                                            eitherSkill = data.either_change;
-                                                                                        }
-                                                                                    } catch (e) {
-                                                                                        console.error("Error parsing either_change:", e);
-                                                                                    }
-                                                                                }
-                                                                                
-                                                                                let engSkill = data.eng_skill;
-                                                                                if (data.english_change) {
-                                                                                    try {
-                                                                                        // Parse english_change properly
-                                                                                        if (data.english_change.includes('[')) {
-                                                                                            // It's a JSON string array
-                                                                                            engSkill = JSON.parse(data.english_change);
-                                                                                        } else {
-                                                                                            // It's a single value
-                                                                                            engSkill = data.english_change;
-                                                                                        }
-                                                                                    } catch (e) {
-                                                                                        console.error("Error parsing english_change:", e);
-                                                                                    }
-                                                                                }
-                                                                                
-                                                                                let chnSkill = data.chn_skill;
-                                                                                if (data.chinese_change) {
-                                                                                    try {
-                                                                                        // Parse chinese_change properly
-                                                                                        if (data.chinese_change.includes('[')) {
-                                                                                            // It's a JSON string array
-                                                                                            chnSkill = JSON.parse(data.chinese_change);
-                                                                                        } else {
-                                                                                            // It's a single value
-                                                                                            chnSkill = data.chinese_change;
-                                                                                        }
-                                                                                    } catch (e) {
-                                                                                        console.error("Error parsing chinese_change:", e);
-                                                                                    }
-                                                                                }
-                                                                                
-                                                                                // Process quantity changes
-                                                                                if (data.change_req) {
-                                                                                    try {
-                                                                                        const changeReq = JSON.parse(data.change_req);
-                                                                                        if (Array.isArray(changeReq) && changeReq.length > 0) {
-                                                                                            // Get the last quantity change
-                                                                                            const lastChange = changeReq[changeReq.length - 1];
-                                                                                            if (lastChange.change_qty) {
-                                                                                                // Find which key in qtyReqData has a non-zero value
-                                                                                                Object.keys(qtyReqData).forEach(key => {
-                                                                                                    if (qtyReqData[key] > 0) {
-                                                                                                        qtyReqData[key] = parseInt(lastChange.change_qty);
-                                                                                                    }
-                                                                                                });
-                                                                                            }
-                                                                                        }
-                                                                                    } catch (e) {
-                                                                                        console.error("Error parsing change_req:", e);
-                                                                                    }
-                                                                                }
-                                                                                
-                                                                                // Format data with possibly changed values
-                                                                                this.formData = {
-                                                                                    submitter: JSON.parse(data.submitter || '{}'),
-                                                                                    education: JSON.parse(data.edu || '{}'),
-                                                                                    qtyReq: qtyReqData,
-                                                                                    engSkill: engSkill ? JSON.parse(engSkill || '[]') : null,
-                                                                                    chnSkill: chnSkill ? JSON.parse(chnSkill || '[]') : null,
-                                                                                    either_skill: eitherSkill,
-                                                                                    workExp: JSON.parse(data.w_exp || '{}'),
-                                                                                    reasonExp: data.reason_exp,
-                                                                                    compSkill: compSkill,
-                                                                                    positionInfo: JSON.parse(data.pos || '{}'),
-                                                                                    approval: JSON.parse(data.approval || '[]'),
-                                                                                    req_id: data.req_id,
-                                                                                    key_in_date: data.key_in_date,
-                                                                                    date_req: data.date_req,
-                                                                                    spec: data.spec,
-                                                                                    jd: data.jd,
-                                                                                    att_jd: data.att_jd,
-                                                                                    att_dis: data.att_dis,
-                                                                                    wps: data.wps,
-                                                                                    old_emp: data.old_emp,
-                                                                                    raw_qty_req: data.qty_req,
-                                                                                    isOther_reason: data.isOther_reason,
-                                                                                    isChangeRequest: !!data.req_id_change,
-                                                                                    status_amendent: data.status_amendent,
-                                                                                    denyTempData: denyTempData,
-                                                                                    recruited: data.recruited
-                                                                                };
-                                                                            } else {
-                                                                                // No change request, use original data
-                                                                                this.formData = {
-                                                                                    submitter: JSON.parse(data.submitter || '{}'),
-                                                                                    education: JSON.parse(data.edu || '{}'),
-                                                                                    qtyReq: qtyReqData,
-                                                                                    engSkill: JSON.parse(data.eng_skill || '[]'),
-                                                                                    chnSkill: JSON.parse(data.chn_skill || '[]'),
-                                                                                    either_skill: data.either_skill,
-                                                                                    workExp: JSON.parse(data.w_exp || '{}'),
-                                                                                    reasonExp: data.reason_exp,
-                                                                                    compSkill: JSON.parse(data.comp_skill || '{}'),
-                                                                                    positionInfo: JSON.parse(data.pos || '{}'),
-                                                                                    approval: JSON.parse(data.approval || '[]'),
-                                                                                    req_id: data.req_id,
-                                                                                    key_in_date: data.key_in_date,
-                                                                                    date_req: data.date_req,
-                                                                                    spec: data.spec,
-                                                                                    jd: data.jd,
-                                                                                    att_jd: data.att_jd,
-                                                                                    att_dis: data.att_dis,
-                                                                                    wps: data.wps,
-                                                                                    old_emp: data.old_emp,
-                                                                                    raw_qty_req: data.qty_req,
-                                                                                    isOther_reason: data.isOther_reason,
-                                                                                    isChangeRequest: false,
-                                                                                    status_amendent: data.status_amendent,
-                                                                                    denyTempData: denyTempData,
-                                                                                    recruited: data.recruited
-                                                                                };
-                                                                            }
-                                                                        }
-                                                                    } catch (error) {
-                                                                        console.error('Error fetching print data:', error);
-                                                                    }
-                                                                }
-                                                            },
-                                                            watch: {
-                                                                formData: {
-                                                                    handler(newVal) {
-                                                                        if (newVal) {
-                                                                            this.$nextTick(() => {
-                                                                                this.updateFormFields();
-                                                                            });
-                                                                        }
-                                                                    },
-                                                                    immediate: true
-                                                                }
-                                                            },
-                                                            
-                                                            mounted() {
-                                                                this.$nextTick(() => {
-                                                                    if (this.formData) {
-                                                                        this.updateFormFields();
-                                                                    }
-                                                                });
-                                                            },
-                                                            methods: {
-                                                                async getDataModel() {
-                                                                    let params = {
-                                                                        loc: 'vg'
+                                                            export default {
+                                                                layout: "print",
+                                                                data() {
+                                                                    return {
+                                                                        api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
+                                                                        formData: null,
+                                                                        duty:[],
+                                                                        otherReason: []
                                                                     };
-                                                                    try {
-                                                                        const response = await this.$axios.post(this.api + "getDataModel", params);
-                                                                        if (response.data) {
-                                                                            const dutyData = response.data.dataDutyHrm || [];
-                                                                            this.duty = dutyData;
-                                                                            this.otherReason = response.data.dataOtherReason;
-                                                                            
-                                                                            return dutyData;
-                                                                        } else {
-                                                                            console.error('API response missing data');
+                                                                },
+                                                                async created() {
+                                                                    await this.getDataModel();
+                                                                    const id = this.$route.query.id;
+                                                                    
+                                                                    if (id) {
+                                                                        try {
+                                                                            const response = await this.$axios.get(`${this.api}getMprById/${id}`);
+                                                                            if (response.data && response.data.success) {
+                                                                                const data = response.data.data;
+                                                                                let qtyReqData;
+                                                                                try {
+                                                                                    qtyReqData = data.qty_req ? JSON.parse(data.qty_req) : {};
+                                                                                } catch (e) {
+                                                                                    console.error("Error parsing qty_req:", e);
+                                                                                    qtyReqData = {};
+                                                                                }
+                                                                                
+                                                                                // parse logs safely (may be stringified array or array-of-arrays)
+                                                                                let parsedLogs = null;
+                                                                                try {
+                                                                                    parsedLogs = data.logs ? JSON.parse(data.logs) : null;
+                                                                                } catch (e) {
+                                                                                    console.error("Error parsing logs:", e);
+                                                                                    parsedLogs = null;
+                                                                                }
+                                                                                
+                                                                                // Parse deny_temp for recruited value
+                                                                                let denyTempData = null;
+                                                                                try {
+                                                                                    denyTempData = data.deny_temp ? JSON.parse(data.deny_temp) : null;
+                                                                                } catch (e) {
+                                                                                    console.error("Error parsing deny_temp:", e);
+                                                                                    denyTempData = null;
+                                                                                }
+                                                                                
+                                                                                if (data.req_id_change) {
+                                                                                    // ...existing change-request parsing logic...
+                                                                                    // (keep existing parsing for compSkill, eitherSkill, engSkill, chnSkill, change_req adjustments)
+                                                                                    // After processing, ensure we include activeRct, logsParsed and req_id_oldyear
+                                                                                    this.formData = {
+                                                                                        submitter: JSON.parse(data.submitter || '{}'),
+                                                                                        education: JSON.parse(data.edu || '{}'),
+                                                                                        qtyReq: qtyReqData,
+                                                                                        engSkill: engSkill ? JSON.parse(engSkill || '[]') : null,
+                                                                                        chnSkill: chnSkill ? JSON.parse(chnSkill || '[]') : null,
+                                                                                        either_skill: eitherSkill,
+                                                                                        workExp: JSON.parse(data.w_exp || '{}'),
+                                                                                        reasonExp: data.reason_exp,
+                                                                                        compSkill: compSkill,
+                                                                                        positionInfo: JSON.parse(data.pos || '{}'),
+                                                                                        approval: JSON.parse(data.approval || '[]'),
+                                                                                        req_id: data.req_id,
+                                                                                        key_in_date: data.key_in_date,
+                                                                                        date_req: data.date_req,
+                                                                                        spec: data.spec,
+                                                                                        jd: data.jd,
+                                                                                        att_jd: data.att_jd,
+                                                                                        att_dis: data.att_dis,
+                                                                                        wps: data.wps,
+                                                                                        old_emp: data.old_emp,
+                                                                                        raw_qty_req: data.qty_req,
+                                                                                        isOther_reason: data.isOther_reason,
+                                                                                        isChangeRequest: !!data.req_id_change,
+                                                                                        status_amendent: data.status_amendent,
+                                                                                        denyTempData: denyTempData,
+                                                                                        recruited: data.recruited,
+                                                                                        activeRct: data.activeRct || null,            // ensure activeRct included
+                                                                                        logsParsed: parsedLogs,                        // ensure logsParsed included
+                                                                                        req_id_oldyear: data.req_id_oldyear || null   // include req_id_oldyear
+                                                                                    };
+                                                                                } else {
+                                                                                    // No change request, use original data - ensure activeRct, logsParsed and req_id_oldyear are included
+                                                                                    this.formData = {
+                                                                                        submitter: JSON.parse(data.submitter || '{}'),
+                                                                                        education: JSON.parse(data.edu || '{}'),
+                                                                                        qtyReq: qtyReqData,
+                                                                                        engSkill: JSON.parse(data.eng_skill || '[]'),
+                                                                                        chnSkill: JSON.parse(data.chn_skill || '[]'),
+                                                                                        either_skill: data.either_skill,
+                                                                                        workExp: JSON.parse(data.w_exp || '{}'),
+                                                                                        reasonExp: data.reason_exp,
+                                                                                        compSkill: JSON.parse(data.comp_skill || '{}'),
+                                                                                        positionInfo: JSON.parse(data.pos || '{}'),
+                                                                                        approval: JSON.parse(data.approval || '[]'),
+                                                                                        req_id: data.req_id,
+                                                                                        key_in_date: data.key_in_date,
+                                                                                        date_req: data.date_req,
+                                                                                        spec: data.spec,
+                                                                                        jd: data.jd,
+                                                                                        att_jd: data.att_jd,
+                                                                                        att_dis: data.att_dis,
+                                                                                        wps: data.wps,
+                                                                                        old_emp: data.old_emp,
+                                                                                        raw_qty_req: data.qty_req,
+                                                                                        isOther_reason: data.isOther_reason,
+                                                                                        isChangeRequest: false,
+                                                                                        status_amendent: data.status_amendent,
+                                                                                        denyTempData: denyTempData,
+                                                                                        recruited: data.recruited,
+                                                                                        activeRct: data.activeRct || null,     // include activeRct
+                                                                                        logsParsed: parsedLogs,                 // include parsed logs consistently
+                                                                                        req_id_oldyear: data.req_id_oldyear || null // include req_id_oldyear
+                                                                                    };
+                                                                                }
+                                                                            }
+                                                                        } catch (error) {
+                                                                            console.error('Error fetching print data:', error);
+                                                                        }
+                                                                    }
+                                                                },
+                                                                watch: {
+                                                                    formData: {
+                                                                        handler(newVal) {
+                                                                            if (newVal) {
+                                                                                this.$nextTick(() => {
+                                                                                    this.updateFormFields();
+                                                                                });
+                                                                            }
+                                                                        },
+                                                                        immediate: true
+                                                                    }
+                                                                },
+                                                                
+                                                                mounted() {
+                                                                    this.$nextTick(() => {
+                                                                        if (this.formData) {
+                                                                            this.updateFormFields();
+                                                                        }
+                                                                    });
+                                                                },
+                                                                methods: {
+                                                                    async getDataModel() {
+                                                                        let params = {
+                                                                            loc: 'vg'
+                                                                        };
+                                                                        try {
+                                                                            const response = await this.$axios.post(this.api + "getDataModel", params);
+                                                                            if (response.data) {
+                                                                                const dutyData = response.data.dataDutyHrm || [];
+                                                                                this.duty = dutyData;
+                                                                                this.otherReason = response.data.dataOtherReason;
+                                                                                
+                                                                                return dutyData;
+                                                                            } else {
+                                                                                console.error('API response missing data');
+                                                                                this.duty = [];
+                                                                                return [];
+                                                                            }
+                                                                        } catch (error) {
+                                                                            console.error('Error fetching duty data:', error);
+                                                                            if (error.response) {
+                                                                                console.error('API error details:', error.response.data);
+                                                                            }
                                                                             this.duty = [];
                                                                             return [];
                                                                         }
-                                                                    } catch (error) {
-                                                                        console.error('Error fetching duty data:', error);
-                                                                        if (error.response) {
-                                                                            console.error('API error details:', error.response.data);
-                                                                        }
-                                                                        this.duty = [];
-                                                                        return [];
-                                                                    }
-                                                                },
-                                                                getLocalizedOtherReason(reason) {
-                                                                    try {
-                                                                        if (!reason) return '';
-                                                                        
-                                                                        // Nếu reason là object hoặc JSON string object -> parse và trả về vi/cn
-                                                                        if (typeof reason === 'object' && reason !== null) {
-                                                                            return `${reason.vi}/${reason.cn}`;
-                                                                        }
-                                                                        
-                                                                        if (typeof reason === 'string') {
-                                                                            const trimmed = reason.trim();
-                                                                            // JSON string object
-                                                                            if (trimmed.startsWith('{')) {
-                                                                                const parsedReason = JSON.parse(trimmed);
-                                                                                return `${parsedReason.vi}/${parsedReason.cn}`;
+                                                                    },
+                                                                    getLocalizedOtherReason(reason) {
+                                                                        try {
+                                                                            if (!reason) return '';
+                                                                            
+                                                                            // Nếu reason là object hoặc JSON string object -> parse và trả về vi/cn
+                                                                            if (typeof reason === 'object' && reason !== null) {
+                                                                                return `${reason.vi}/${reason.cn}`;
                                                                             }
                                                                             
-                                                                            // Nếu là id dạng "1" hoặc number -> tìm trong this.otherReason
-                                                                            const id = parseInt(trimmed);
-                                                                            if (!isNaN(id) && Array.isArray(this.otherReason)) {
-                                                                                const found = this.otherReason.find(r => Number(r.id) === id);
+                                                                            if (typeof reason === 'string') {
+                                                                                const trimmed = reason.trim();
+                                                                                // JSON string object
+                                                                                if (trimmed.startsWith('{')) {
+                                                                                    const parsedReason = JSON.parse(trimmed);
+                                                                                    return `${parsedReason.vi}/${parsedReason.cn}`;
+                                                                                }
+                                                                                
+                                                                                // Nếu là id dạng "1" hoặc number -> tìm trong this.otherReason
+                                                                                const id = parseInt(trimmed);
+                                                                                if (!isNaN(id) && Array.isArray(this.otherReason)) {
+                                                                                    const found = this.otherReason.find(r => Number(r.id) === id);
+                                                                                    if (found) {
+                                                                                        const rn = typeof found.reason_name === 'string'
+                                                                                        ? JSON.parse(found.reason_name)
+                                                                                        : found.reason_name;
+                                                                                        return `${rn.vi}/${rn.cn}`;
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                            
+                                                                            // Nếu là number id
+                                                                            if (typeof reason === 'number' && Array.isArray(this.otherReason)) {
+                                                                                const found = this.otherReason.find(r => Number(r.id) === reason);
                                                                                 if (found) {
                                                                                     const rn = typeof found.reason_name === 'string'
                                                                                     ? JSON.parse(found.reason_name)
@@ -576,567 +522,620 @@
                                                                                     return `${rn.vi}/${rn.cn}`;
                                                                                 }
                                                                             }
+                                                                            
+                                                                            // Fallback: trả về nguyên bản
+                                                                            return String(reason);
+                                                                        } catch (error) {
+                                                                            console.error('Error parsing other reason:', error);
+                                                                            return reason || '';
                                                                         }
+                                                                    },
+                                                                    getLevelName(dutyNo) {
+                                                                        if (!dutyNo || !this.duty) return '';
                                                                         
-                                                                        // Nếu là number id
-                                                                        if (typeof reason === 'number' && Array.isArray(this.otherReason)) {
-                                                                            const found = this.otherReason.find(r => Number(r.id) === reason);
-                                                                            if (found) {
-                                                                                const rn = typeof found.reason_name === 'string'
-                                                                                ? JSON.parse(found.reason_name)
-                                                                                : found.reason_name;
-                                                                                return `${rn.vi}/${rn.cn}`;
-                                                                            }
-                                                                        }
+                                                                        const dutyItem = this.duty.find(d => d.duty_no === dutyNo);
+                                                                        if (!dutyItem) return dutyNo;
                                                                         
-                                                                        // Fallback: trả về nguyên bản
-                                                                        return String(reason);
-                                                                    } catch (error) {
-                                                                        console.error('Error parsing other reason:', error);
-                                                                        return reason || '';
-                                                                    }
-                                                                },
-                                                                getLevelName(dutyNo) {
-                                                                    if (!dutyNo || !this.duty) return '';
-                                                                    
-                                                                    const dutyItem = this.duty.find(d => d.duty_no === dutyNo);
-                                                                    if (!dutyItem) return dutyNo;
-                                                                    
-                                                                    try {
-                                                                        const dutyName = typeof dutyItem.duty_name === 'string' 
-                                                                        ? JSON.parse(dutyItem.duty_name) 
-                                                                        : dutyItem.duty_name;
-                                                                        
-                                                                        return `${dutyName.vi}/${dutyName.cn}`; // Return format: Vietnamese/Chinese
-                                                                    } catch (e) {
-                                                                        console.error('Error parsing duty name:', e);
-                                                                        return dutyNo;
-                                                                    }
-                                                                },
-                                                                updateFormFields() {
-                                                                    if (!this.formData) return;
-                                                                    
-                                                                    // Education level
-                                                                    if (this.formData.education) {
-                                                                        const eduLevel = parseInt(this.formData.education);
-                                                                        if (eduLevel === 1)  this.$refs.eduTHCS.checked = true;
-                                                                        else if (eduLevel === 2) this.$refs.eduPTTH.checked = true;
-                                                                        else if (eduLevel === 3) this.$refs.eduTC.checked = true;
-                                                                        else if (eduLevel === 4) this.$refs.eduCD.checked = true;
-                                                                        else if (eduLevel === 5) this.$refs.eduDH.checked = true;
-                                                                    }
-                                                                    
-                                                                    // Work experience
-                                                                    if (this.formData.workExp) {
-                                                                        const expLevel = parseInt(this.formData.workExp);
-                                                                        if (expLevel === 1) this.$refs.expNo.checked = true;
-                                                                        else if (expLevel === 2) this.$refs.expbl1.checked = true;
-                                                                        else if (expLevel === 3) this.$refs.exp12.checked = true;
-                                                                        else if (expLevel === 4) this.$refs.exp35.checked = true;
-                                                                        else if (expLevel === 5) this.$refs.exp5.checked = true;
-                                                                    }
-                                                                    
-                                                                    // Reason for expansion
-                                                                    if (this.formData.reasonExp) {
-                                                                        const reasonId = parseInt(this.formData.reasonExp);
-                                                                        if (reasonId === 1) this.$refs.reasonExpand.checked = true;
-                                                                        if (reasonId === 2) this.$refs.reasonReplace.checked = true;
-                                                                        if (reasonId === 3) this.$refs.reasonOther.checked = true;
-                                                                        
-                                                                        // Old employee number
-                                                                        if (this.formData.old_emp) {
-                                                                            this.$refs.oldEmpNo.value = this.formData.old_emp;
-                                                                        }
-                                                                    }
-                                                                    
-                                                                    // Quantity required - handle recruited value when status_amendent is completed
-                                                                    const shouldUseRecruited = this.formData.status_amendent === 'completed' && 
-                                                                    this.formData.denyTempData && 
-                                                                    this.formData.denyTempData.recruited !== undefined;
-                                                                    
-                                                                    if (shouldUseRecruited) {
-                                                                        // Use recruited value for all quantity fields
-                                                                        const recruitedValue = this.formData.recruited || this.formData.denyTempData.recruited;
-                                                                        
-                                                                        // Find which type of position was originally requested and set that field
-                                                                        if (this.formData.qtyReq) {
-                                                                            if (this.formData.qtyReq.workers && this.formData.qtyReq.workers > 0) {
-                                                                                this.$refs.workers.value = recruitedValue;
-                                                                            }
-                                                                            if (this.formData.qtyReq.staff && this.formData.qtyReq.staff > 0) {
-                                                                                this.$refs.staff.value = recruitedValue;
-                                                                            }
-                                                                            if (this.formData.qtyReq.staff_lang && this.formData.qtyReq.staff_lang > 0) {
-                                                                                this.$refs.staff.value = recruitedValue;
-                                                                            }
-                                                                            if (this.formData.qtyReq.tranlator && this.formData.qtyReq.tranlator > 0) {
-                                                                                this.$refs.staff.value = recruitedValue;
-                                                                            }
-                                                                            if (this.formData.qtyReq.leader && this.formData.qtyReq.leader > 0) {
-                                                                                this.$refs.leader.value = recruitedValue;
-                                                                            }
-                                                                            if (this.formData.qtyReq.engineers && this.formData.qtyReq.engineers > 0) {
-                                                                                this.$refs.engineers.value = recruitedValue;
-                                                                            }
-                                                                            if (this.formData.qtyReq && this.formData.qtyReq.level) {
-                                                                                const levelDutyNo = this.formData.qtyReq.level;
-                                                                                const levelName = this.getLevelName(levelDutyNo);
-                                                                                this.$refs.level.value = levelName;
-                                                                            }
-                                                                        }
-                                                                    } else {
-                                                                        // Use original logic for quantity fields
-                                                                        if (this.formData.qtyReq) {
-                                                                            if (this.formData.qtyReq.workers && this.formData.qtyReq.workers > 0) {
-                                                                                this.$refs.workers.value = this.formData.qtyReq.workers;
-                                                                            }
-                                                                            if (this.formData.qtyReq.staff && this.formData.qtyReq.staff > 0) {
-                                                                                this.$refs.staff.value = this.formData.qtyReq.staff;
-                                                                            }
-                                                                            if (this.formData.qtyReq.staff_lang && this.formData.qtyReq.staff_lang > 0) {
-                                                                                this.$refs.staff.value = this.formData.qtyReq.staff_lang;
-                                                                            }
-                                                                            if (this.formData.qtyReq.tranlator && this.formData.qtyReq.tranlator > 0) {
-                                                                                this.$refs.staff.value = this.formData.qtyReq.tranlator;
-                                                                            }
-                                                                            if (this.formData.qtyReq.leader && this.formData.qtyReq.leader > 0) {
-                                                                                this.$refs.leader.value = this.formData.qtyReq.leader;
-                                                                            }
-                                                                            if (this.formData.qtyReq.engineers && this.formData.qtyReq.engineers > 0) {
-                                                                                this.$refs.engineers.value = this.formData.qtyReq.engineers;
-                                                                            }
-                                                                            if (this.formData.qtyReq && this.formData.qtyReq.level) {
-                                                                                const levelDutyNo = this.formData.qtyReq.level;
-                                                                                const levelName = this.getLevelName(levelDutyNo);
-                                                                                this.$refs.level.value = levelName;
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                    
-                                                                    // Language skills handling - updated for either_skill changes
-                                                                    if (this.formData.either_skill) {
                                                                         try {
-                                                                            const eitherSkill = this.formData.either_skill;
-                                                                            // Check either_skill as number value
-                                                                            if (typeof eitherSkill === 'number' || typeof eitherSkill === 'string') {
-                                                                                const skillLevel = parseInt(eitherSkill);
-                                                                                if (skillLevel === 1) {
-                                                                                    this.$refs.engHigh.checked = true;
-                                                                                    this.$refs.chnHigh.checked = true;
-                                                                                } else if (skillLevel === 2) {
-                                                                                    this.$refs.engMed.checked = true; 
-                                                                                    this.$refs.chnMed.checked = true;
-                                                                                } else if (skillLevel === 3) {
-                                                                                    this.$refs.engLow.checked = true;
-                                                                                    this.$refs.chnLow.checked = true;
-                                                                                } else if (skillLevel === 4) {
-                                                                                    this.$refs.engNo.checked = true;
-                                                                                    this.$refs.chnNo.checked = true;
+                                                                            const dutyName = typeof dutyItem.duty_name === 'string' 
+                                                                            ? JSON.parse(dutyItem.duty_name) 
+                                                                            : dutyItem.duty_name;
+                                                                            
+                                                                            return `${dutyName.vi}/${dutyName.cn}`; // Return format: Vietnamese/Chinese
+                                                                        } catch (e) {
+                                                                            console.error('Error parsing duty name:', e);
+                                                                            return dutyNo;
+                                                                        }
+                                                                    },
+                                                                    updateFormFields() {
+                                                                        if (!this.formData) return;
+                                                                        
+                                                                        // Education level
+                                                                        if (this.formData.education) {
+                                                                            const eduLevel = parseInt(this.formData.education);
+                                                                            if (eduLevel === 1)  this.$refs.eduTHCS.checked = true;
+                                                                            else if (eduLevel === 2) this.$refs.eduPTTH.checked = true;
+                                                                            else if (eduLevel === 3) this.$refs.eduTC.checked = true;
+                                                                            else if (eduLevel === 4) this.$refs.eduCD.checked = true;
+                                                                            else if (eduLevel === 5) this.$refs.eduDH.checked = true;
+                                                                        }
+                                                                        
+                                                                        // Work experience
+                                                                        if (this.formData.workExp) {
+                                                                            const expLevel = parseInt(this.formData.workExp);
+                                                                            if (expLevel === 1) this.$refs.expNo.checked = true;
+                                                                            else if (expLevel === 2) this.$refs.expbl1.checked = true;
+                                                                            else if (expLevel === 3) this.$refs.exp12.checked = true;
+                                                                            else if (expLevel === 4) this.$refs.exp35.checked = true;
+                                                                            else if (expLevel === 5) this.$refs.exp5.checked = true;
+                                                                        }
+                                                                        
+                                                                        // Reason for expansion
+                                                                        if (this.formData.reasonExp) {
+                                                                            const reasonId = parseInt(this.formData.reasonExp);
+                                                                            if (reasonId === 1) this.$refs.reasonExpand.checked = true;
+                                                                            if (reasonId === 2) this.$refs.reasonReplace.checked = true;
+                                                                            if (reasonId === 3) this.$refs.reasonOther.checked = true;
+                                                                            
+                                                                            // Old employee number
+                                                                            if (this.formData.old_emp) {
+                                                                                this.$refs.oldEmpNo.value = this.formData.old_emp;
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        // Quantity required - handle recruited value when status_amendent is completed
+                                                                        const shouldUseRecruited = this.formData.status_amendent === 'completed' && 
+                                                                        this.formData.denyTempData && 
+                                                                        this.formData.denyTempData.recruited !== undefined;
+                                                                        
+                                                                        if (shouldUseRecruited) {
+                                                                            // Use recruited value for all quantity fields
+                                                                            const recruitedValue = this.formData.recruited || this.formData.denyTempData.recruited;
+                                                                            
+                                                                            // Find which type of position was originally requested and set that field
+                                                                            if (this.formData.qtyReq) {
+                                                                                if (this.formData.qtyReq.workers && this.formData.qtyReq.workers > 0) {
+                                                                                    this.$refs.workers.value = recruitedValue;
+                                                                                }
+                                                                                if (this.formData.qtyReq.staff && this.formData.qtyReq.staff > 0) {
+                                                                                    this.$refs.staff.value = recruitedValue;
+                                                                                }
+                                                                                if (this.formData.qtyReq.staff_lang && this.formData.qtyReq.staff_lang > 0) {
+                                                                                    this.$refs.staff.value = recruitedValue;
+                                                                                }
+                                                                                if (this.formData.qtyReq.tranlator && this.formData.qtyReq.tranlator > 0) {
+                                                                                    this.$refs.staff.value = recruitedValue;
+                                                                                }
+                                                                                if (this.formData.qtyReq.leader && this.formData.qtyReq.leader > 0) {
+                                                                                    this.$refs.leader.value = recruitedValue;
+                                                                                }
+                                                                                if (this.formData.qtyReq.engineers && this.formData.qtyReq.engineers > 0) {
+                                                                                    this.$refs.engineers.value = recruitedValue;
+                                                                                }
+                                                                                if (this.formData.qtyReq && this.formData.qtyReq.level) {
+                                                                                    const levelDutyNo = this.formData.qtyReq.level;
+                                                                                    const levelName = this.getLevelName(levelDutyNo);
+                                                                                    this.$refs.level.value = levelName;
                                                                                 }
                                                                             }
-                                                                            // Handle either_skill as array
-                                                                            else if (Array.isArray(eitherSkill)) {
-                                                                                // Find the last valid value
-                                                                                const validValues = eitherSkill
-                                                                                .map(val => parseInt(val))
-                                                                                .filter(val => !isNaN(val) && [1, 2, 3, 4].includes(val));
-                                                                                
-                                                                                if (validValues.length > 0) {
-                                                                                    const lastValue = validValues[validValues.length - 1];
-                                                                                    
-                                                                                    // Clear all checkboxes first
-                                                                                    this.$refs.engHigh.checked = false;
-                                                                                    this.$refs.engMed.checked = false;
-                                                                                    this.$refs.engLow.checked = false;
-                                                                                    this.$refs.engNo.checked = false;
-                                                                                    this.$refs.chnHigh.checked = false;
-                                                                                    this.$refs.chnMed.checked = false;
-                                                                                    this.$refs.chnLow.checked = false;
-                                                                                    this.$refs.chnNo.checked = false;
-                                                                                    
-                                                                                    // Set the correct checkboxes based on the last value
-                                                                                    switch (lastValue) {
-                                                                                        case 1:
+                                                                        } else {
+                                                                            // Use original logic for quantity fields
+                                                                            if (this.formData.qtyReq) {
+                                                                                if (this.formData.qtyReq.workers && this.formData.qtyReq.workers > 0) {
+                                                                                    this.$refs.workers.value = this.formData.qtyReq.workers;
+                                                                                }
+                                                                                if (this.formData.qtyReq.staff && this.formData.qtyReq.staff > 0) {
+                                                                                    this.$refs.staff.value = this.formData.qtyReq.staff;
+                                                                                }
+                                                                                if (this.formData.qtyReq.staff_lang && this.formData.qtyReq.staff_lang > 0) {
+                                                                                    this.$refs.staff.value = this.formData.qtyReq.staff_lang;
+                                                                                }
+                                                                                if (this.formData.qtyReq.tranlator && this.formData.qtyReq.tranlator > 0) {
+                                                                                    this.$refs.staff.value = this.formData.qtyReq.tranlator;
+                                                                                }
+                                                                                if (this.formData.qtyReq.leader && this.formData.qtyReq.leader > 0) {
+                                                                                    this.$refs.leader.value = this.formData.qtyReq.leader;
+                                                                                }
+                                                                                if (this.formData.qtyReq.engineers && this.formData.qtyReq.engineers > 0) {
+                                                                                    this.$refs.engineers.value = this.formData.qtyReq.engineers;
+                                                                                }
+                                                                                if (this.formData.qtyReq && this.formData.qtyReq.level) {
+                                                                                    const levelDutyNo = this.formData.qtyReq.level;
+                                                                                    const levelName = this.getLevelName(levelDutyNo);
+                                                                                    this.$refs.level.value = levelName;
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        // Language skills handling - updated for either_skill changes
+                                                                        if (this.formData.either_skill) {
+                                                                            try {
+                                                                                const eitherSkill = this.formData.either_skill;
+                                                                                // Check either_skill as number value
+                                                                                if (typeof eitherSkill === 'number' || typeof eitherSkill === 'string') {
+                                                                                    const skillLevel = parseInt(eitherSkill);
+                                                                                    if (skillLevel === 1) {
                                                                                         this.$refs.engHigh.checked = true;
                                                                                         this.$refs.chnHigh.checked = true;
-                                                                                        break;
-                                                                                        case 2:
-                                                                                        this.$refs.engMed.checked = true;
+                                                                                    } else if (skillLevel === 2) {
+                                                                                        this.$refs.engMed.checked = true; 
                                                                                         this.$refs.chnMed.checked = true;
-                                                                                        break;
-                                                                                        case 3:
+                                                                                    } else if (skillLevel === 3) {
                                                                                         this.$refs.engLow.checked = true;
                                                                                         this.$refs.chnLow.checked = true;
-                                                                                        break;
-                                                                                        case 4:
+                                                                                    } else if (skillLevel === 4) {
                                                                                         this.$refs.engNo.checked = true;
                                                                                         this.$refs.chnNo.checked = true;
+                                                                                    }
+                                                                                }
+                                                                                // Handle either_skill as array
+                                                                                else if (Array.isArray(eitherSkill)) {
+                                                                                    // Find the last valid value
+                                                                                    const validValues = eitherSkill
+                                                                                    .map(val => parseInt(val))
+                                                                                    .filter(val => !isNaN(val) && [1, 2, 3, 4].includes(val));
+                                                                                    
+                                                                                    if (validValues.length > 0) {
+                                                                                        const lastValue = validValues[validValues.length - 1];
+                                                                                        
+                                                                                        // Clear all checkboxes first
+                                                                                        this.$refs.engHigh.checked = false;
+                                                                                        this.$refs.engMed.checked = false;
+                                                                                        this.$refs.engLow.checked = false;
+                                                                                        this.$refs.engNo.checked = false;
+                                                                                        this.$refs.chnHigh.checked = false;
+                                                                                        this.$refs.chnMed.checked = false;
+                                                                                        this.$refs.chnLow.checked = false;
+                                                                                        this.$refs.chnNo.checked = false;
+                                                                                        
+                                                                                        // Set the correct checkboxes based on the last value
+                                                                                        switch (lastValue) {
+                                                                                            case 1:
+                                                                                            this.$refs.engHigh.checked = true;
+                                                                                            this.$refs.chnHigh.checked = true;
+                                                                                            break;
+                                                                                            case 2:
+                                                                                            this.$refs.engMed.checked = true;
+                                                                                            this.$refs.chnMed.checked = true;
+                                                                                            break;
+                                                                                            case 3:
+                                                                                            this.$refs.engLow.checked = true;
+                                                                                            this.$refs.chnLow.checked = true;
+                                                                                            break;
+                                                                                            case 4:
+                                                                                            this.$refs.engNo.checked = true;
+                                                                                            this.$refs.chnNo.checked = true;
+                                                                                            break;
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            } catch (e) {
+                                                                                console.error('Error parsing either_skill:', e);
+                                                                                this.handleIndividualLanguageSkills();
+                                                                            }
+                                                                        } else {
+                                                                            this.handleIndividualLanguageSkills();
+                                                                        }
+                                                                        
+                                                                        // Computer skills - handle both original and changed data
+                                                                        if (this.formData.compSkill && this.formData.compSkill.skills) {
+                                                                            const skills = this.formData.compSkill.skills;
+                                                                            if (skills.includes('Word')) this.$refs.comp_Word.checked = true;
+                                                                            if (skills.includes('Excel')) this.$refs.comp_Excel.checked = true;
+                                                                            if (skills.includes('PowerPoint')) this.$refs.comp_PowerPoint.checked = true;
+                                                                            if (skills.includes('Access')) this.$refs.comp_Access.checked = true;
+                                                                            if (skills.includes('Internet')) this.$refs.comp_Internet.checked = true;
+                                                                            
+                                                                            // Other computer skills
+                                                                            if (this.formData.compSkill.others) {
+                                                                                this.$refs.compOther.value = this.formData.compSkill.others;
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        // Workplace safety
+                                                                        if (this.formData.wps) {
+                                                                            const wpsLevel = parseInt(this.formData.wps);
+                                                                            if (wpsLevel === 1) this.$refs.wpsBasic.checked = true;
+                                                                            else if (wpsLevel === 2) this.$refs.wpsIntermediate.checked = true;
+                                                                            else if (wpsLevel === 3) this.$refs.wpsAdvanced.checked = true;
+                                                                        }
+                                                                        
+                                                                        // Attachment checkbox
+                                                                        if (this.formData.att_jd) {
+                                                                            this.$refs.hasAttachment.checked = true;
+                                                                        } else {
+                                                                            this.$refs.noAttachment.checked = true;
+                                                                        }
+                                                                        
+                                                                    },
+                                                                    
+                                                                    handleIndividualLanguageSkills() {
+                                                                        if (this.formData.engSkill) {
+                                                                            let engLevel;
+                                                                            if (Array.isArray(this.formData.engSkill)) {
+                                                                                // Take the last value in the array
+                                                                                const validValues = this.formData.engSkill.filter(val => [1, 2, 3, 4].includes(parseInt(val)));
+                                                                                if (validValues.length > 0) {
+                                                                                    engLevel = parseInt(validValues[validValues.length - 1]);
+                                                                                }
+                                                                            } else {
+                                                                                // If it's a single value
+                                                                                engLevel = parseInt(this.formData.engSkill);
+                                                                            }
+                                                                            
+                                                                            // Clear all checkboxes first
+                                                                            this.$refs.engHigh.checked = false;
+                                                                            this.$refs.engMed.checked = false;
+                                                                            this.$refs.engLow.checked = false;
+                                                                            this.$refs.engNo.checked = false;
+                                                                            
+                                                                            // Set the correct checkbox
+                                                                            switch(engLevel) {
+                                                                                case 1:
+                                                                                this.$refs.engHigh.checked = true;
+                                                                                break;
+                                                                                case 2:
+                                                                                this.$refs.engMed.checked = true;
+                                                                                break;
+                                                                                case 3:
+                                                                                this.$refs.engLow.checked = true;
+                                                                                break;
+                                                                                case 4:
+                                                                                this.$refs.engNo.checked = true;
+                                                                                break;
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        // Handle Chinese skill
+                                                                        if (this.formData.chnSkill) {
+                                                                            let chnLevel;
+                                                                            if (Array.isArray(this.formData.chnSkill)) {
+                                                                                // Take the last value in the array
+                                                                                const validValues = this.formData.chnSkill.filter(val => [1, 2, 3, 4].includes(parseInt(val)));
+                                                                                if (validValues.length > 0) {
+                                                                                    chnLevel = parseInt(validValues[validValues.length - 1]);
+                                                                                }
+                                                                            } else {
+                                                                                // If it's a single value
+                                                                                chnLevel = parseInt(this.formData.chnSkill);
+                                                                            }
+                                                                            
+                                                                            // Clear all checkboxes first
+                                                                            this.$refs.chnHigh.checked = false;
+                                                                            this.$refs.chnMed.checked = false;
+                                                                            this.$refs.chnLow.checked = false;
+                                                                            this.$refs.chnNo.checked = false;
+                                                                            
+                                                                            // Set the correct checkbox
+                                                                            switch(chnLevel) {
+                                                                                case 1:
+                                                                                this.$refs.chnHigh.checked = true;
+                                                                                break;
+                                                                                case 2:
+                                                                                this.$refs.chnMed.checked = true;
+                                                                                break;
+                                                                                case 3:
+                                                                                this.$refs.chnLow.checked = true;
+                                                                                break;
+                                                                                case 4:
+                                                                                this.$refs.chnNo.checked = true;
+                                                                                break;
+                                                                            }
+                                                                        }
+                                                                        
+                                                                    },
+                                                                    getApprovalArrayForPrint() {
+                                                                        const fd = this.formData || {};
+                                                                        const approval = Array.isArray(fd.approval) ? fd.approval : [];
+                                                                        
+                                                                        // If req_id_oldyear exists -> always use approval (per requirement)
+                                                                        if (fd.req_id_oldyear) {
+                                                                            return approval;
+                                                                        }
+                                                                        
+                                                                        // Normalize logsParsed: can be nested array (array of arrays) or flat array
+                                                                        const logsRaw = fd.logsParsed;
+                                                                        let lastLogs = [];
+                                                                        
+                                                                        if (Array.isArray(logsRaw) && logsRaw.length > 0) {
+                                                                            // If logsRaw is array-of-arrays, pick last inner array
+                                                                            const lastCandidate = logsRaw[logsRaw.length - 1];
+                                                                            if (Array.isArray(lastCandidate) && lastCandidate.length > 0) {
+                                                                                lastLogs = lastCandidate;
+                                                                            } else if (logsRaw.every(item => item && typeof item.level !== 'undefined')) {
+                                                                                // logsRaw itself is flat array of log objects
+                                                                                lastLogs = logsRaw;
+                                                                            } else {
+                                                                                // fallback: try to find the last inner array anywhere
+                                                                                for (let i = logsRaw.length - 1; i >= 0; i--) {
+                                                                                    if (Array.isArray(logsRaw[i]) && logsRaw[i].length > 0) {
+                                                                                        lastLogs = logsRaw[i];
                                                                                         break;
                                                                                     }
                                                                                 }
                                                                             }
+                                                                        }
+                                                                        
+                                                                        // Selection rules:
+                                                                        // - if activeRct is present (truthy) -> use logs (lastLogs) if available, otherwise fallback to approval
+                                                                        // - if activeRct is empty:
+                                                                        //     - if status_amendent is empty -> use approval
+                                                                        //     - if status_amendent present -> use lastLogs (fallback to approval if lastLogs empty)
+                                                                        if (fd.activeRct) {
+                                                                            return lastLogs.length ? lastLogs : approval;
+                                                                        } else {
+                                                                            if (!fd.status_amendent) {
+                                                                                return approval;
+                                                                            } else {
+                                                                                return lastLogs.length ? lastLogs : approval;
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    
+                                                                    getApprover(level) {
+                                                                        try {
+                                                                            const arr = this.getApprovalArrayForPrint();
+                                                                            if (!Array.isArray(arr) || arr.length === 0) return null;
+                                                                            
+                                                                            const found = arr.find(item => {
+                                                                                if (!item) return false;
+                                                                                const itemLevel = Number(item.level);
+                                                                                return !isNaN(itemLevel) && itemLevel === Number(level);
+                                                                            });
+                                                                            
+                                                                            if (found && found.approver) return found.approver;
+                                                                            if (found && found.empno) return { empno: found.empno, name: found.name, dept: found.dept, email: found.email };
+                                                                            return null;
                                                                         } catch (e) {
-                                                                            console.error('Error parsing either_skill:', e);
-                                                                            this.handleIndividualLanguageSkills();
+                                                                            console.error('getApprover error', e);
+                                                                            return null;
                                                                         }
-                                                                    } else {
-                                                                        this.handleIndividualLanguageSkills();
-                                                                    }
+                                                                    },
                                                                     
-                                                                    // Computer skills - handle both original and changed data
-                                                                    if (this.formData.compSkill && this.formData.compSkill.skills) {
-                                                                        const skills = this.formData.compSkill.skills;
-                                                                        if (skills.includes('Word')) this.$refs.comp_Word.checked = true;
-                                                                        if (skills.includes('Excel')) this.$refs.comp_Excel.checked = true;
-                                                                        if (skills.includes('PowerPoint')) this.$refs.comp_PowerPoint.checked = true;
-                                                                        if (skills.includes('Access')) this.$refs.comp_Access.checked = true;
-                                                                        if (skills.includes('Internet')) this.$refs.comp_Internet.checked = true;
-                                                                        
-                                                                        // Other computer skills
-                                                                        if (this.formData.compSkill.others) {
-                                                                            this.$refs.compOther.value = this.formData.compSkill.others;
+                                                                    getApprovalDate(level) {
+                                                                        try {
+                                                                            const arr = this.getApprovalArrayForPrint();
+                                                                            if (!Array.isArray(arr) || arr.length === 0) return null;
+                                                                            
+                                                                            const found = arr.find(item => {
+                                                                                if (!item) return false;
+                                                                                const itemLevel = Number(item.level);
+                                                                                return !isNaN(itemLevel) && itemLevel === Number(level);
+                                                                            });
+                                                                            
+                                                                            if (found && found.processed_at) {
+                                                                                return found.processed_at.split(' ')[0];
+                                                                            }
+                                                                            return null;
+                                                                        } catch (e) {
+                                                                            console.error('getApprovalDate error', e);
+                                                                            return null;
                                                                         }
-                                                                    }
-                                                                    
-                                                                    // Workplace safety
-                                                                    if (this.formData.wps) {
-                                                                        const wpsLevel = parseInt(this.formData.wps);
-                                                                        if (wpsLevel === 1) this.$refs.wpsBasic.checked = true;
-                                                                        else if (wpsLevel === 2) this.$refs.wpsIntermediate.checked = true;
-                                                                        else if (wpsLevel === 3) this.$refs.wpsAdvanced.checked = true;
-                                                                    }
-                                                                    
-                                                                    // Attachment checkbox
-                                                                    if (this.formData.att_jd) {
-                                                                        this.$refs.hasAttachment.checked = true;
-                                                                    } else {
-                                                                        this.$refs.noAttachment.checked = true;
-                                                                    }
-                                                                    
-                                                                },
+                                                                    },
+                                                                }
+                                                            };
+                                                        </script>
+                                                        
+                                                        <style>
+                                                            body {
+                                                                font-family: "Times New Roman", Times, serif !important;
+                                                            }
+                                                            
+                                                            .chinese {
+                                                                font-family: Kaiti, "宋体", serif !important;
+                                                            }
+                                                            
+                                                            .text-header_title,
+                                                            .text-header,
+                                                            .colum3,
+                                                            .table th b,
+                                                            .signature-cell {
+                                                                font-family: "Times New Roman", SimSun, "宋体", Times, serif !important;
+                                                            }
+                                                            
+                                                            .print-layout th {
+                                                                font-family: "Times New Roman", Times, serif !important;
+                                                            }
+                                                            
+                                                            .v-application {
+                                                                line-height: 1.2;
+                                                            }
+                                                            
+                                                            .text-header_title {
+                                                                font-size: 31px !important;
+                                                                font-family: "Times New Roman", Times, serif !important;
+                                                                width: 31%;
+                                                                padding: 15px !important;
+                                                                font-weight: bold;
+                                                            }
+                                                            
+                                                            .text-header {
+                                                                font-size: 16px !important;
+                                                                padding: 8px !important;
+                                                                line-height: 1.4;
+                                                            }
+                                                            
+                                                            .colum3 {
+                                                                width: 12%;
+                                                                padding: 8px !important;
+                                                                font-size: 15px !important;
+                                                            }
+                                                            
+                                                            .table {
+                                                                width: 100%;
+                                                                max-width: 100%;
+                                                                margin-bottom: 1rem;
+                                                                background-color: transparent;
+                                                                border-collapse: collapse !important;
+                                                            }
+                                                            
+                                                            .table td,
+                                                            .table th {
+                                                                text-align: center;
+                                                                padding: 5px;
+                                                                vertical-align: middle;
+                                                                border: 1px solid #333;
+                                                                background-color: transparent;
+                                                            }
+                                                            
+                                                            .table thead th {
+                                                                vertical-align: bottom;
+                                                                border-bottom: 2px solid #333;
+                                                            }
+                                                            
+                                                            .table tbody+tbody {
+                                                                border-top: 2px solid #333;
+                                                            }
+                                                            
+                                                            .table-bordered {
+                                                                border: 1px solid #333;
+                                                            }
+                                                            
+                                                            .table-bordered td,
+                                                            .table-bordered th {
+                                                                border: 1px solid #333;
+                                                            }
+                                                            
+                                                            .table-bordered2 td,
+                                                            .table-bordered2 th {
+                                                                border-top: none;
+                                                                border-left: 1px solid #333;
+                                                                border-right: 1px solid #333;
+                                                                border-bottom: 1px solid #333;
+                                                            }
+                                                            
+                                                            .table th b {
+                                                                text-transform: uppercase;
+                                                                font-size: 15px;
+                                                            }
+                                                            
+                                                            .align-middle {
+                                                                vertical-align: middle !important;
+                                                            }
+                                                            
+                                                            tr.textMid td {
+                                                                font-size: 12px !important;
+                                                            }
+                                                            
+                                                            img.img-fluid {
+                                                                padding: 3px;
+                                                                max-width: 100px;
+                                                                margin: 0 auto;
+                                                                display: block;
+                                                            }
+                                                            
+                                                            .signature-cell {
+                                                                padding: 10px 50px;
+                                                                vertical-align: middle !important;
+                                                                text-align: center !important;
+                                                            }
+                                                            
+                                                            .signature-title {
+                                                                font-size: 14px;
+                                                                font-weight: bold;
+                                                                line-height: 1.5;
+                                                                display: inline-block;
+                                                            }
+                                                            
+                                                            /* New styles */
+                                                            .no-bottom-border {
+                                                                border-bottom: 1px solid #333 !important;
+                                                            }
+                                                            
+                                                            .no-top-border {
+                                                                border-top: none !important;
+                                                            }
+                                                            
+                                                            /* Ensure no margin between tables */
+                                                            .table {
+                                                                margin-bottom: 0 !important;
+                                                            }
+                                                            
+                                                            /* Adjust border for table cells */
+                                                            .no-bottom-border tr:last-child td {
+                                                                border-bottom: 1px solid #333 !important;
+                                                            }
+                                                            
+                                                            .no-top-border tr:first-child td,
+                                                            .no-top-border tr:first-child th {
+                                                                border-top: none !important;
+                                                            }
+                                                            
+                                                            /* Signature table styles */
+                                                            .signature-table {
+                                                                width: 100%;
+                                                                margin-top: 20px;
+                                                                border-collapse: collapse;
+                                                            }
+                                                            
+                                                            .no-top-border {
+                                                                border-top: none !important;
+                                                            }
+                                                            
+                                                            .signature-space {
+                                                                height: 150px;
+                                                                border: none !important;
+                                                            }
+                                                            
+                                                            .signature-note {
+                                                                text-align: left;
+                                                                padding: 10px;
+                                                                white-space: nowrap;
+                                                            }
+                                                            
+                                                            /* Ensure all borders are 1px thick */
+                                                            .table-bordered {
+                                                                border: 1px solid #333;
+                                                            }
+                                                            
+                                                            .table td,
+                                                            .table th {
+                                                                border: 1px solid #333;
+                                                            }
+                                                            
+                                                            .table thead th {
+                                                                border-bottom: 1px solid #333;
+                                                            }
+                                                            
+                                                            .table tbody+tbody {
+                                                                border-top: 1px solid #333;
+                                                            }
+                                                            
+                                                            /* Add loading state styles */
+                                                            .processing {
+                                                                opacity: 0.7;
+                                                                pointer-events: none;
+                                                            }
+                                                            
+                                                            /* Button style */
+                                                            .mb-3 {
+                                                                margin-bottom: 1rem !重要;
+                                                            }
+                                                            
+                                                            /* Print media query to hide elements */
+                                                            @media print {
+                                                                .no-print {
+                                                                    display: none !important;
+                                                                }
                                                                 
-                                                                handleIndividualLanguageSkills() {
-                                                                    if (this.formData.engSkill) {
-                                                                        let engLevel;
-                                                                        if (Array.isArray(this.formData.engSkill)) {
-                                                                            // Take the last value in the array
-                                                                            const validValues = this.formData.engSkill.filter(val => [1, 2, 3, 4].includes(parseInt(val)));
-                                                                            if (validValues.length > 0) {
-                                                                                engLevel = parseInt(validValues[validValues.length - 1]);
-                                                                            }
-                                                                        } else {
-                                                                            // If it's a single value
-                                                                            engLevel = parseInt(this.formData.engSkill);
-                                                                        }
-                                                                        
-                                                                        // Clear all checkboxes first
-                                                                        this.$refs.engHigh.checked = false;
-                                                                        this.$refs.engMed.checked = false;
-                                                                        this.$refs.engLow.checked = false;
-                                                                        this.$refs.engNo.checked = false;
-                                                                        
-                                                                        // Set the correct checkbox
-                                                                        switch(engLevel) {
-                                                                            case 1:
-                                                                            this.$refs.engHigh.checked = true;
-                                                                            break;
-                                                                            case 2:
-                                                                            this.$refs.engMed.checked = true;
-                                                                            break;
-                                                                            case 3:
-                                                                            this.$refs.engLow.checked = true;
-                                                                            break;
-                                                                            case 4:
-                                                                            this.$refs.engNo.checked = true;
-                                                                            break;
-                                                                        }
-                                                                    }
-                                                                    
-                                                                    // Handle Chinese skill
-                                                                    if (this.formData.chnSkill) {
-                                                                        let chnLevel;
-                                                                        if (Array.isArray(this.formData.chnSkill)) {
-                                                                            // Take the last value in the array
-                                                                            const validValues = this.formData.chnSkill.filter(val => [1, 2, 3, 4].includes(parseInt(val)));
-                                                                            if (validValues.length > 0) {
-                                                                                chnLevel = parseInt(validValues[validValues.length - 1]);
-                                                                            }
-                                                                        } else {
-                                                                            // If it's a single value
-                                                                            chnLevel = parseInt(this.formData.chnSkill);
-                                                                        }
-                                                                        
-                                                                        // Clear all checkboxes first
-                                                                        this.$refs.chnHigh.checked = false;
-                                                                        this.$refs.chnMed.checked = false;
-                                                                        this.$refs.chnLow.checked = false;
-                                                                        this.$refs.chnNo.checked = false;
-                                                                        
-                                                                        // Set the correct checkbox
-                                                                        switch(chnLevel) {
-                                                                            case 1:
-                                                                            this.$refs.chnHigh.checked = true;
-                                                                            break;
-                                                                            case 2:
-                                                                            this.$refs.chnMed.checked = true;
-                                                                            break;
-                                                                            case 3:
-                                                                            this.$refs.chnLow.checked = true;
-                                                                            break;
-                                                                            case 4:
-                                                                            this.$refs.chnNo.checked = true;
-                                                                            break;
-                                                                        }
-                                                                    }
-                                                                    
-                                                                },
-                                                                getApprover(level) {
-                                                                    if (!this.formData || !this.formData.approval) return null;
-                                                                    try {
-                                                                        const approvalItem = this.formData.approval.find(item => item.level === level);
-                                                                        return approvalItem?.approver || null;
-                                                                    } catch (e) {
-                                                                        console.error('Error getting approver data:', e);
-                                                                        return null;
-                                                                    }
-                                                                },
-                                                                getApprovalDate(level) {
-                                                                    if (!this.formData || !this.formData.approval) return null;
-                                                                    try {
-                                                                        const approvalItem = this.formData.approval.find(item => item.level === level);
-                                                                        if (approvalItem?.processed_at) {
-                                                                            return approvalItem.processed_at.split(' ')[0]; // Returns only YYYY-MM-DD part
-                                                                        }
-                                                                        return null;
-                                                                    } catch (e) {
-                                                                        console.error('Error getting approval date:', e);
-                                                                        return null;
-                                                                    }
+                                                                /* Adjust margins for print layout */
+                                                                .table {
+                                                                    margin: 0 !important;
+                                                                }
+                                                                
+                                                                .no-bottom-border {
+                                                                    margin-bottom: 10px !important;
+                                                                }
+                                                                
+                                                                /* Set print margins to 0.1 inches */
+                                                                @page {
+                                                                    margin: 0.2in;
+                                                                    size: A4 portrait;
+                                                                }
+                                                                
+                                                                /* Scale content to 86% */
+                                                                [ref="printContent"] {
+                                                                    transform-origin: top left;
                                                                 }
                                                             }
-                                                        };
-                                                    </script>
-                                                    
-                                                    <style>
-                                                    body {
-                                                        font-family: "Times New Roman", Times, serif !important;
-                                                    }
-                                                    
-                                                    .chinese {
-                                                        font-family: Kaiti, "宋体", serif !important;
-                                                    }
-                                                    
-                                                    .text-header_title,
-                                                    .text-header,
-                                                    .colum3,
-                                                    .table th b,
-                                                    .signature-cell {
-                                                        font-family: "Times New Roman", SimSun, "宋体", Times, serif !important;
-                                                    }
-                                                    
-                                                    .print-layout th {
-                                                        font-family: "Times New Roman", Times, serif !important;
-                                                    }
-                                                    
-                                                    .v-application {
-                                                        line-height: 1.2;
-                                                    }
-                                                    
-                                                    .text-header_title {
-                                                        font-size: 31px !important;
-                                                        font-family: "Times New Roman", Times, serif !important;
-                                                        width: 31%;
-                                                        padding: 15px !important;
-                                                        font-weight: bold;
-                                                    }
-                                                    
-                                                    .text-header {
-                                                        font-size: 16px !important;
-                                                        padding: 8px !important;
-                                                        line-height: 1.4;
-                                                    }
-                                                    
-                                                    .colum3 {
-                                                        width: 12%;
-                                                        padding: 8px !important;
-                                                        font-size: 15px !important;
-                                                    }
-                                                    
-                                                    .table {
-                                                        width: 100%;
-                                                        max-width: 100%;
-                                                        margin-bottom: 1rem;
-                                                        background-color: transparent;
-                                                        border-collapse: collapse !important;
-                                                    }
-                                                    
-                                                    .table td,
-                                                    .table th {
-                                                        text-align: center;
-                                                        padding: 5px;
-                                                        vertical-align: middle;
-                                                        border: 1px solid #333;
-                                                        background-color: transparent;
-                                                    }
-                                                    
-                                                    .table thead th {
-                                                        vertical-align: bottom;
-                                                        border-bottom: 2px solid #333;
-                                                    }
-                                                    
-                                                    .table tbody+tbody {
-                                                        border-top: 2px solid #333;
-                                                    }
-                                                    
-                                                    .table-bordered {
-                                                        border: 1px solid #333;
-                                                    }
-                                                    
-                                                    .table-bordered td,
-                                                    .table-bordered th {
-                                                        border: 1px solid #333;
-                                                    }
-                                                    
-                                                    .table-bordered2 td,
-                                                    .table-bordered2 th {
-                                                        border-top: none;
-                                                        border-left: 1px solid #333;
-                                                        border-right: 1px solid #333;
-                                                        border-bottom: 1px solid #333;
-                                                    }
-                                                    
-                                                    .table th b {
-                                                        text-transform: uppercase;
-                                                        font-size: 15px;
-                                                    }
-                                                    
-                                                    .align-middle {
-                                                        vertical-align: middle !important;
-                                                    }
-                                                    
-                                                    tr.textMid td {
-                                                        font-size: 12px !important;
-                                                    }
-                                                    
-                                                    img.img-fluid {
-                                                        padding: 3px;
-                                                        max-width: 100px;
-                                                        margin: 0 auto;
-                                                        display: block;
-                                                    }
-                                                    
-                                                    .signature-cell {
-                                                        padding: 10px 50px;
-                                                        vertical-align: middle !important;
-                                                        text-align: center !important;
-                                                    }
-                                                    
-                                                    .signature-title {
-                                                        font-size: 14px;
-                                                        font-weight: bold;
-                                                        line-height: 1.5;
-                                                        display: inline-block;
-                                                    }
-                                                    
-                                                    /* New styles */
-                                                    .no-bottom-border {
-                                                        border-bottom: 1px solid #333 !important;
-                                                    }
-                                                    
-                                                    .no-top-border {
-                                                        border-top: none !important;
-                                                    }
-                                                    
-                                                    /* Ensure no margin between tables */
-                                                    .table {
-                                                        margin-bottom: 0 !important;
-                                                    }
-                                                    
-                                                    /* Adjust border for table cells */
-                                                    .no-bottom-border tr:last-child td {
-                                                        border-bottom: 1px solid #333 !important;
-                                                    }
-                                                    
-                                                    .no-top-border tr:first-child td,
-                                                    .no-top-border tr:first-child th {
-                                                        border-top: none !important;
-                                                    }
-                                                    
-                                                    /* Signature table styles */
-                                                    .signature-table {
-                                                        width: 100%;
-                                                        margin-top: 20px;
-                                                        border-collapse: collapse;
-                                                    }
-                                                    
-                                                    .no-top-border {
-                                                        border-top: none !important;
-                                                    }
-                                                    
-                                                    .signature-space {
-                                                        height: 150px;
-                                                        border: none !important;
-                                                    }
-                                                    
-                                                    .signature-note {
-                                                        text-align: left;
-                                                        padding: 10px;
-                                                        white-space: nowrap;
-                                                    }
-                                                    
-                                                    /* Ensure all borders are 1px thick */
-                                                    .table-bordered {
-                                                        border: 1px solid #333;
-                                                    }
-                                                    
-                                                    .table td,
-                                                    .table th {
-                                                        border: 1px solid #333;
-                                                    }
-                                                    
-                                                    .table thead th {
-                                                        border-bottom: 1px solid #333;
-                                                    }
-                                                    
-                                                    .table tbody+tbody {
-                                                        border-top: 1px solid #333;
-                                                    }
-                                                    
-                                                    /* Add loading state styles */
-                                                    .processing {
-                                                        opacity: 0.7;
-                                                        pointer-events: none;
-                                                    }
-                                                    
-                                                    /* Button style */
-                                                    .mb-3 {
-                                                        margin-bottom: 1rem !重要;
-                                                    }
-                                                    
-                                                    /* Print media query to hide elements */
-                                                    @media print {
-                                                        .no-print {
-                                                            display: none !important;
-                                                        }
-                                                        
-                                                        /* Adjust margins for print layout */
-                                                        .table {
-                                                            margin: 0 !important;
-                                                        }
-                                                        
-                                                        .no-bottom-border {
-                                                            margin-bottom: 10px !important;
-                                                        }
-                                                        
-                                                        /* Set print margins to 0.1 inches */
-                                                        @page {
-                                                            margin: 0.2in;
-                                                            size: A4 portrait;
-                                                        }
-                                                        
-                                                        /* Scale content to 86% */
-                                                        [ref="printContent"] {
-                                                            transform-origin: top left;
-                                                        }
-                                                    }
-                                                </style>
+                                                        </style>

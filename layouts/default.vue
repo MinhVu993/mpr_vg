@@ -248,31 +248,31 @@ export default {
                 
                 
                  // Dify chatbot integration
-                 const mpr = this.$session.get('mpr') || {};
-                const photoUrl = mpr.empno ? `${this.storageUrl}${this.tokenApi}${mpr.empno}` : null;
+                //  const mpr = this.$session.get('mpr') || {};
+                // const photoUrl = mpr.empno ? `${this.storageUrl}${this.tokenApi}${mpr.empno}` : null;
                 
-                window.difyChatbotConfig = {
-                    token: 'RXiPyzrCVrJlGqWA',
-                    baseUrl: 'http://10.13.34.176',
-                    dynamicScript: true,
-                    inputs: {
-                        username: mpr.name || 'Guest',
-                        lang: mpr.language || 'en',
-                    },
-                    systemVariables: {},
-                    userVariables: {
-                        empno: mpr.empno || '',
-                        name: mpr.name || '',
-                        avatar_url: photoUrl, 
-                    },
-                };
-                // Load script
-                const script = document.createElement('script');
-                script.src = 'http://10.13.34.176/embed.min.js';
-                script.id = 'RXiPyzrCVrJlGqWA';
-                script.defer = true;
+                // window.difyChatbotConfig = {
+                //     token: 'RXiPyzrCVrJlGqWA',
+                //     baseUrl: 'http://10.13.34.176',
+                //     dynamicScript: true,
+                //     inputs: {
+                //         username: mpr.name || 'Guest',
+                //         lang: mpr.language || 'en',
+                //     },
+                //     systemVariables: {},
+                //     userVariables: {
+                //         empno: mpr.empno || '',
+                //         name: mpr.name || '',
+                //         avatar_url: photoUrl, 
+                //     },
+                // };
+                // // Load script
+                // const script = document.createElement('script');
+                // script.src = 'http://10.13.34.176/embed.min.js';
+                // script.id = 'RXiPyzrCVrJlGqWA';
+                // script.defer = true;
                 
-                document.body.appendChild(script);
+                // document.body.appendChild(script);
                 
             } else {
                 this.loaded = false;

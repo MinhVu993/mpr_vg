@@ -48,11 +48,9 @@
                     </v-tab>
                     <v-tab>
                         {{ $t("Approved") }}
-                        <!-- <v-badge :content="statusCounts().completed > 9 ? '9+' : statusCounts().completed.toString()" color="" :value="statusCounts().completed" ></v-badge> -->
                     </v-tab>
                     <v-tab>
                         {{ $t("Rejected") }}
-                        <!-- <v-badge :content="statusCounts().decline.toString()" color=""  :value="statusCounts().decline" ></v-badge> -->
                     </v-tab>
                     <v-spacer></v-spacer>
                     <v-menu v-model="yearMenu" :close-on-content-click="false" transition="scale-transition" offset-y
@@ -223,47 +221,125 @@
 </template>
 <template v-slot:[`item.status`]="{ item }">
     <div class="d-flex align-center flex-wrap">
-        <v-chip v-if="isNewYearRequest(item)" label outlined color="green darken-2" small dark class="mr-1 mb-1" >
-            {{ $t('Approved') }}
-        </v-chip>
-        
-        <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
-            <template v-slot:activator="{ on, attrs }">
-                <v-chip v-if="item.status" label outlined :color="getStatusColor(item.status, item)" small dark v-bind="attrs" v-on="on" class="mr-1 mb-1" @click="openApprovalDetails(item)" style="cursor: pointer" >
-                    <template v-if="isNewYearRequest(item)">
-                        <v-icon left small color="primary">mdi-calendar-refresh</v-icon>
-                        <!-- <span class="font-weight-bold mr-1">{{ $t('NY_Prefix') }}:</span> -->
-                    </template>
-                    
+        <!-- Year-End To Do: show original status + amendment status (if any) + virtual waiting_dept chip -->
+        <template v-if="isYearEndTodo(item) || isYearEndPending(item)">
+            <v-tooltip bottom :disabled="!getNextApproverInfoForStatus(item)" v-if="item.status">
+                <template v-slot:activator="{ on, attrs }">
+                    <v-chip
+                    label
+                    outlined
+                    :color="getStatusColor(item.status, item)"
+                    small
+                    dark
+                    v-bind="attrs"
+                    v-on="on"
+                    class="mr-1 mb-1"
+                    @click="openApprovalDetails(item)"
+                    style="cursor: pointer"
+                    >
                     {{ getStatusWithApprover(item.status, item) }}
                 </v-chip>
             </template>
-            
-            <span v-if="getReturnInfo(item).returned && item.status !== 'completed'">
-                <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
-                {{ getNextApproverInfoForStatus(item) }}
-            </span>
-            <span v-else-if="getNextApproverInfoForStatus(item)">
-                {{ getNextApproverInfoForStatus(item) }}
-            </span>
+            <span>{{ getNextApproverInfoForStatus(item) }}</span>
         </v-tooltip>
         
+        <!-- 2) Amendment status chip (with tooltip) -->
         <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
-            <template v-slot:activator="{ on: amendmentOn, attrs: amendmentAttrs }">
-                <v-chip label :color="getAmendmentStatusColor(item.status_amendent)" small outlined dark v-bind="amendmentAttrs" v-on="amendmentOn" class="mr-1 mb-1" @click="openApprovalDetails(item)" style="cursor: pointer" >
-                    {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
-                </v-chip>
-            </template>
-            <span v-if="getReturnInfo(item).returned && item.status_amendent !== 'completed'">
-                <strong>{{ $t('Return reason') }}:</strong> {{ getReturnInfo(item).reason }}<br>
-                {{ getNextApproverInfoForStatus(item) }}
-            </span>
-            <span>
-                {{ getNextApproverInfoForAmendment(item) }}
-            </span>
-        </v-tooltip>
+            <template v-slot:activator="{ on, attrs }">
+                <v-chip
+                label
+                outlined
+                :color="getAmendmentStatusColor(item.status_amendent)"
+                small
+                dark
+                v-bind="attrs"
+                v-on="on"
+                class="mr-1 mb-1"
+                @click="openApprovalDetails(item)"
+                style="cursor: pointer"
+                >
+                {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
+            </v-chip>
+        </template>
+        <span>{{ getNextApproverInfoForAmendment(item) }}</span>
+    </v-tooltip>
+    
+    <!-- 3) Virtual Year‑End waiting_dept -->
+    <v-tooltip bottom :disabled="!getNextApproverInfoForEndYear(item)">
+        <template v-slot:activator="{ on, attrs }">
+            <v-chip
+            label
+            :color="getEndYearStatusColor('waiting_dept')"
+            small
+            outlined
+            dark
+            v-bind="attrs"
+            v-on="on"
+            class="mr-1 mb-1"
+            @click="openApprovalDetails(item)"
+            style="cursor: pointer"
+            >
+            {{ getEndYearStatusWithApprover('waiting_dept', item) }}
+        </v-chip>
+    </template>
+    <span>{{ getNextApproverInfoForEndYear(item) }}</span>
+</v-tooltip>
+</template>
+<template v-else>
+    <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
+        <template v-slot:activator="{ on, attrs }">
+            <v-chip
+            v-if="item.status"
+            label
+            outlined
+            :color="getStatusColor(item.status, item)"
+            small
+            dark
+            v-bind="attrs"
+            v-on="on"
+            class="mr-1 mb-1"
+            @click="openApprovalDetails(item)"
+            style="cursor: pointer"
+            >
+            {{ getStatusWithApprover(item.status, item) }}
+        </v-chip>
         
-    </div>
+    </template>
+    <span>
+        {{ getReturnInfo(item).returned ? getReturnInfo(item).reason : getNextApproverInfoForStatus(item) }}
+    </span>
+</v-tooltip>
+<v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
+    <template v-slot:activator="{ on, attrs }">
+        <v-chip
+        label
+        :color="getAmendmentStatusColor(item.status_amendent)"
+        small
+        outlined
+        dark
+        v-bind="attrs"
+        v-on="on"
+        class="mr-1 mb-1"
+        @click="openApprovalDetails(item)"
+        style="cursor: pointer"
+        >
+        {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
+    </v-chip>
+</template>
+<span>{{ getNextApproverInfoForAmendment(item) }}</span>
+</v-tooltip>
+<v-tooltip bottom :disabled="!getNextApproverInfoForEndYear(item)" v-if="item.status_endyear && !item.req_id_oldyear">
+    <template v-slot:activator="{ on: eyOn, attrs: eyAttrs }">
+        <v-chip label :color="getEndYearStatusColor(item.status_endyear)" small outlined dark v-bind="eyAttrs" v-on="eyOn" class="mr-1 mb-1" @click="openApprovalDetails(item)" style="cursor: pointer">
+            {{ getEndYearStatusWithApprover(item.status_endyear, item) }}
+        </v-chip>
+    </template>
+    <span>
+        {{ getNextApproverInfoForEndYear(item) }}
+    </span>
+</v-tooltip>
+</template>
+</div>
 </template>
 <template v-slot:[`item.action`]="{ item }">
     <v-icon @click="printDocument(item)">mdi-printer</v-icon>
@@ -275,7 +351,6 @@
             <span class="text-truncate" style="max-width:150px;">
                 {{  getLocalizedOtherReason(item.isOther_reason) }}
             </span>
-            <!-- <v-btn x-small text color="primary" @click="openOtherReasonDialog(item)"><v-icon x-small>mdi-eye</v-icon></v-btn> -->
         </div>
     </template>
     <template v-else>
@@ -494,39 +569,43 @@
                         </v-data-table>
                     </v-expansion-panel-content>
                 </v-expansion-panel>
-                <v-expansion-panel v-for="(cycle, cycleIndex) in groupedApprovalData" :key="cycleIndex" v-show="!selectedItem.req_id_oldyear">
-                    <v-expansion-panel-header>
-                        <div class="d-flex align-center">
-                            <v-chip label outlined :color="getCycleColor(cycleIndex + 1)" class="mr-4" >
-                                {{ $t('Cycle') }} {{ cycleIndex + 1 }}
+                <v-expansion-panel 
+                v-for="(cycle, cycleIndex) in groupedApprovalData" 
+                :key="cycleIndex" 
+                v-show="selectedItem && !selectedItem.req_id_oldyear"
+                >
+                <v-expansion-panel-header>
+                    <div class="d-flex align-center">
+                        <v-chip label outlined :color="getCycleColor(cycleIndex + 1)" class="mr-4" >
+                            {{ $t('Cycle') }} {{ cycleIndex + 1 }}
+                        </v-chip>
+                    </div>
+                </v-expansion-panel-header>
+                <v-expansion-panel-content>
+                    <v-data-table :headers="approvalHeaders" :items="cycle" hide-default-footer class="elevation-1" >
+                        <template v-slot:[`item.type`]="{ item }">
+                            {{ item.type }}
+                        </template>
+                        <template v-slot:[`item.status`]="{ item }">
+                            <v-chip small :color="getApprovalStatusColor(item.status)" dark label>
+                                {{ $t(item.status || 'waiting') }}
                             </v-chip>
-                        </div>
-                    </v-expansion-panel-header>
-                    <v-expansion-panel-content>
-                        <v-data-table :headers="approvalHeaders" :items="cycle" hide-default-footer class="elevation-1" >
-                            <template v-slot:[`item.type`]="{ item }">
-                                {{ item.type }}
-                            </template>
-                            <template v-slot:[`item.status`]="{ item }">
-                                <v-chip small :color="getApprovalStatusColor(item.status)" dark label>
-                                    {{ $t(item.status || 'waiting') }}
-                                </v-chip>
-                            </template>
-                            <template v-slot:[`item.reason_denied`]="{ item }">
-                                {{ getLocalizedText(item.reason_denied_raw || item.reason_denied || '') }}
-                            </template>
-                            <template v-slot:[`item.return_reason`]="{ item }">
-                                {{ getLocalizedText(item.return_reason_raw || item.return_reason || '') }}
-                            </template>
-                            <template v-slot:[`item.approval_record`]="{ item }">
-                                {{ getLocalizedText(item.approval_record_raw || item.approval_record || '') }}
-                            </template>
-                        </v-data-table>
-                    </v-expansion-panel-content>
-                </v-expansion-panel>
-            </v-expansion-panels>
-        </v-card-text>
-    </v-card>
+                        </template>
+                        <template v-slot:[`item.reason_denied`]="{ item }">
+                            {{ getLocalizedText(item.reason_denied_raw || item.reason_denied || '') }}
+                        </template>
+                        <template v-slot:[`item.return_reason`]="{ item }">
+                            {{ getLocalizedText(item.return_reason_raw || item.return_reason || '') }}
+                        </template>
+                        <template v-slot:[`item.approval_record`]="{ item }">
+                            {{ getLocalizedText(item.approval_record_raw || item.approval_record || '') }}
+                        </template>
+                    </v-data-table>
+                </v-expansion-panel-content>
+            </v-expansion-panel>
+        </v-expansion-panels>
+    </v-card-text>
+</v-card>
 </v-dialog>
 
 <!-- Return Dialog -->
@@ -989,6 +1068,7 @@
                 api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
                 storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
                 loading: false,
+                flowLoading: {},
                 cancelDialog: false,
                 showCancelDatePicker: false,
                 selectedCancelDate: '',
@@ -1383,134 +1463,87 @@
                 
                 return this.formattedData.filter(item => {
                     if (!item.req_id) return false;
-                    
-                    // Sử dụng hàm hỗ trợ mới để lấy năm từ req_id
                     const itemYear = this.getYearFromReqId(item.req_id); 
-                    
                     if (!itemYear) return false;
-                    
-                    // Kiểm tra xem năm của đơn có nằm trong danh sách đã chọn không
                     return this.selectedYears.includes(itemYear);
                 });
             },
             
+            //
             filteredData() {
                 let result = this.dataFilteredByYear;
-                
-                // 1. Lọc theo role và quyền truy cập
                 if (this.activeUser) {
                     if (!['hr', 'admin'].includes(this.activeUser.role?.toLowerCase())) {
                         result = result.filter(item => {
-                            // ƯU TIÊN 1: Nếu là đơn User CẦN LÀM (To Do), luôn cho phép hiển thị
-                            // (Hàm này đã chứa logic kiểm tra ngày tháng chặt chẽ rồi)
                             if (this.canApproveItemForTodo(item)) {
                                 return true;
-                            }
-                            
-                            // Logic cũ: Kiểm tra quyền sở hữu
-                            const currentStatus = item.status_amendent || item.status;
-                            if (['completed', 'declined'].includes(currentStatus)) {
-                                return item.submiterInfo?.empno === this.activeUser.empno;
                             }
                             return item.submiterInfo?.empno === this.activeUser.empno;
                         });
                     }
                 }
                 
-                // 2. Lọc theo Tab Status
+                // 2. Lọc theo Tab (Status Filter)
                 if (this.statusFilter === 1) { // Tab: To Do
                     result = result.filter(item => this.canApproveItemForTodo(item));
                     
                 } else if (this.statusFilter === 2) { // Tab: Pending
                     result = result.filter(item => {
                         const pendingStatuses = ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'];
-                        const isNormalPending = pendingStatuses.includes(item.status) || pendingStatuses.includes(item.status_amendent);
                         
-                        if (isNormalPending) return true;
-                        
-                        // Logic Year End cho Tab Pending (CẬP NHẬT ĐIỀU KIỆN NGÀY)
-                        if (this.settingHistory && Array.isArray(this.settingHistory)) {
-                            const currentYear = new Date().getFullYear();
-                            const today = dayjs().format('YYYY-MM-DD');
-                            const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
-                            
-                            // KIỂM TRA: email_date <= today <= deadline_date
-                            if (setting && setting.email_date && setting.deadline_date) {
-                                const isWithinRange = (today >= setting.email_date) && (today <= setting.deadline_date);
-                                
-                                if (isWithinRange) {
-                                    if (item.fulfilled === 'no' &&
-                                    !item.req_id_oldyear &&
-                                    !item.deny_temp &&
-                                    (item.status === 'completed' || item.status_amendent === 'completed')) {
-                                        
-                                        const isSubmitter = this.activeUser && item.submiterInfo && item.submiterInfo.empno === this.activeUser.empno;
-                                        let isLevel1Approver = false;
-                                        
-                                        if (item.approval) {
-                                            try {
-                                                const approvalData = JSON.parse(item.approval);
-                                                const level1 = approvalData.find(lvl => lvl.level === 1);
-                                                if (level1 && level1.approver && this.activeUser && level1.approver.empno === this.activeUser.empno) {
-                                                    isLevel1Approver = true;
-                                                }
-                                            } catch (e) { }
-                                        }
-                                        
-                                        if (isSubmitter || isLevel1Approver) {
-                                            return true;
-                                        }
-                                    }
-                                }
-                            }
+                        if (this.isYearEndPending(item)) return true;
+                        if (item.status_endyear) {
+                            return pendingStatuses.includes(item.status_endyear);
                         }
-                        return false;
+                        if (item.status_amendent) {
+                            return pendingStatuses.includes(item.status_amendent);
+                        }
+                        return pendingStatuses.includes(item.status);
                     });
                     
                 } else if (this.statusFilter === 3) { // Tab: Returned
-                    result = result.filter(item =>
-                    (item.status === 'waiting_dept' || item.status_amendent === 'waiting_dept') &&
-                    this.hasReturnedLevel(item)
-                    );
+                    result = result.filter(item => {
+                        const currentStatus = item.status_endyear || item.status_amendent || item.status;
+                        return currentStatus === 'waiting_dept' && this.hasReturnedLevel(item);
+                    });
                     
                 } else if (this.statusFilter === 4) { // Tab: Approved
                     result = result.filter(item => {
-                        const isCompleted = item.status === 'completed' || item.status_amendent === 'completed';
+                        const isCompleted = (item.status_endyear === 'completed') || 
+                        (!item.status_endyear && item.status_amendent === 'completed') ||
+                        (!item.status_endyear && !item.status_amendent && item.status === 'completed');
                         if (!isCompleted) return false;
-                        
-                        // Ẩn các đơn Year End khỏi tab Approved để ép user vào tab To Do (chỉ trong khoảng thời gian deadline)
                         if (this.canApproveItemForTodo(item)) {
                             return false;
                         }
-                        
                         return true;
                     });
                     
                 } else if (this.statusFilter === 5) { // Tab: Rejected
-                    result = result.filter(item =>
-                    ['declined', 'cancelled'].includes(item.status) ||
-                    ['declined', 'cancelled'].includes(item.status_amendent)
-                    );
+                    result = result.filter(item => {
+                        const rejectedStatuses = ['declined', 'cancelled'];
+                        const currentStatus = item.status_endyear || item.status_amendent || item.status;
+                        return rejectedStatuses.includes(currentStatus);
+                    });
                 }
                 
-                // 3. Lọc theo filter values (Dropdown headers) - Giữ nguyên
                 Object.entries(this.filterValues).forEach(([key, values]) => {
                     if (values && values.length) {
                         result = result.filter(item => {
                             switch (key) {
                                 case 'req_id': return values.includes(item.req_id);
-                                case 'submitter': return values.some(value => { const empno = value.split(' - ')[0]; return item.submiterInfo?.empno === empno; });
-                                case 'date_req': return values.includes(this.formatDate(item.date_req));
+                                case 'submitter': return values.some(val => item.submiterInfo?.empno && val.includes(item.submiterInfo.empno));
                                 case 'unit': return values.includes(item.unit);
                                 case 'unit_name': return values.includes(item.unit_name);
                                 case 'pos': return values.includes(this.getPositionName(item.pos));
-                                case 'reason': return values.some(v => { if (item.reason && item.reason === v) return true; try { if (Number(item.reason_exp) === 3) { const localized = this.getLocalizedOtherReason(item.isOther_reason); if (localized && localized === v) return true; } } catch (e) { } return false; });
-                                case 'status': return values.includes(this.getStatusText(item.status)) || values.includes(this.getStatusText(item.status_amendent));
-                                case 'sub_pos': return values.some(val => { const itemName = this.getSubPositionName(item.sub_pos, true); return itemName === val; });
+                                // Cập nhật lọc Status để bao gồm status_endyear
+                                case 'status': 
+                                return values.includes(this.getStatusText(item.status)) || 
+                                values.includes(this.getStatusText(item.status_amendent)) ||
+                                values.includes(this.getEndYearStatusText(item.status_endyear));
                                 case 'recruited': return values.includes(item.recruited);
                                 case 'resign': return values.includes(item.resign);
                                 case 'qty_req': return values.includes(item.qtyInfo.total);
-                                case 'recruited_status': const status = this.getRecruitmentStatus(item); return status.show && values.includes(status.text);
                                 case 'key_in_date': return values.includes(this.formatDate(item.key_in_date));
                                 default: return true;
                             }
@@ -1518,27 +1551,15 @@
                     }
                 });
                 
-                // 4. Lọc theo search input - Giữ nguyên
                 if (this.search) {
                     const searchTerm = this.search.toLowerCase();
                     result = result.filter(item => {
                         return (
-                        String(item.id).toLowerCase().includes(searchTerm) ||
                         String(item.req_id).toLowerCase().includes(searchTerm) ||
-                        String(item.date_req).toLowerCase().includes(searchTerm) ||
                         (item.submiterInfo?.name || '').toLowerCase().includes(searchTerm) ||
-                        (item.unit || '').toLowerCase().includes(searchTerm) ||
-                        (item.division || '').toLowerCase().includes(searchTerm) ||
-                        this.getPositionName(item.pos).toLowerCase().includes(searchTerm) ||
-                        (item.language || '').toLowerCase().includes(searchTerm) ||
-                        (item.reason || '').toLowerCase().includes(searchTerm) ||
                         this.getStatusText(item.status).toLowerCase().includes(searchTerm) ||
                         this.getStatusText(item.status_amendent).toLowerCase().includes(searchTerm) ||
-                        String(item.recruited || '').toLowerCase().includes(searchTerm) ||
-                        String(item.resign || '').toLowerCase().includes(searchTerm) ||
-                        String(item.qtyInfo?.total || '').toLowerCase().includes(searchTerm) ||
-                        String(item.qtyInfo?.details || '').toLowerCase().includes(searchTerm) ||
-                        (item.sub_pos ? this.getSubPositionName(item.sub_pos, true).toLowerCase().includes(searchTerm) : false)
+                        this.getEndYearStatusText(item.status_endyear).toLowerCase().includes(searchTerm) // Thêm tìm kiếm EndYear
                         );
                     });
                 }
@@ -1549,19 +1570,14 @@
                 if (!this.formattedData || this.formattedData.length === 0) {
                     return [new Date().getFullYear().toString()]; // Dự phòng nếu không có dữ liệu
                 }
-                
-                // Dùng Set để lấy các năm duy nhất
                 const years = new Set();
                 
                 this.formattedData.forEach(item => {
-                    // Sử dụng hàm hỗ trợ mới để lấy năm
                     const year = this.getYearFromReqId(item.req_id); 
                     if (year) {
                         years.add(year);
                     }
                 });
-                
-                // Sắp xếp năm mới nhất lên đầu
                 return Array.from(years).sort((a, b) => b - a);
             },
             positionFilterItems() {
@@ -1611,7 +1627,8 @@
                     }))].filter(Boolean),
                     status: [...new Set(this.formattedData.flatMap(item => [
                     this.getStatusText(item.status),
-                    this.getStatusText(item.status_amendent)
+                    this.getStatusText(item.status_amendent),
+                    this.getEndYearStatusText(item.status_endyear) // <--- THÊM DÒNG NÀY
                     ]))].filter(Boolean),
                     sub_pos: [...new Set(this.subPos.map(sp => {
                         try {
@@ -1640,17 +1657,174 @@
             },
         },
         methods: {
+            isYearEndTodo(item) {
+                try {
+                    if (!item) return false;
+                    if (!this.settingHistory || !Array.isArray(this.settingHistory)) return false;
+                    
+                    const currentYear = new Date().getFullYear();
+                    const today = dayjs().format('YYYY-MM-DD');
+                    const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
+                    if (!setting || !setting.email_date || !setting.deadline_date) return false;
+                    
+                    const isWithinRange = (today >= setting.email_date) && (today <= setting.deadline_date);
+                    if (!isWithinRange) return false;
+                    const completedCondition = (item.status === 'completed' || item.status_amendent === 'completed');
+                    const notYetProcessed = !item.req_id_oldyear && !item.deny_temp && !item.status_endyear;
+                    const notFulfilled = item.fulfilled === 'no';
+                    if (notFulfilled && notYetProcessed && completedCondition) {
+                        const isLevel1Approver = this.canApproveItemForTodo(item);
+                        if (isLevel1Approver) {
+                            return true;
+                        }
+                    }
+                    
+                    return false;
+                } catch (e) {
+                    console.error('isYearEndTodo error', e);
+                    return false;
+                }
+            },
+            isYearEndPending(item) {
+                try {
+                    if (!item) return false;
+                    if (!this.settingHistory || !Array.isArray(this.settingHistory)) return false;
+                    
+                    const currentYear = new Date().getFullYear();
+                    const today = dayjs().format('YYYY-MM-DD');
+                    const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
+                    if (!setting || !setting.email_date || !setting.deadline_date) return false;
+                    
+                    const isWithinRange = (today >= setting.email_date) && (today <= setting.deadline_date);
+                    if (!isWithinRange) return false;
+                    
+                    const completedCondition = (item.status === 'completed' || item.status_amendent === 'completed');
+                    const notYetProcessed = !item.req_id_oldyear && !item.deny_temp && !item.status_endyear;
+                    const notFulfilled = item.fulfilled === 'no';
+                    
+                    return (notFulfilled && notYetProcessed && completedCondition);
+                } catch (e) {
+                    console.error('isYearEndPending error', e);
+                    return false;
+                }
+            },
+            getEndYearStatusText(status) {
+                if (!status) return "";
+                const prefix = "📅 "; 
+                if (status === 'completed') return prefix + this.$t("Approved");
+                if (status === 'declined') return prefix + this.$t("Rejected");
+                
+                switch (status) {
+                    case "waiting_dept":
+                    return prefix + this.$t("Pending Dept");
+                    case "waiting_div":
+                    return prefix + this.$t("Pending Div");
+                    default:
+                    return prefix + this.$t(status);
+                }
+            },
+            getEndYearStatusColor(status) {
+                switch (status) {
+                    case "waiting_dept":
+                    return "red darken-1";
+                    case "waiting_div":
+                    return "red darken-1";
+                    case "completed":
+                    return "green darken-1"; 
+                    case "declined":
+                    return "red darken-1";
+                    default:
+                    return "blue-grey darken-1";
+                }
+            },
+            
+            getEndYearStatusWithApprover(status, item) {
+                const statusText = this.getEndYearStatusText(status);
+                const approverInfo = this.getApproverNameForEndYear(status, item);
+                if (approverInfo) {
+                    return `${statusText}`; 
+                }
+                return statusText;
+            },
+            
+            getApproverNameForEndYear(status, item) {
+                try {
+                    if (!status || status === 'completed' || status === 'declined') return null;
+                    
+                    const statusLevels = {
+                        'waiting_dept': 0,
+                        'waiting_div': 1
+                    };
+                    
+                    if (!statusLevels.hasOwnProperty(status)) return null;
+                    
+                    let flowData = this.approvalFlowCache[item.id];
+                    if (!flowData) return null;
+                    
+                    const currentLevel = statusLevels[status];
+                    const currentFlow = flowData[currentLevel];
+                    
+                    if (!currentFlow || !currentFlow.managers || currentFlow.managers.length === 0) return null;
+                    
+                    const mainApprover = currentFlow.managers[0];
+                    return mainApprover.name || mainApprover.empno;
+                } catch (error) {
+                    return null;
+                }
+            },
+            
+            getNextApproverInfoForEndYear(item) {
+                try {
+                    if (!item.status_endyear || item.status_endyear === 'completed' || item.status_endyear === 'declined') {
+                        return null;
+                    }
+                    
+                    const statusLevels = {
+                        'waiting_dept': 0,
+                        'waiting_div': 1
+                    };
+                    
+                    if (!statusLevels.hasOwnProperty(item.status_endyear)) return null;
+                    
+                    let flowData = this.approvalFlowCache[item.id];
+                    if (!flowData) {
+                        this.loadFlowDataForItem(item);
+                        return this.$t('Loading approver info...');
+                    }
+                    
+                    const currentLevel = statusLevels[item.status_endyear];
+                    const currentFlow = flowData[currentLevel];
+                    
+                    if (!currentFlow || !currentFlow.managers || currentFlow.managers.length === 0) {
+                        return this.$t('Approver info not available');
+                    }
+                    
+                    const mainApprover = currentFlow.managers[0];
+                    const deputies = mainApprover.deputies || [];
+                    
+                    let approverText = `${this.$t('Manager')}: ${mainApprover.empno} - ${mainApprover.name}`;
+                    if (deputies.length > 0) {
+                        const activeDeputies = deputies.filter(d => d.status);
+                        if (activeDeputies.length > 0) {
+                            approverText += `\n${this.$t('Deputies')}: ` +
+                            activeDeputies.map(d => `${d.empno} - ${d.name}`).join('\n');
+                        }
+                    }
+                    return approverText;
+                    
+                } catch (error) {
+                    console.error('Error getting end year approver info:', error);
+                    return this.$t('Approver info not available');
+                }
+            },
             getYearFromReqId(req_id) {
                 if (!req_id || typeof req_id !== 'string') {
                     return null; 
                 }
                 
                 let yearPrefix = '';
-                
-                // CASE 1: Dạng có dấu gạch ngang (HR-MPR00-2601-0001)
                 if (req_id.includes('-')) {
                     const parts = req_id.split('-');
-                    // parts[0]: HR, parts[1]: MPR00, parts[2]: 2601 (NămTháng)
                     if (parts.length >= 3) {
                         const yearMonth = parts[2];
                         if (yearMonth && yearMonth.length >= 2) {
@@ -1658,14 +1832,9 @@
                         }
                     }
                 } 
-                // CASE 2: Dạng liền mạch bắt đầu bằng HR (HR250108001)
                 else if (req_id.toUpperCase().startsWith('HR') && req_id.length >= 4) {
-                    // Lấy ký tự ở vị trí index 2 và 3 (ngay sau 'HR')
-                    // Ví dụ: H(0)R(1)2(2)5(3)... -> Lấy 25
                     yearPrefix = req_id.substring(2, 4);
                 }
-                
-                // Kiểm tra xem kết quả lấy được có phải là 2 chữ số không
                 if (yearPrefix && /^\d{2}$/.test(yearPrefix)) {
                     return `20${yearPrefix}`; // Trả về 2026 hoặc 2025
                 }
@@ -1817,12 +1986,10 @@
                     if (s.startsWith('{')) {
                         try {
                             const obj = JSON.parse(s);
-                            // if API translation structure
                             if (obj && obj.translation && typeof obj.translation === 'object') {
                                 const txt = obj.translation[targetLang] || obj.translation[locale] || obj.translation.vi || obj.translation.en || String(Object.values(obj.translation)[0] || '');
                                 return txt || '';
                             }
-                            // if object contains locale keys
                             if (obj[locale] && String(obj[locale]).trim()) return String(obj[locale]);
                             
                             const supportedOrder = ['vi', 'en', 'cn'];
@@ -1836,15 +2003,10 @@
                             translateAsync(sourceText, cacheKey);
                             return sourceText;
                         } catch (e) {
-                            // not JSON, continue to potential translation below
                         }
                     }
-                    
-                    // plain string: check cache or call translate if needed
                     const cacheKey = `str::${s}::${locale}`;
                     if (this._translateCache.has(cacheKey)) return this._translateCache.get(cacheKey);
-                    
-                    // heuristics: if text already in desired language, return
                     const hasCJK = /[\u4e00-\u9fff]/.test(s);
                     const hasVietnameseDiacritics = /[àáảãạăắằẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳỵỷỹý]/i.test(s);
                     const isAscii = /^[\x00-\x7F]*$/.test(s);
@@ -1853,7 +2015,6 @@
                         return s;
                     }
                     
-                    // seed & async translate
                     this._translateCache.set(cacheKey, s);
                     translateAsync(s, cacheKey);
                     return s;
@@ -1863,7 +2024,6 @@
                 }
             },
             getStatusTranslationKey(status) {
-                // Mapping trạng thái sang key dịch thuật
                 const statusMap = {
                     'waiting': 'waiting',
                     'waiting_dept': 'Waiting for Department',
@@ -1918,15 +2078,12 @@
                 try {
                     if (otherReason === null || otherReason === undefined) return '';
                     const locale = (this.$i18n && this.$i18n.locale) ? this.$i18n.locale : (localStorage.getItem('preferred-locale') || 'en');
-                    
-                    // 1) Nếu otherReason là id (number) hoặc string number -> tìm trong this.otherReason
                     let candidateId = null;
                     if (typeof otherReason === 'number') {
                         candidateId = otherReason;
                     } else if (typeof otherReason === 'string') {
                         const s = otherReason.trim();
                         if (!s) return '';
-                        // string dạng JSON object -> xử lý bên dưới
                         if (!s.startsWith('{')) {
                             const parsedId = parseInt(s, 10);
                             if (!isNaN(parsedId)) candidateId = parsedId;
@@ -1945,7 +2102,6 @@
                         }
                     }
                     
-                    // 2) Nếu không phải id -> xử lý như trước (string JSON hoặc object)
                     let obj = otherReason;
                     if (typeof otherReason === 'string') {
                         const trimmed = otherReason.trim();
@@ -1961,11 +2117,7 @@
                         }
                     }
                     if (!obj || typeof obj !== 'object') return obj || '';
-                    
-                    // nếu đã có text cho locale thì trả về ngay
                     if (obj[locale] && String(obj[locale]).trim()) return String(obj[locale]);
-                    
-                    // lấy source text nếu có và dịch async giống trước
                     const supported = ['vi','en','cn'];
                     const sourceLang = supported.find(k => obj[k] && String(obj[k]).trim());
                     const sourceText = (sourceLang && obj[sourceLang]) ? String(obj[sourceLang]).trim() : '';
@@ -1979,7 +2131,6 @@
                     const cached = this._otherReasonCache.get(cacheKey) || {};
                     if (cached[locale] && String(cached[locale]).trim()) return String(cached[locale]);
                     
-                    // background translate
                     (async () => {
                         try {
                             const translateApi = 'http://gmo021.cansportsvg.com:49200/api/translate';
@@ -2044,6 +2195,7 @@
                 const remaining = Math.ceil((deadline - todayDateOnly) / (1000 * 60 * 60 * 24));
                 return remaining;
             },
+            
             getRecruitmentStatus(item) {
                 const stocknumber = parseInt(item.stocknumber);
                 const recruited = parseInt(item.recruited);
@@ -2051,27 +2203,25 @@
                 const resumed = parseInt(item.resumed);
                 const status = item.status;
                 const statusAmendent = item.status_amendent;
+                const statusEndYear = item.status_endyear;
                 const activeRctVal = item?.activeRct;
                 const activeRctInt = (activeRctVal === null || typeof activeRctVal === 'undefined') ? null : parseInt(activeRctVal);
-                if (activeRctInt === 1 && status !== 'completed' && status !== 'declined') {
+                if (activeRctInt === 1 && statusEndYear === 'completed') {
                     return {
-                        text: this.$t('Recruiting'),
+                        text: this.$t('Closed'),
                         show: true,
-                        color: '#43A047', 
+                        color: '#6c757d',
                         dark: false,
                     };
                 }
-                
                 const isCompleted = (status === 'completed') && (!statusAmendent);
                 
                 if (item.deny_temp &&
                 typeof item.deny_temp === 'string' &&
                 item.deny_temp.trim() !== '' &&
                 (
-                statusAmendent === 'completed' ||
-                (status === 'completed' && activeRctInt !== "")
-                )
-                ) {
+                statusAmendent === 'completed' || (status === 'completed' && activeRctInt !== "") )) 
+                {
                     try {
                         const denyTempData = JSON.parse(item.deny_temp);
                         
@@ -2087,7 +2237,22 @@
                         console.error('Error parsing deny_temp in getRecruitmentStatus:', e);
                     }
                 }
-                
+                if (statusEndYear && statusEndYear.startsWith('waiting')) {
+                    return {
+                        text: this.$t('Recruiting'),
+                        show: true,
+                        color: '#43A047', 
+                        dark: false,
+                    };
+                }
+                if (statusEndYear === 'completed' && activeRctInt === 1) {
+                    return {
+                        text: this.$t('Recruiting'),
+                        show: true,
+                        color: '#43A047', 
+                        dark: false,
+                    };
+                }
                 if (isCompleted) {
                     if (stocknumber === 0) {
                         return {
@@ -2306,24 +2471,13 @@
                 if (!str) return "";
                 return str.slice(-9);
             },
+            //
             statusCounts() {
                 const all = this.dataFilteredByYear.length;
                 let todo = 0, completed = 0, processing = 0, returned = 0, declined = 0;
                 
-                // 1. Xác định xem hôm nay có nằm trong "Khoảng thời gian Year End" không
-                let isYearEndWindow = false;
-                if (this.settingHistory && Array.isArray(this.settingHistory)) {
-                    const currentYear = new Date().getFullYear();
-                    const today = dayjs().format('YYYY-MM-DD');
-                    const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
-                    
-                    // Điều kiện: email_date <= today <= deadline_date
-                    if (setting && setting.email_date && setting.deadline_date) {
-                        if (today >= setting.email_date && today <= setting.deadline_date) {
-                            isYearEndWindow = true;
-                        }
-                    }
-                }
+                const pendingStatuses = ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'];
+                const rejectedStatuses = ['declined', 'cancelled'];
                 
                 this.dataFilteredByYear.forEach(item => {
                     // --- Count To Do ---
@@ -2331,56 +2485,27 @@
                         todo++;
                     }
                     
+                    // Xác định trạng thái hiện tại (Priority: EndYear > Amendment > Standard)
+                    const currentStatus = item.status_endyear || item.status_amendent || item.status;
+                    
                     // --- Count Processing (Pending) ---
-                    let isPending = false;
-                    const pendingStatuses = ['waiting_dept', 'waiting_div', 'waiting_hr_rec_sf', 'waiting_hr', 'waiting_ad', 'waiting_gm'];
-                    
-                    // A. Pending thường
-                    if (pendingStatuses.includes(item.status) || pendingStatuses.includes(item.status_amendent)) {
-                        isPending = true;
-                    }
-                    
-                    // B. Pending do Year End (Chỉ đếm nếu đang trong khoảng thời gian cho phép)
-                    if (!isPending && isYearEndWindow) {
-                        if (item.fulfilled === 'no' && 
-                        !item.req_id_oldyear && 
-                        !item.deny_temp && 
-                        (item.status === 'completed' || item.status_amendent === 'completed')) {
-                            
-                            const isSubmitter = this.activeUser && item.submiterInfo && item.submiterInfo.empno === this.activeUser.empno;
-                            let isLevel1Approver = false;
-                            if (item.approval) {
-                                try {
-                                    const approvalData = JSON.parse(item.approval);
-                                    const level1 = approvalData.find(lvl => lvl.level === 1);
-                                    if (level1 && level1.approver && this.activeUser && level1.approver.empno === this.activeUser.empno) {
-                                        isLevel1Approver = true;
-                                    }
-                                } catch (e) { }
-                            }
-                            
-                            if (isSubmitter || isLevel1Approver) {
-                                isPending = true;
-                            }
-                        }
-                    }
-                    
-                    if (isPending) {
+                    // Nếu là Year‑End pending thì cũng được coi là Pending (HIỂN THỊ CHO TẤT CẢ NGƯỜI DÙNG)
+                    if (this.isYearEndPending(item) || pendingStatuses.includes(currentStatus)) {
                         processing++;
                     }
                     
                     // --- Count Completed ---
-                    if (item.status === 'completed' || item.status_amendent === 'completed') {
+                    if (currentStatus === 'completed') {
                         completed++;
                     }
                     
                     // --- Count Returned ---
-                    if ((item.status === 'waiting_dept' || item.status_amendent === 'waiting_dept') && this.hasReturnedLevel(item)) {
+                    if (currentStatus === 'waiting_dept' && this.hasReturnedLevel(item)) {
                         returned++;
                     }
                     
                     // --- Count Declined ---
-                    if (['declined', 'cancelled'].includes(item.status) || ['declined', 'cancelled'].includes(item.status_amendent)) {
+                    if (rejectedStatuses.includes(currentStatus)) {
                         declined++;
                     }
                 });
@@ -2605,7 +2730,6 @@
             
             formatReason(reasonId) {
                 try {
-                    // Kiểm tra nếu reasonId là 3 thì trả về object với type rỗng
                     if (reasonId === 3) {
                         return {
                             type: '', // Để trống vì sẽ hiển thị isOther_reason
@@ -2775,45 +2899,45 @@
             },
             getDisplayQuantity(qtyReq, item) {
                 try {
-                    const activeRctVal = item?.activeRct;
-                    const activeRctInt = (activeRctVal === null || typeof activeRctVal === 'undefined') ? null : parseInt(activeRctVal);
-                    
                     if (item &&
                     item.deny_temp &&
                     typeof item.deny_temp === 'string' &&
-                    item.deny_temp.trim() !== '' &&
-                    (
-                    item.status_amendent === 'completed' ||
-                    (item.status === 'completed' && activeRctInt !== "" )
-                    )
-                    ) {
-                        try {
-                            const denyTempData = JSON.parse(item.deny_temp);
-                            if (denyTempData.recruited !== undefined) {
-                                return parseInt(denyTempData.recruited);
-                            } else if (item.recruited !== undefined) {
-                                return parseInt(item.recruited);
+                    item.deny_temp.trim() !== '') {
+                        
+                        const isEndYearCompleted = item.status_endyear === 'completed';
+                        const isAmendmentCompleted = !item.status_endyear && item.status_amendent === 'completed';
+                        const isFulfilled = String(item.fulfilled).toLowerCase() === 'yes';
+                        const isNewYearProcessed = String(item.activeRct) === '1' || item.activeRct === 1;
+                        
+                        if (isEndYearCompleted || isAmendmentCompleted || isFulfilled || isNewYearProcessed) {
+                            try {
+                                const denyTempData = JSON.parse(item.deny_temp);
+                                if (denyTempData && typeof denyTempData.recruited !== 'undefined' && denyTempData.recruited !== null && String(denyTempData.recruited).trim() !== '') {
+                                    return parseInt(denyTempData.recruited) || 0;
+                                } else if (typeof item.recruited !== 'undefined' && item.recruited !== null && String(item.recruited).trim() !== '') {
+                                    return parseInt(item.recruited) || 0;
+                                }
+                            } catch (error) {
+                                console.error('Error parsing deny_temp:', error);
                             }
-                        } catch (error) {
-                            console.error('Error parsing deny_temp for quantity display:', error);
                         }
                     }
-                    
                     if (typeof qtyReq === 'string') {
                         if (qtyReq.startsWith('{')) {
                             const qtyData = JSON.parse(qtyReq);
                             return (
-                            parseInt(qtyData.workers) +
-                            parseInt(qtyData.staff) +
-                            parseInt(qtyData.engineers) +
-                            parseInt(qtyData.leader) +
-                            parseInt(qtyData.tranlator)
+                            parseInt(qtyData.workers || 0) +
+                            parseInt(qtyData.staff || 0) +
+                            parseInt(qtyData.staff_lang || 0) +
+                            parseInt(qtyData.engineers || 0) +
+                            parseInt(qtyData.leader || 0) +
+                            parseInt(qtyData.tranlator || 0)
                             );
                         } else {
-                            return parseInt(qtyReq);
+                            return parseInt(qtyReq) || 0;
                         }
                     }
-                    return parseInt(qtyReq);
+                    return parseInt(qtyReq) || 0;
                 } catch (e) {
                     console.error("Error parsing quantity:", e);
                     return 0;
@@ -2848,7 +2972,6 @@
                 if (!hasLogs) return false;
                 
                 if (item.status === 'completed' && this.hasQuantityChange(item)) {
-                    // Kiểm tra xem amendment có bị từ chối không
                     return this.isAmendmentDenied(item);
                 }
                 return false;
@@ -2867,7 +2990,6 @@
             },
             
             hasQuantityChange(item) {
-                // Nếu có deny_temp VÀ status_amendent='completed', không hiển thị change quantity tooltip
                 if (item.deny_temp && 
                 item.deny_temp.trim() !== '' && 
                 item.status_amendent === 'completed') {
@@ -3083,101 +3205,93 @@
                 }
             },
             canApproveItemForTodo(item) {
-                if (item.approval) {
-                    try {
-                        const approvalData = JSON.parse(item.approval);
-                        const hasReturnedStatus = approvalData.some(level => level.status === 'returned');
-                        if ((item.status === 'waiting_dept' || item.status_amendent === 'waiting_dept') && hasReturnedStatus) {
-                            return false;
-                        }
-                    } catch (error) {
-                        console.error('Error parsing approval data:', error);
-                    }
-                }
+                if (!this.activeUser || !item) return false;
                 
-                if (this.settingHistory && Array.isArray(this.settingHistory)) {
-                    const currentYear = new Date().getFullYear();
-                    const today = dayjs().format('YYYY-MM-DD');
-                    const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
-                    if (setting && setting.email_date && setting.deadline_date) {
-                        const isWithinRange = (today >= setting.email_date) && (today <= setting.deadline_date);
-                        
-                        if (isWithinRange) {
-                            if (item.fulfilled === 'no' && 
-                            !item.req_id_oldyear && 
-                            !item.deny_temp && 
-                            (item.status === 'completed' || item.status_amendent === 'completed')) {
-                                
-                                const isSubmitter = this.activeUser && item.submiterInfo && item.submiterInfo.empno === this.activeUser.empno;
-                                let isLevel1Approver = false;
-                                
-                                if (item.approval) {
-                                    try {
-                                        const approvalData = JSON.parse(item.approval);
-                                        const level1 = approvalData.find(lvl => lvl.level === 1);
-                                        if (level1 && level1.approver && this.activeUser && level1.approver.empno === this.activeUser.empno) {
-                                            isLevel1Approver = true;
-                                        }
-                                    } catch (e) { }
-                                }
-                                
-                                if (isSubmitter || isLevel1Approver) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // 3. Logic cũ: Nếu đã hoàn thành/từ chối (và không thỏa mãn điều kiện ngày ở trên) -> KHÔNG HIỆN
-                if ((item.status === 'completed' || item.status === 'declined') &&
-                (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined')) {
+                const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
+                if (!flowData || !Array.isArray(flowData) || flowData.length === 0) {
                     return false;
                 }
                 
-                // 4. Logic duyệt đơn thông thường (Standard Approval Flow)
-                try {
-                    const approval = JSON.parse(item.approval);
-                    
-                    // ... (Giữ nguyên phần logic check manager/deputy của bạn ở đây) ...
-                    // Tôi rút gọn để tập trung vào logic ngày tháng ở trên
-                    if (item.status_amendent) {
-                        // ... logic amendment ...
-                        const statusToLevelCode = { 'waiting_dept': 'dept_manager', 'waiting_div': 'division_manager', 'waiting_hr_rec_sf': 'hr_rec_sf', 'waiting_hr': 'hr_manager', 'waiting_ad': 'smp_manager', 'waiting_gm': 'general_manager' };
-                        const currentLevelCode = statusToLevelCode[item.status_amendent];
-                        if (!currentLevelCode) return false;
-                        const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
-                        if (!flowData || !Array.isArray(flowData)) return false;
-                        const currentFlowLevel = flowData.find(level => level.lvl_code === currentLevelCode);
-                        if (!currentFlowLevel?.managers) return false;
-                        return currentFlowLevel.managers.some(manager => {
-                            if (manager.empno === this.activeUser.empno) return true;
-                            if (manager.deputies && Array.isArray(manager.deputies)) { return manager.deputies.some(deputy => deputy.empno === this.activeUser.empno && deputy.status === true); }
-                            return false;
-                        });
-                    }
-                    
-                    const currentLevel = approval.find(level => level.status === 'waiting');
-                    if (!currentLevel) return false;
-                    if (currentLevel.approver && currentLevel.approver.empno === this.activeUser.empno) return true;
-                    
-                    const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
-                    if (!flowData || !Array.isArray(flowData)) return false;
-                    const statusToLevelCode = { 'waiting_dept': 'dept_manager', 'waiting_div': 'division_manager', 'waiting_hr_rec_sf': 'hr_rec_sf', 'waiting_hr': 'hr_manager', 'waiting_ad': 'smp_manager', 'waiting_gm': 'general_manager' };
-                    const currentLevelCode = statusToLevelCode[item.status];
-                    if (!currentLevelCode) return false;
-                    const currentFlowLevel = flowData.find(level => level.lvl_code === currentLevelCode);
-                    if (!currentFlowLevel?.managers) return false;
-                    return currentFlowLevel.managers.some(manager => {
+                const isUserInManagers = (managers) => {
+                    if (!Array.isArray(managers)) return false;
+                    return managers.some(manager => {
                         if (manager.empno === this.activeUser.empno) return true;
-                        if (manager.deputies && Array.isArray(manager.deputies)) { return manager.deputies.some(deputy => deputy.empno === this.activeUser.empno && deputy.status === true); }
+                        if (Array.isArray(manager.deputies)) {
+                            return manager.deputies.some(deputy => deputy.empno === this.activeUser.empno && deputy.status);
+                        }
                         return false;
                     });
-                    
-                } catch (error) {
-                    console.error('Error in canApproveItemForTodo:', error);
+                };
+                
+                const findFlowLevel = (flow, candidates) => {
+                    if (!flow || !Array.isArray(flow)) return null;
+                    for (const c of candidates) {
+                        const exact = flow.find(l => l.lvl_code === c || l.level === c || l.lvl_name?.en === c);
+                        if (exact) return exact;
+                    }
+                    for (const c of candidates) {
+                        const partial = flow.find(l => l.lvl_code && l.lvl_code.indexOf(c) !== -1);
+                        if (partial) return partial;
+                    }
+                    return null;
+                };
+                if (item.fulfilled === 'no' && !item.req_id_oldyear && !item.deny_temp && 
+                !item.status_endyear && 
+                (item.status === 'completed' || item.status_amendent === 'completed')) {
+                    const level = findFlowLevel(flowData, ['mpr_dept', 'dept', 'dept_manager']);
+                    if (level && isUserInManagers(level.managers)) return true;
                     return false;
                 }
+                
+                if (item.status_endyear && item.status_endyear !== 'completed' && item.status_endyear !== 'declined') {
+                    const statusToCandidates = {
+                        'waiting_dept': ['mpr_dept', 'dept', 'dept_manager'],
+                        'waiting_div': ['mpr_div', 'division', 'division_manager'],
+                        'waiting_hr_rec_sf': ['mpr_hr_sf', 'hr_rec_sf'],
+                    };
+                    const candidates = statusToCandidates[item.status_endyear];
+                    if (candidates) {
+                        const level = findFlowLevel(flowData, candidates);
+                        if (level && isUserInManagers(level.managers)) return true;
+                    }
+                    return false;
+                }
+                
+                if (item.status_amendent && item.status_amendent !== 'completed' && item.status_amendent !== 'declined') {
+                    const statusToCandidates = {
+                        'waiting_dept': ['mpr_dept', 'dept', 'dept_manager'],
+                        'waiting_div': ['mpr_div', 'division', 'division_manager'],
+                        'waiting_hr_rec_sf': ['mpr_hr_sf', 'hr_rec_sf'],
+                        'waiting_hr': ['mpr_hr_manager', 'hr_manager'],
+                        'waiting_ad': ['mpr_smp_manager', 'smp_manager'],
+                        'waiting_gm': ['mpr_gm_manager', 'general_manager']
+                    };
+                    const candidates = statusToCandidates[item.status_amendent];
+                    if (candidates) {
+                        const level = findFlowLevel(flowData, candidates);
+                        if (level && isUserInManagers(level.managers)) return true;
+                    }
+                    return false;
+                }
+                
+                if ((!item.status_endyear && !item.status_amendent) && item.status && item.status !== 'completed' && item.status !== 'declined') {
+                    const statusToCandidates = {
+                        'waiting_dept': ['mpr_dept', 'dept', 'dept_manager'],
+                        'waiting_div': ['mpr_div', 'division', 'division_manager'],
+                        'waiting_hr_rec_sf': ['mpr_hr_sf', 'hr_rec_sf'],
+                        'waiting_hr': ['mpr_hr_manager', 'hr_manager'],
+                        'waiting_ad': ['mpr_smp_manager', 'smp_manager'],
+                        'waiting_gm': ['mpr_gm_manager', 'general_manager']
+                    };
+                    const candidates = statusToCandidates[item.status];
+                    if (candidates) {
+                        const level = findFlowLevel(flowData, candidates);
+                        if (level && isUserInManagers(level.managers)) return true;
+                    }
+                    return false;
+                }
+                
+                return false;
             },
             async fetchFlowData() {
                 if (!this.activeUser) return;
@@ -3198,6 +3312,7 @@
                 }
             },
             getAmendmentStatusText(status, item = {}) {
+                
                 if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
                     return "🔄" + this.$t("Returned");
                 }
@@ -3398,20 +3513,13 @@
                         'waiting_ad': 4,
                         'waiting_gm': 5
                     };
-                    
-                    // Determine which status to use for getting approver info
                     let effectiveStatus = null;
-                    
-                    // Priority: amendment status if it's in waiting state
                     if (item.status_amendent && statusLevels.hasOwnProperty(item.status_amendent)) {
                         effectiveStatus = item.status_amendent;
                     }
-                    // Otherwise use main status if it's in waiting state
                     else if (item.status && statusLevels.hasOwnProperty(item.status)) {
                         effectiveStatus = item.status;
                     }
-                    
-                    // If no effective status found, return null
                     if (!effectiveStatus) return null;
                     
                     const currentLevel = statusLevels[effectiveStatus];
@@ -3439,10 +3547,9 @@
                     return null;
                 }
             },
-            isNewYearRequest(item) {
-                return item.activeRct !== null && item.activeRct !== undefined && item.activeRct !== '';
-            },
+            
             getStatusWithApprover(status, item) {
+                
                 const statusText = this.$t(this.getStatusText(status, item));
                 const approverInfo = this.getApproverName(status, item);
                 
@@ -3632,14 +3739,23 @@
                 }
             },
             loadFlowDataForItem(item) {
-                if (this.approvalFlowCache[item.id]) return;
+                if (!item || !item.id) return;
+                const id = item.id;
+                if (this.approvalFlowCache[id]) return;
+                if (this.flowLoading[id]) return; // avoid duplicate requests
                 
+                // mark loading
+                this.$set(this.flowLoading, id, true);
                 this.getFlowDataForItem(item)
                 .then(() => {
+                    // force redraw so tooltips pick up new content
                     this.$forceUpdate();
                 })
                 .catch(error => {
                     console.error("Error loading flow data:", error);
+                })
+                .finally(() => {
+                    this.$delete(this.flowLoading, id);
                 });
             },
             async getFlowDataForItem(item) {
@@ -3873,9 +3989,6 @@
                 await Promise.all(preloadPromises);
             },
             filterToDoData(data) {
-                // return data.filter(item => {
-                //     return [ 'waiting_dept', 'waiting_div', 'waiting_hr_rec_sf','waiting_hr', 'waiting_ad', 'waiting_gm'].includes(item.status);
-                // });
                 
                 return data.filter(item => {
                     return this.canApproveItemForTodo(item);
@@ -3927,14 +4040,10 @@
                             text: this.$t('Candidates transferred successfully'),
                             type: 'success'
                         });
-                        
-                        // Close dialog and reset selection
                         this.candidatesDialog = false;
                         this.selectedCandidates = [];
                         this.transferMprId = '';
                         this.selectAll = false;
-                        
-                        // Reload data
                         await this.getAllData();
                     }
                 } catch (error) {
@@ -4130,14 +4239,7 @@
                 await this.getAllData();
                 await this.fetchFlowData();
                 await this.fetchData();
-                // const savedLocale = localStorage.getItem('preferred-locale');
-                // if (savedLocale) {
-                //     this.$i18n.locale = savedLocale;
-                // }
-                // this.$nextTick(() => {
-                //     this.setDefaultTab();
-                // });
-                
+                await this.preloadFlowData();
             }
             catch (error) {
                 console.error('Error in mounted hook:', error);
@@ -4185,17 +4287,6 @@
                 },
                 immediate: true
             },
-            
-            // filteredData: {
-            //     handler() {
-            //         this.$nextTick(() => {
-            //             this.preloadFlowData();
-            //         });
-            //     },
-            //     immediate: true,
-            //     deep: true
-            // },
-            
             statusFilter: {
                 handler() {
                     this.filteredItems = [];
