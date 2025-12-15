@@ -78,7 +78,6 @@ class vgMprCtrlTemp extends Controller
                 );
             }
 
-            // Find MPR record by req_id
             $mpr = MprTemp::where("req_id", $req_id)
                 ->where("status", "completed")
                 ->first();
@@ -154,7 +153,7 @@ class vgMprCtrlTemp extends Controller
         } elseif ($empno && $dept) {
             $params = new Request([
                 "empno" => $empno,
-                "app_code" => "mpr",
+                "app_code" => "mpr_",
                 "location" => "VG",
                 "custom_data" => json_encode([
                     "custom_dept" => $dept,
@@ -245,14 +244,6 @@ class vgMprCtrlTemp extends Controller
                             return true;
                         }
 
-                        // // Case 3: Check department access
-                        // $itemDept = isset($submitter['dept_sumt']) ? trim($submitter['dept_sumt']) :
-                        // (isset($submitter['dept']) ? trim($submitter['dept']) : '');
-
-                        // if (!empty($itemDept) && in_array($itemDept, $userAccessibleDepts)) {
-                        //     return true;
-                        // }
-
                         // Case 4: Check current approval level access
                         $statusesToCheck = [];
                         if (!empty($item->status)) {
@@ -284,7 +275,6 @@ class vgMprCtrlTemp extends Controller
                                         $currentFlow["managers"]
                                         as $manager
                                     ) {
-                                        // For HR_REC_SF and above levels, show all departments
                                         if (
                                             $currentLevel >= 2 &&
                                             $manager["empno"] === $empno
@@ -315,7 +305,6 @@ class vgMprCtrlTemp extends Controller
                                                 $manager["deputies"]
                                                 as $deputy
                                             ) {
-                                                // For HR_REC_SF and above levels
                                                 if (
                                                     $currentLevel >= 2 &&
                                                     $deputy["empno"] ===
@@ -326,7 +315,6 @@ class vgMprCtrlTemp extends Controller
                                                     return true;
                                                 }
 
-                                                // For lower levels
                                                 if (
                                                     $currentLevel < 2 &&
                                                     $deputy["empno"] ===
@@ -876,7 +864,7 @@ class vgMprCtrlTemp extends Controller
             "mail_data" => json_encode($mailData),
         ];
 
-        // $this->sendMsg($params);
+        $this->sendMsg($params);
     }
     public function updateReqId(Request $request)
     {
@@ -941,7 +929,7 @@ class vgMprCtrlTemp extends Controller
     {
         $params = new Request([
             "empno" => $req->empno,
-            "app_code" => "mpr",
+            "app_code" => "mpr_",
             "location" => "VG",
             "custom_data" => json_encode([
                 "custom_dept" => $req->dept,
@@ -1149,7 +1137,11 @@ class vgMprCtrlTemp extends Controller
                                 "original" => $mpr->req_id,
                                 "new" => $newMpr->req_id,
                             ]);
-
+                            try {
+                                $this->migrateCompletedMprToDemandSingle($newMpr);
+                            } catch (\Exception $e) {
+                                \Log::error("Error migrating duplicated MPR to Demand: " . $e->getMessage());
+                            }
                             // --- BỔ SUNG: CẬP NHẬT ĐƠN CŨ VỀ 0 ĐỂ ĐÓNG ---
                             $denyTempData = [
                                 "fullfilldate" => now()->format("Y-m-d"),
@@ -1745,7 +1737,7 @@ class vgMprCtrlTemp extends Controller
             "mail_data" => json_encode($mailData),
         ];
 
-        // $this->sendMsg($params);
+        $this->sendMsg($params);
     }
 
     private function sendDenialEmailNotification(
@@ -1816,7 +1808,7 @@ class vgMprCtrlTemp extends Controller
             "mail_data" => json_encode($mailData),
         ];
 
-        // $this->sendMsg($params);
+        $this->sendMsg($params);
     }
 
     private function sendReturnEmailNotification(
@@ -1907,7 +1899,7 @@ class vgMprCtrlTemp extends Controller
             "mail_data" => json_encode($mailData),
         ];
 
-        // $this->sendMsg($params);
+        $this->sendMsg($params);
     }
     private function getLevelName($level)
     {
@@ -2308,7 +2300,7 @@ class vgMprCtrlTemp extends Controller
                 $requestParams = new Request();
                 $requestParams->merge([
                     "empno" => $submitter["empno"],
-                    "app_code" => "MPR",
+                    "app_code" => "MPR_",
                     "location" => $userData["location"] ?? "VN",
                     "custom_data" => json_encode([
                         "custom_dept" => $submitter["dept"] ?? null,
@@ -2806,7 +2798,7 @@ class vgMprCtrlTemp extends Controller
                 "mail_data" => json_encode($mailData),
             ];
 
-            // $this->sendMsg($params);
+            $this->sendMsg($params);
 
             return true;
         } catch (\Exception $e) {
@@ -2989,7 +2981,7 @@ class vgMprCtrlTemp extends Controller
                 "mail_data" => json_encode($mailData),
             ];
 
-            // $this->sendMsg($params);
+            $this->sendMsg($params);
 
             return true;
         } catch (\Exception $e) {
@@ -3688,73 +3680,117 @@ class vgMprCtrlTemp extends Controller
 
             return $demand;
         } catch (\Exception $e) {
-            \Log::error(
-                "Error in migrateCompletedMprToDemandSingle: " .
-                    $e->getMessage(),
-                [
-                    "mpr_id" => $mpr->id,
-                    "req_id" => $mpr->req_id ?? "N/A",
-                    "trace" => $e->getTraceAsString(),
-                ]
-            );
+           
             throw $e;
         }
     }
-    // Hàm xử lý nhân đôi đơn cho năm mới
     private function duplicateForNewYear($originalMpr)
     {
         try {
             $newMpr = $originalMpr->replicate();
-
-            // 1. Tạo Req ID mới
             $nextYearJan = now()
                 ->addYear()
                 ->startOfYear();
             $newMpr->req_id = $this->generateNewReqIdString($nextYearJan);
-
-            // --- YÊU CẦU: LIÊN KẾT VỚI BIỂU MẪU BAN ĐẦU ---
             $newMpr->req_id_oldyear = $originalMpr->req_id;
-
-            // 2. Reset các trường không cần thiết
             $newMpr->activeRct = null;
             $newMpr->deny_temp = null;
             $newMpr->candidates = null;
             $newMpr->resignList = null;
             $newMpr->resign = 0;
 
-            // 3. Tính toán lại số lượng (giữ nguyên logic cũ)
-            $originalRecruited = intval($originalMpr->recruited ?? 0);
-            $originalStock = intval($originalMpr->stocknumber ?? 0);
-
-            if ($originalRecruited > 0) {
-                $newQty = $originalStock;
-                $qtyReqJson = json_decode($originalMpr->qty_req, true) ?? [];
-                $pos = intval($originalMpr->pos);
-                // Cập nhật số lượng chi tiết dựa theo vị trí
-                switch ($pos) {
-                    case 1:
-                        $qtyReqJson["workers"] = $newQty;
-                        break;
-                    case 2:
-                        $qtyReqJson["staff"] = $newQty;
-                        break;
-                    case 3:
-                        $qtyReqJson["leader"] = $newQty;
-                        break;
-                    case 4:
-                        $qtyReqJson["engineers"] = $newQty;
-                        break;
-                    case 5:
-                        $qtyReqJson["tranlator"] = $newQty;
-                        break;
+            $pos = intval($originalMpr->pos);
+            $newQtyFromChange = null;
+            if (
+                !empty($originalMpr->status_amendent) &&
+                $originalMpr->status_amendent === "completed" &&
+                !empty($originalMpr->change_req)
+            ) {
+                try {
+                    $changes = json_decode($originalMpr->change_req, true);
+                    if (is_array($changes) && count($changes) > 0) {
+                        $lastChange = end($changes);
+                        if (
+                            !empty($lastChange["change_qty"]) ||
+                            $lastChange["change_qty"] === "0"
+                        ) {
+                            $newQtyFromChange = intval(
+                                $lastChange["change_qty"]
+                            );
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::warning(
+                        "Error parsing change_req in duplicateForNewYear: " .
+                            $e->getMessage()
+                    );
+                    $newQtyFromChange = null;
                 }
-                $newMpr->qty_req = json_encode($qtyReqJson);
-                $newMpr->stocknumber = $newQty;
-            } else {
-                $newMpr->stocknumber = $originalMpr->stocknumber;
             }
 
-            // 4. Trạng thái đơn mới (Completed để hiện lịch sử đã duyệt)
+            // 3. Tính toán lại số lượng: ưu tiên change_qty nếu có
+            if (isset($newQtyFromChange) && $newQtyFromChange >= 0) {
+                $qtyReqJson = json_decode($originalMpr->qty_req, true) ?? [];
+
+                // Map theo pos giống logic cũ
+                switch ($pos) {
+                    case 1:
+                        $qtyReqJson["workers"] = $newQtyFromChange;
+                        break;
+                    case 2:
+                        $qtyReqJson["staff"] = $newQtyFromChange;
+                        break;
+                    case 3:
+                        $qtyReqJson["leader"] = $newQtyFromChange;
+                        break;
+                    case 4:
+                        $qtyReqJson["engineers"] = $newQtyFromChange;
+                        break;
+                    case 5:
+                        $qtyReqJson["tranlator"] = $newQtyFromChange;
+                        break;
+                    default:
+                        // If mapping not found, try to preserve existing structure but set a generic total if possible
+                        // leave existing keys intact
+                        break;
+                }
+
+                $newMpr->qty_req = json_encode($qtyReqJson);
+                $newMpr->stocknumber = $newQtyFromChange;
+            } else {
+                // Fallback: giữ logic cũ (dùng stocknumber/original stock)
+                $originalRecruited = intval($originalMpr->recruited ?? 0);
+                $originalStock = intval($originalMpr->stocknumber ?? 0);
+
+                if ($originalRecruited > 0) {
+                    $newQty = $originalStock;
+                    $qtyReqJson =
+                        json_decode($originalMpr->qty_req, true) ?? [];
+                    switch ($pos) {
+                        case 1:
+                            $qtyReqJson["workers"] = $newQty;
+                            break;
+                        case 2:
+                            $qtyReqJson["staff"] = $newQty;
+                            break;
+                        case 3:
+                            $qtyReqJson["leader"] = $newQty;
+                            break;
+                        case 4:
+                            $qtyReqJson["engineers"] = $newQty;
+                            break;
+                        case 5:
+                            $qtyReqJson["tranlator"] = $newQty;
+                            break;
+                    }
+                    $newMpr->qty_req = json_encode($qtyReqJson);
+                    $newMpr->stocknumber = $newQty;
+                } else {
+                    $newMpr->stocknumber = $originalMpr->stocknumber;
+                 
+                }
+            }
+
             $newMpr->recruited = 0;
             $newMpr->fulfilled = "no";
             $newMpr->fullfilldate = null;
@@ -3764,13 +3800,12 @@ class vgMprCtrlTemp extends Controller
             // Reset ngày tạo
             $newMpr->created_at = now();
             $newMpr->updated_at = now();
-
-            // --- YÊU CẦU: CẬP NHẬT NGÀY TỪ CÀI ĐẶT YEAR-END ---
-            $currentYear = date("Y");
-            // Tìm cấu hình năm (ưu tiên năm hiện tại)
+             $currentYear = date("Y");
             $yearSetting = MprEndYear::where("year", $currentYear)->first();
+            if (!$yearSetting) {
+                $yearSetting = MprEndYear::orderBy("year", "desc")->first();
+            }
 
-            // Nếu không thấy năm hiện tại, thử tìm năm mới nhất (phòng trường hợp cấu hình cho năm sau)
             if (!$yearSetting) {
                 $yearSetting = MprEndYear::orderBy("year", "desc")->first();
             }
@@ -3781,12 +3816,12 @@ class vgMprCtrlTemp extends Controller
                     $yearSetting->email_date ?? date("Y-m-d");
                 $newMpr->date_req = $yearSetting->ey_date_req ?? date("Y-m-d");
             } else {
-                // Fallback nếu chưa có cấu hình
+             
                 $newMpr->key_in_date = date("Y-m-d");
                 $newMpr->date_req = date("Y-m-d");
             }
 
-            // --- YÊU CẦU: GIỮ LẠI LỊCH SỬ KÝ DUYỆT CỦA ĐƠN GỐC ---
+           
             $newMpr->approval = $originalMpr->approval;
             $newMpr->logs = $originalMpr->logs;
             $newMpr->approval_record = $originalMpr->approval_record;
@@ -3801,31 +3836,21 @@ class vgMprCtrlTemp extends Controller
     }
     private function generateNewReqIdString($targetDate = null)
     {
-        // 1. Xác định prefix (VD: HR-MPR00-2511-)
+       
         $date = $targetDate ? \Carbon\Carbon::parse($targetDate) : now();
         $yymm = $date->format("ym");
         $prefix = "HR-MPR00-{$yymm}-";
-
-        // 2. Tìm số lớn nhất hiện có trong DB
-        // Sử dụng MAX(CAST(...)) để lấy chính xác giá trị số lớn nhất, tránh lỗi do sorting chuỗi
         $maxNumber = MprTemp::where("req_id", "LIKE", $prefix . "%")
             ->selectRaw("MAX(CAST(RIGHT(req_id, 4) AS UNSIGNED)) as max_num")
             ->value("max_num");
-
-        // 3. Xác định số bắt đầu thử (nếu chưa có đơn nào thì bắt đầu từ 1, nếu có thì lấy max + 1)
         $nextNumber = $maxNumber ? $maxNumber + 1 : 1;
-
-        // 4. Vòng lặp kiểm tra an toàn (Chống trùng lặp tuyệt đối)
-        // Nếu mã dự kiến đã tồn tại (do race condition hoặc dữ liệu ẩn), nó sẽ tự tăng tiếp
         do {
             $sequence = str_pad($nextNumber, 4, "0", STR_PAD_LEFT);
             $newReqId = $prefix . $sequence;
 
-            // Kiểm tra xem mã này có thực sự chưa tồn tại không
             $exists = MprTemp::where("req_id", $newReqId)->exists();
 
             if ($exists) {
-                // Nếu đã tồn tại thì thử số tiếp theo
                 $nextNumber++;
             }
         } while ($exists);
@@ -4237,7 +4262,7 @@ class vgMprCtrlTemp extends Controller
         })
             ->where("stocknumber", ">", 0)
             ->whereNull("deny_temp")
-            ->whereNull("activeRct") // Chỉ những đơn chưa có hành động
+            ->whereNull("activeRct")
             ->whereNull("req_id_oldyear")
             ->get();
 
@@ -4302,7 +4327,6 @@ class vgMprCtrlTemp extends Controller
                     "stocknumber" => $mpr->stocknumber,
                 ];
 
-                // Logic này sẽ luôn chạy để đóng đơn dù có email hay không
                 $denyTempData = [
                     "fullfilldate" => now()->format("Y-m-d"),
                     "fulfilled" => "yes",
@@ -4315,7 +4339,7 @@ class vgMprCtrlTemp extends Controller
                 $mpr->stocknumber = 0;
                 $mpr->fulfilled = "yes";
                 $mpr->fullfilldate = now()->format("Y-m-d");
-                $mpr->activeRct = 0; // Đánh dấu là "Đã hủy/đóng"
+                $mpr->activeRct = 0;
                 $mpr->save();
 
                 $dbUpdateSuccessCount++;
@@ -4323,12 +4347,9 @@ class vgMprCtrlTemp extends Controller
                 // Đồng bộ sang bảng Demand
                 // $this->migrateCompletedMprToDemandSingle($mpr);
 
-                // --- D. Xử lý gửi mail hoặc Log ---
                 if (!empty($email)) {
-                    // Nếu có email thì thêm vào danh sách gửi
                     $groupedForEmail[$email][] = $requestDataRow;
                 } else {
-                    // Nếu approval rỗng hoặc không tìm thấy email cấp 1, chỉ ghi log warning
                     \Log::warning(
                         "[SCHEDULE] Auto-close success (DB Updated) but NO Level 1 Email found for req_id " .
                             $mpr->req_id

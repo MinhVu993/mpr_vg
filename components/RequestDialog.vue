@@ -398,6 +398,7 @@
         </v-col>
         <v-col cols="12">
             <v-text-field 
+             v-show="form.req_id_oldyear || (editData && editData.req_id_oldyear)"
             outlined 
             readonly 
             dense
@@ -461,12 +462,17 @@
                         </div>
                     </v-stepper-step>
                     <template v-for="(step, idx) in approvalStepperSteps">
-                        <v-stepper-step :complete="step.status === 'approved'"
+                        <v-stepper-step 
+                        v-if="step.approver && step.approver.empno && isLevel1Approved"
+                        :complete="step.status === 'approved'"
                         :editable="false"
                         :rules="step.shouldShowError ? [() => false] : []"
-                        :color="getApprovalStatusColor(step.status)" step
+                        :color="getApprovalStatusColor(step.status)" 
+                        step
                         :error-icon="step.shouldShowError ? 'mdi-cancel' : ''"
-                        complete-icon="mdi-check" :key="idx" v-if="isLevel1Approved">
+                        complete-icon="mdi-check" 
+                        :key="idx" 
+                        >
                         <template>
                             <div class="caption">{{ step.levelName }}</div>
                             <div class="caption">
@@ -475,35 +481,28 @@
                             </div>
                             <div class="caption">{{ step.processed_at }}</div>
                             <div class="approval-record-container caption">
-                                <div v-if="step.reason_denied"
-                                class="record-item error--text">
-                                <v-icon small color="error"
-                                class="mr-1">mdi-close</v-icon>
-                                <span class="font-italic">{{ step.reason_denied
-                                }}</span>
+                                <div v-if="step.reason_denied" class="record-item error--text">
+                                    <v-icon small color="error" class="mr-1">mdi-close</v-icon>
+                                    <span class="font-italic">{{ step.reason_denied }}</span>
+                                </div>
+                                <div v-if="step.return_reason" class="record-item warning--text">
+                                    <v-icon small color="#FFA500" class="mr-1">mdi-undo-variant</v-icon>
+                                    <span class="font-italic">{{ step.return_reason }}</span>
+                                </div>
+                                <div v-if="step.approval_record" class="record-item success--text">
+                                    <v-icon small color="success" class="mr-1">mdi-check</v-icon>
+                                    <span class="font-italic">{{ step.approval_record }}</span>
+                                </div>
                             </div>
-                            <div v-if="step.return_reason"
-                            class="record-item warning--text">
-                            <v-icon small color="#FFA500"
-                            class="mr-1">mdi-undo-variant</v-icon>
-                            <span class="font-italic">{{ step.return_reason
-                            }}</span>
-                        </div>
-                        <div v-if="step.approval_record"
-                        class="record-item success--text">
-                        <v-icon small color="success"
-                        class="mr-1">mdi-check</v-icon>
-                        <span class="font-italic">{{ step.approval_record
-                        }}</span>
-                    </div>
-                </div>
+                        </template>
+                    </v-stepper-step>
+                    <v-divider 
+                    v-if="idx < approvalStepperSteps.length - 1"
+                    :key="`div-${idx}`">
+                </v-divider>
             </template>
-        </v-stepper-step>
-        <v-divider v-if="idx < approvalStepperSteps.length - 1"
-        :key="`div-${idx}`"></v-divider>
-    </template>
-</v-stepper-header>
-</v-stepper>
+        </v-stepper-header>
+    </v-stepper>
 </v-expansion-panel-content>
 </v-expansion-panel>
 
@@ -758,7 +757,7 @@ v-model="viewOriginal"
 
 </template>
 <script>
-      import VfaAppFlow from "../../../@global-component/vfa-comp";
+    import VfaAppFlow from "../../../@global-component/vfa-comp";
     // import VfaAppFlow from 'D:/source/@global-component/vfa-comp';
     export default {
         components: { VfaAppFlow },
@@ -1002,7 +1001,17 @@ v-model="viewOriginal"
             };
         },
         watch: {
-            
+            "activeUser.empno": {
+                handler(newVal) {
+                    if (!newVal || newVal.trim() === '') {
+                        console.warn('activeUser.empno is empty');
+                        return;
+                    }
+                    // Force update approval history khi empno được set
+                    this.$forceUpdate();
+                },
+                immediate: true
+            },
             isChange: {
                 immediate: true,
                 async handler(newVal) {
@@ -3310,7 +3319,12 @@ v-model="viewOriginal"
         },
         computed: {
             showPreviousApprovalHistory() {
-                // Hiển thị khi activeRct không rỗng và có logs data
+                // === KIỂM TRA EMPNO TRƯỚC TIÊN ===
+                if (!this.activeUser?.empno) {
+                    console.warn('empno is empty, hiding previous approval history');
+                    return false;
+                }
+                
                 if (!this.editData) return false;
                 
                 const hasActiveRct = this.editData.activeRct !== null && 
@@ -3319,7 +3333,6 @@ v-model="viewOriginal"
                 
                 if (!hasActiveRct) return false;
                 
-                // Kiểm tra xem có logs data không
                 if (!this.editData.logs) return false;
                 
                 try {
@@ -3337,13 +3350,17 @@ v-model="viewOriginal"
             },
             
             previousApprovalStepperSteps() {
+                if (!this.activeUser?.empno) {
+                    console.warn('empno is empty, skipping previous approval history');
+                    return [];
+                }
+                
                 if (!this.editData || !this.editData.logs) return [];
                 
                 try {
                     let logs = typeof this.editData.logs === 'string' ? 
                     JSON.parse(this.editData.logs) : this.editData.logs;
                     
-                    // Lấy phần tử cuối cùng từ mảng logs
                     if (!Array.isArray(logs) || logs.length === 0) return [];
                     
                     const previousApprovalData = logs[logs.length - 1];
@@ -3360,7 +3377,12 @@ v-model="viewOriginal"
                     };
                     
                     return previousApprovalData
-                    .filter(lv => lv.status && ["waiting", "approved", "rejected", "returned"].includes(lv.status))
+                    .filter(lv => {
+                        if (!lv.approver || !lv.approver.empno) {
+                            return false;
+                        }
+                        return lv.status && ["waiting", "approved", "rejected", "returned"].includes(lv.status);
+                    })
                     .map(lv => {
                         const reasonDeniedText = this.getLocalizedFromMultiLang(lv.reason_denied);
                         const returnReasonText = this.getLocalizedFromMultiLang(lv.return_reason);
@@ -4153,6 +4175,11 @@ v-model="viewOriginal"
                 }));
             },
             approvalStepperSteps() {
+                if (!this.activeUser?.empno) {
+                    console.warn('empno is empty, skipping approval history');
+                    return [];
+                }
+                
                 if (!this.editData || !this.editData.approval) return [];
                 
                 try {
@@ -4176,31 +4203,34 @@ v-model="viewOriginal"
                         6: this.$t("GM Manager")
                     };
                     
-                    // Get translated approval records
                     const translatedRecords = {};
                     for (const key in currentApprovalRecord) {
                         const text = currentApprovalRecord[key];
                         if (text) {
-                            // Check cache first
                             const cached = this.getCachedTranslation(text, this.$i18n.locale);
                             if (cached) {
                                 translatedRecords[key] = cached;
                             } else {
-                                // If not in cache, queue translation
                                 this.translateApprovalRecord(text, this.$i18n.locale).then(translated => {
                                     this.setCachedTranslation(text, this.$i18n.locale, translated);
                                     translatedRecords[key] = translated;
-                                    // Force update to reflect changes
                                     this.$forceUpdate();
                                 });
-                                // Use original text while waiting for translation
                                 translatedRecords[key] = text;
                             }
                         }
                     }
                     
                     return approvalArr
-                    .filter(lv => lv.status && ["waiting", "approved", "rejected"].includes(lv.status))
+                    // === SỬA: Thêm điều kiện lọc bỏ những level không có approver info ===
+                    .filter(lv => {
+                        // Bỏ qua nếu không có empno của approver
+                        if (!lv.approver || !lv.approver.empno) {
+                            return false;
+                        }
+                        // Giữ lại nếu có status hợp lệ
+                        return lv.status && ["waiting", "approved", "rejected"].includes(lv.status);
+                    })
                     .map(lv => {
                         const recordKey = lv.type || "";
                         const record = translatedRecords[recordKey] || "";
@@ -4279,6 +4309,12 @@ v-model="viewOriginal"
             this.$nextTick(() => {
                 const sessionUser = this.$session.get("mpr");
                 if (sessionUser) {
+                    // === KIỂM TRA EMPNO ===
+                    if (!sessionUser.empno || sessionUser.empno.trim() === '') {
+                        console.warn('Session empno is empty');
+                        return;
+                    }
+                    
                     this.activeUser = {
                         empno: sessionUser.empno,
                         name: sessionUser.name,
@@ -4287,21 +4323,23 @@ v-model="viewOriginal"
                         location: sessionUser.location,
                         email: sessionUser.email,
                     };
+                    
+                    // === GỌI LẠI CÁC HÀNG CẢN EMPNO ===
                     this.getReq_id();
                     this.getChangeReason();
                     this.getDataModel().then(() => {
                         if (this.editData) {
                             this.populateForm(this.editData);
-                        } else {
-                            if (this.$props.user) {
-                                this.user.div = this.$props.user.div || "";
-                                this.user.dept = this.$props.user.dept || "";
-                                this.user.unit = this.$props.user.unit || "";
-                            }
                         }
                     });
+                    
+                    // Force update để trigger computed properties
+                    this.$forceUpdate();
+                } else {
+                    console.warn('No session user found');
                 }
             });
+            
             if (!this.editData) {
                 this.generateReqId().then((newReqId) => {
                     this.form.req_id = newReqId;

@@ -142,6 +142,11 @@
             <template #[`header.action`]>
                 {{ $t('Print') }}
             </template>
+            <template #[`header.recruited_status`]>
+                <DsFilter :name="$t('Recruitment status')" 
+                :in-items="filterItems.recruited_status"
+                @changed="updateFilter('recruited_status', $event)" />
+            </template>
             <template v-slot:[`item.recruited_status`]="{ item }">
                 <v-chip 
                 v-if="getRecruitmentStatus(item).show"
@@ -205,7 +210,7 @@
 <template v-slot:[`item.status`]="{ item }">
     <div class="d-flex align-center flex-wrap">
         <!-- Year-End To Do: show original status + amendment status (if any) + virtual waiting_dept chip -->
-     <template v-if="isYearEndTodo(item) || isYearEndPending(item)">
+        <template v-if="isYearEndTodo(item) || isYearEndPending(item)">
             <!-- 1) Original status chip (with tooltip) -->
             <v-tooltip bottom :disabled="!getNextApproverInfoForStatus(item)" v-if="item.status">
                 <template v-slot:activator="{ on, attrs }">
@@ -288,10 +293,10 @@
             {{ getStatusWithApprover(item.status, item) }}
         </v-chip>
     </template>
-             <span>
+    <span>
         {{ getReturnInfo(item).returned ? getReturnInfo(item).reason : getNextApproverInfoForStatus(item) }}
     </span>
-
+    
 </v-tooltip>
 <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
     <template v-slot:activator="{ on, attrs }">
@@ -652,34 +657,34 @@
                 <template v-slot:[`header.select`]>
                     <v-checkbox v-model="selectAll" color="primary" hide-details @click="toggleSelectAll" ></v-checkbox>
                 </template>
-            <template v-slot:[`item.empno`]="{ item }">
-                <div class="d-flex align-center">
-                    {{ item.empno }}
-                </div>
-            </template>
-            <template v-slot:[`item.name`]="{ item }">
-                <div class="d-flex align-center">
-                    {{ item.name }}
-                </div>
-            </template>
-            <template v-slot:[`item.position`]="{ item }">
-                <div class="d-flex align-center">
-                    {{ getPositionName(item.position) }}
-                </div>
-            </template>
-            <template v-slot:[`item.date`]="{ item }">
-                <div class="d-flex align-center">
-                    {{ formatDate(item.date) }}
-                </div>
-            </template>
-            <template v-slot:[`header.empno`]> {{ $t('Empno') }} </template>
-            <template v-slot:[`header.name`]> {{ $t('Name') }} </template>
-            <template v-slot:[`header.date`]> {{ $t('In date') }} </template>
-            <template v-slot:[`header.key_in`]>{{ $t('Key in') }} </template>
-            <template v-slot:[`header.position`]>{{ $t('Position') }} </template>
-    </v-data-table>
-</v-card-text>
-</v-card>
+                <template v-slot:[`item.empno`]="{ item }">
+                    <div class="d-flex align-center">
+                        {{ item.empno }}
+                    </div>
+                </template>
+                <template v-slot:[`item.name`]="{ item }">
+                    <div class="d-flex align-center">
+                        {{ item.name }}
+                    </div>
+                </template>
+                <template v-slot:[`item.position`]="{ item }">
+                    <div class="d-flex align-center">
+                        {{ getPositionName(item.position) }}
+                    </div>
+                </template>
+                <template v-slot:[`item.date`]="{ item }">
+                    <div class="d-flex align-center">
+                        {{ formatDate(item.date) }}
+                    </div>
+                </template>
+                <template v-slot:[`header.empno`]> {{ $t('Empno') }} </template>
+                <template v-slot:[`header.name`]> {{ $t('Name') }} </template>
+                <template v-slot:[`header.date`]> {{ $t('In date') }} </template>
+                <template v-slot:[`header.key_in`]>{{ $t('Key in') }} </template>
+                <template v-slot:[`header.position`]>{{ $t('Position') }} </template>
+            </v-data-table>
+        </v-card-text>
+    </v-card>
 </v-dialog>
 <v-dialog v-model="resignDialog" max-width="1000px">
     <v-card>
@@ -1201,6 +1206,25 @@
                                 case 'unit': return values.includes(item.unit);
                                 case 'unit_name': return values.includes(item.unit_name);
                                 case 'pos': return values.includes(this.getPositionName(item.pos));
+                              
+                                case 'reason':
+                                return values.some(val => {
+                                    // Xử lý case reason_exp = 3 (Other reason)
+                                    if (Number(item.reason_exp) === 3 && item.isOther_reason) {
+                                        const localizedReason = this.getLocalizedOtherReason(item.isOther_reason);
+                                        return val === localizedReason;
+                                    }
+                                    // Xử lý case reason thông thường
+                                    return val === item.reason;
+                                });
+                                case 'recruited_status':
+                                try {
+                                    const rs = this.getRecruitmentStatus(item);
+                                    const text = rs && rs.text ? rs.text : '';
+                                    return values.includes(text);
+                                } catch (e) {
+                                    return false;
+                                }
                                 case 'status': 
                                 return values.includes(this.getStatusText(item.status)) || 
                                 values.includes(this.getStatusText(item.status_amendent)) ||
@@ -1287,6 +1311,16 @@
                             return this.getLocalizedOtherReason(item.isOther_reason);
                         }
                         return item.reason;
+                    }))].filter(Boolean),
+                  
+                    reason: [...new Set(this.formattedData.map(item => {
+                        if (Number(item.reason_exp) === 3 && item.isOther_reason) {
+                            return this.getLocalizedOtherReason(item.isOther_reason);
+                        }
+                        if (item.reason) {
+                            return item.reason;
+                        }
+                        return '';
                     }))].filter(Boolean),
                     status: [...new Set(this.formattedData.flatMap(item => [
                     this.getStatusText(item.status),
@@ -1382,28 +1416,28 @@
                 }
             },
             isYearEndPending(item) {
-               try {
-                   if (!item) return false;
-                   if (!this.settingHistory || !Array.isArray(this.settingHistory)) return false;
-
-                   const currentYear = new Date().getFullYear();
-                   const today = dayjs().format('YYYY-MM-DD');
-                   const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
-                   if (!setting || !setting.email_date || !setting.deadline_date) return false;
-
-                   const isWithinRange = (today >= setting.email_date) && (today <= setting.deadline_date);
-                   if (!isWithinRange) return false;
-
-                   const completedCondition = (item.status === 'completed' || item.status_amendent === 'completed');
-                   const notYetProcessed = !item.req_id_oldyear && !item.deny_temp && !item.status_endyear;
-                   const notFulfilled = item.fulfilled === 'no';
-
-                   return (notFulfilled && notYetProcessed && completedCondition);
-               } catch (e) {
-                   console.error('isYearEndPending error', e);
-                   return false;
-               }
-           },
+                try {
+                    if (!item) return false;
+                    if (!this.settingHistory || !Array.isArray(this.settingHistory)) return false;
+                    
+                    const currentYear = new Date().getFullYear();
+                    const today = dayjs().format('YYYY-MM-DD');
+                    const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
+                    if (!setting || !setting.email_date || !setting.deadline_date) return false;
+                    
+                    const isWithinRange = (today >= setting.email_date) && (today <= setting.deadline_date);
+                    if (!isWithinRange) return false;
+                    
+                    const completedCondition = (item.status === 'completed' || item.status_amendent === 'completed');
+                    const notYetProcessed = !item.req_id_oldyear && !item.deny_temp && !item.status_endyear;
+                    const notFulfilled = item.fulfilled === 'no';
+                    
+                    return (notFulfilled && notYetProcessed && completedCondition);
+                } catch (e) {
+                    console.error('isYearEndPending error', e);
+                    return false;
+                }
+            },
             getEndYearStatusText(status) {
                 if (!status) return "";
                 const prefix = "📅 "; 
@@ -3406,12 +3440,12 @@
                 }
             },
             loadFlowDataForItem(item) {
-              
+                
                 if (!item || !item.id) return;
                 const id = item.id;
                 if (this.approvalFlowCache[id]) return;
                 if (this.flowLoading[id]) return; // avoid duplicate requests
-
+                
                 // mark loading
                 this.$set(this.flowLoading, id, true);
                 this.getFlowDataForItem(item)
@@ -3733,9 +3767,6 @@
                                 break;
                                 case 'pos':
                                 row[header.title] = this.getPositionName(item.pos);
-                                break;
-                                case 'sub_pos':
-                                row[header.title] = this.getSubPositionName(item.sub_pos, true);
                                 break;
                                 case 'qty_req':
                                 row[header.title] = this.getDisplayQuantity(item.qty_req, item);

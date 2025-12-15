@@ -1536,7 +1536,26 @@
                                 case 'unit': return values.includes(item.unit);
                                 case 'unit_name': return values.includes(item.unit_name);
                                 case 'pos': return values.includes(this.getPositionName(item.pos));
-                                // Cập nhật lọc Status để bao gồm status_endyear
+                                case 'sub_pos': 
+                                return values.includes(this.getSubPositionName(item.sub_pos, true));
+                                case 'reason':
+                                return values.some(val => {
+                                    // Xử lý case reason_exp = 3 (Other reason)
+                                    if (Number(item.reason_exp) === 3 && item.isOther_reason) {
+                                        const localizedReason = this.getLocalizedOtherReason(item.isOther_reason);
+                                        return val === localizedReason;
+                                    }
+                                    // Xử lý case reason thông thường
+                                    return val === item.reason;
+                                });
+                                case 'recruited_status':
+                                try {
+                                    const rs = this.getRecruitmentStatus(item);
+                                    const text = rs && rs.text ? rs.text : '';
+                                    return values.includes(text);
+                                } catch (e) {
+                                    return false;
+                                }
                                 case 'status': 
                                 return values.includes(this.getStatusText(item.status)) || 
                                 values.includes(this.getStatusText(item.status_amendent)) ||
@@ -1617,28 +1636,28 @@
                     unit: [...new Set(this.formattedData.map(item => item.unit))].filter(Boolean),
                     // division: [...new Set(this.formattedData.map(item => item.division))].filter(Boolean),
                     pos: [...new Set(this.formattedData.map(item => this.getPositionName(item.pos)))].filter(Boolean),
+                    
                     reason: [...new Set(this.formattedData.map(item => {
-                        // Nếu là reason_exp = 3 (Other) thì lấy giá trị localized từ isOther_reason
+                        // Nếu là reason_exp = 3 (Other) thì lấy giá trị localized
                         if (Number(item.reason_exp) === 3 && item.isOther_reason) {
                             return this.getLocalizedOtherReason(item.isOther_reason);
                         }
-                        // Nếu không phải Other reason thì lấy reason thông thường
-                        return item.reason;
+                        // Nếu không phải Other thì lấy reason thông thường
+                        if (item.reason) {
+                            return item.reason;
+                        }
+                        return '';
                     }))].filter(Boolean),
                     status: [...new Set(this.formattedData.flatMap(item => [
                     this.getStatusText(item.status),
                     this.getStatusText(item.status_amendent),
                     this.getEndYearStatusText(item.status_endyear) // <--- THÊM DÒNG NÀY
                     ]))].filter(Boolean),
-                    sub_pos: [...new Set(this.subPos.map(sp => {
-                        try {
-                            const subNameObj = JSON.parse(sp.sub_name.trim());
-                            const locale = this.$i18n.locale || 'en';
-                            return subNameObj[locale] || subNameObj['en'] || '';
-                        } catch (error) {
-                            console.error('Error parsing sub position name:', error);
-                            return '';
+                    sub_pos: [...new Set(this.formattedData.map(item => {
+                        if (item.sub_pos) {
+                            return this.getSubPositionName(item.sub_pos, true);
                         }
+                        return '';
                     }))].filter(Boolean),
                     recruited: [...new Set(this.formattedData.map(item => item.recruited))].filter(Boolean),
                     resign: [...new Set(this.formattedData.map(item => item.resign))].filter(Boolean),
@@ -4413,7 +4432,7 @@
             "Loading approver info...":"Loading approver info...",
             "Current":"Current",
             "loadingData":"Loading data...please wait",
-            "Year-End Settings":"Annual Settlement Settings",
+            "Year-End Settings":"Fiscal Year Settlement",
             "year":"Fiscal Year",
             "Email Notification Date":"Fiscal Year Settlement Mail Date",
             "Reply Deadline":"Reply Deadline",
@@ -4674,7 +4693,7 @@
             "Loading approver info...":"正在加載審批人信息...",
             "Current":"當前",
             "loadingData":"正在加載數據...請稍候",
-            "Year-End Settings": "年度結算設定",
+            "Year-End Settings": "财务年度结算",
             "year":"年度",
             "Email Notification Date":"年度結算 email 通知日期",
             "Reply Deadline":"最後回覆期限日期",
