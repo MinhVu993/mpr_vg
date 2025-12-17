@@ -19,7 +19,7 @@
             <v-app-bar v-if="showFlowSign" class="flow-sign-container mb-3" flat dense>
                 <v-icon color="info" class="mr-2">mdi-information-outline</v-icon>
                 <div class="flow-sign-text text-subtitle-2">
-                    <div>{{ getCurrentFlowSign }}</div>
+                    <div>{{ $t('Request_ori:') }}{{ getCurrentFlowSign }}</div>
                     <div v-if="isNewYearProcessing">
                         {{ $t('Request new year:') }} {{ getNewYearShortFlow }}
                     </div>
@@ -398,7 +398,7 @@
         </v-col>
         <v-col cols="12">
             <v-text-field 
-             v-show="form.req_id_oldyear || (editData && editData.req_id_oldyear)"
+            v-show="form.req_id_oldyear || (editData && editData.req_id_oldyear)"
             outlined 
             readonly 
             dense
@@ -825,15 +825,15 @@ v-model="viewOriginal"
                 flow_sign: [
                 {
                     id: 1,
-                    cn: "填表人➜ 單位主管 部級主管 ➜ 處級主管 ➜ 人力資源部 (適用於越籍課長級(含)以下幹部/職員/工人)",
-                    en: "Submitter ➜ Department manager ➜ Division manager ➜ HR Department (Applicable to Vietnamese Section Chief level (inclusive) and below – supervisor/Staff/Workers)",
-                    vi: "Người Điền Biểu ➜ Chủ Quản Đơn Vị ➜ Chủ quản bộ phận ➜ Chủ Quản Cấp Sở ➜ Bộ phận ADHR  (Áp dụng đối với CNV, cán bộ Việt Nam cấp Trưởng ngành trở xuống)",
+                    cn: "填表人➜ 單位主管➜ 部級主管 ➜ 處級主管 ➜ 人力資源部 (適用於越籍課長級(含)以下幹部/職員/工人)",
+                    en: "Submitter ➜ Department manager ➜ Division manager ➜ HR Department (Applicable to Vietnamese Section Chief level (inclusive) and below Leader/Staff/Workers)",
+                    vi: "Người Điền Biểu ➜ Chủ Quản Đơn Vị ➜ Chủ quản bộ phận ➜ Chủ Quản Cấp Sở ➜ Bộ phận ADHR (Áp dụng đối với CNV, cán bộ Việt Nam cấp Trưởng ngành trở xuống)",
                 },
                 {
                     id: 2,
-                    cn: "填表人 ➜ 部級主管 ➜ 處級主管 ➜人力資源部 ➜ 管理處 ➜ 總經理室 (適用於越籍資深課長級(含)以上幹部)",
-                    en: "Submitter ➜ Department manager ➜ Division manager ➜ HR Department ➜ Management Department ➜ General Manager's Office (Applicable to Vietnamese Senior Section Chief level (inclusive) and above – supervisor)",
-                    vi: "Người Điền Biểu ➜ Chủ quản bộ phận ➜ Chủ Quản Cấp Sở ➜ Bộ phận ADHR ➜ Khu quản lý  ➜ Văn Phòng TGĐ (Áp dụng đối với cán bộ Việt Nam cấp Trưởng ngành thâm niên trở lên)",
+                    cn: "填表人 ➜ 單位主管 ➜ 部級主管 ➜ 處級主管 ➜ 人力資源部 ➜ 管理處 ➜ 總經理室 (適用於越籍資深課長級(含)以上幹部)",
+                    en: "Submitter ➜ Department manager ➜ Division manager ➜ HR Department (Applicable to Vietnamese Section Chief level (inclusive) and above Leader)",
+                    vi: "Người Điền Biểu ➜ Chủ Quản Đơn Vị ➜ Chủ quản bộ phận ➜ Chủ Quản Cấp Sở ➜ Bộ phận ADHR ➜ Khu quản lý ➜ Văn Phòng TGĐ (Áp dụng đối với cán bộ Việt Nam cấp Trưởng ngành thâm niên trở lên)",
                 },
                 ],
                 selectedFlowSign: null,
@@ -3689,14 +3689,20 @@ v-model="viewOriginal"
                 
             },
             getNewYearShortFlow() {
-                const selectedFlow = this.flow_sign.find(
-                (f) => f.id === parseInt(this.form.suppType)
-                );
-                if (!selectedFlow) return "";
+                const locale = this.$i18n.locale;
                 
-                const text = selectedFlow[this.$i18n.locale] || selectedFlow.en || "";
-                const parts = text.split('➜').map(p => p.trim()).filter(Boolean);
-                return parts.slice(0, 3).join(' ➜ ');
+                // Chuỗi mũi tên thống nhất
+                const arrow = ' ➜ '; 
+                
+                if (locale === 'cn' || locale === 'tw') { // Xử lý cho tiếng Trung (CN/TW)
+                    return `人力資源部${arrow}部級主管${arrow}處級主管`;
+                } 
+                else if (locale === 'en') { // Tiếng Anh
+                    return `HR Department${arrow}Department manager${arrow}Division manager`;
+                } 
+                else { // Mặc định là Tiếng Việt (vi)
+                    return `Bộ phận ADHR${arrow}Chủ quản bộ phận${arrow}Chủ Quản Cấp Sở`;
+                }
             },
             disAmendent() {
                 if (this.isEdit && this.editData.req_id_change) {
@@ -4475,7 +4481,9 @@ v-model="viewOriginal"
             "Continue Recruitment": "Continue Recruitment",
             "Cancel Recruitment": "Cancel Recruitment",
             "Based on": "Based on",
-            "continue recruitment based on conditions": "recruitment conditions to continue"
+            "continue recruitment based on conditions": "recruitment conditions to continue",
+            "Request new year:": "Annual Requirement Consolidation Settings Process: ",
+            "Request_ori:":"Standard Application Process: "
         },
         "vi": {
             "Create new request": "Tạo yêu cầu mới",
@@ -4608,7 +4616,9 @@ v-model="viewOriginal"
             "Continue Recruitment": "Tiếp tục tuyển dụng",
             "Cancel Recruitment": "Hủy tuyển dụng",
             "Based on": "Dựa theo đơn",
-            "continue recruitment based on conditions": "để tiếp tục tuyển dụng theo điều kiện cũ"
+            "continue recruitment based on conditions": "để tiếp tục tuyển dụng theo điều kiện cũ",
+            "Request new year:": "Lưu trình tổng kết nhu cầu tuyển dụng năm: ",
+            "Request_ori:":"Lưu trình phê duyệt tiêu chuẩn："
         },
         "cn": {
             "Create new request": "创建新请求",
@@ -4741,7 +4751,9 @@ v-model="viewOriginal"
             "Continue Recruitment": "繼續招募",
             "Cancel Recruitment": "取消招募",
             "Based on": "依照",
-            "continue recruitment based on conditions": "招募條件續招"
+            "continue recruitment based on conditions": "招募條件續招",
+            "Request new year:": "年度需求結算流程：",
+            "Request_ori:":"一般申請流程："
         }
     }
 </i18n>

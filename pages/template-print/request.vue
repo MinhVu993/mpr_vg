@@ -436,7 +436,7 @@
                                                                                     activeRct: data.activeRct || null,     // include activeRct
                                                                                     logsParsed: parsedLogs,                 // include parsed logs consistently
                                                                                     req_id_oldyear: data.req_id_oldyear || null ,
-                                                                                     key_new_year: data.key_new_year || null,
+                                                                                    key_new_year: data.key_new_year || null,
                                                                                 };
                                                                             }
                                                                         }
@@ -718,23 +718,24 @@
                                                                 
                                                                 getApprovalArrayForPrint() {
                                                                     const fd = this.formData || {};
-                                                                    // Nếu là đơn cũ (req_id_oldyear) thì ta không dùng hàm chung này cho level 4,5,6
-                                                                    // mà xử lý trực tiếp trong getApprover để tách nguồn dữ liệu.
-                                                                    // Tuy nhiên hàm này vẫn dùng cho các logic khác hoặc fallback.
-                                                                    
                                                                     const approval = Array.isArray(fd.approval) ? fd.approval : [];
                                                                     
-                                                                    // Normalize logsParsed
+                                                                    // 1. Lấy logs cuối cùng (Logic cũ giữ nguyên)
                                                                     const logsRaw = fd.logsParsed;
                                                                     let lastLogs = [];
                                                                     
                                                                     if (Array.isArray(logsRaw) && logsRaw.length > 0) {
+                                                                        // Trường hợp logs là mảng các chu kỳ (mảng 2 chiều)
                                                                         const lastCandidate = logsRaw[logsRaw.length - 1];
                                                                         if (Array.isArray(lastCandidate) && lastCandidate.length > 0) {
                                                                             lastLogs = lastCandidate;
-                                                                        } else if (logsRaw.every(item => item && typeof item.level !== 'undefined')) {
+                                                                        } 
+                                                                        // Trường hợp logs phẳng (ít gặp nhưng vẫn giữ logic cũ phòng hờ)
+                                                                        else if (logsRaw.every(item => item && typeof item.level !== 'undefined')) {
                                                                             lastLogs = logsRaw;
-                                                                        } else {
+                                                                        } 
+                                                                        // Quét ngược để tìm mảng hợp lệ
+                                                                        else {
                                                                             for (let i = logsRaw.length - 1; i >= 0; i--) {
                                                                                 if (Array.isArray(logsRaw[i]) && logsRaw[i].length > 0) {
                                                                                     lastLogs = logsRaw[i];
@@ -744,6 +745,23 @@
                                                                         }
                                                                     }
                                                                     
+                                                                    // 2. [MỚI] KIỂM TRA CHỮ KÝ HỆ THỐNG (AUTO CLOSE)
+                                                                    // Nếu level 1 là SYSTEM ký duyệt -> Lấy dữ liệu từ logs cũ để hiển thị người thật
+                                                                    const level1Item = approval.find(item => Number(item.level) === 1);
+                                                                    if (level1Item && level1Item.approver) {
+                                                                        const empno = level1Item.approver.empno;
+                                                                        const name = level1Item.approver.name;
+                                                                        
+                                                                        // Kiểm tra nếu là SYSTEM
+                                                                        if (empno === 'SYSTEM' || name === 'SYSTEM (AUTO)') {
+                                                                            // Trả về logs cuối cùng (Cycle cũ) nếu có
+                                                                            if (lastLogs.length > 0) {
+                                                                                return lastLogs;
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                    
+                                                                    // 3. Logic cũ cho các trường hợp activeRct hoặc status_amendent
                                                                     if (fd.activeRct) {
                                                                         return lastLogs.length ? lastLogs : approval;
                                                                     } else {

@@ -1206,7 +1206,7 @@
                                 case 'unit': return values.includes(item.unit);
                                 case 'unit_name': return values.includes(item.unit_name);
                                 case 'pos': return values.includes(this.getPositionName(item.pos));
-                              
+                                
                                 case 'reason':
                                 return values.some(val => {
                                     // Xử lý case reason_exp = 3 (Other reason)
@@ -1312,7 +1312,7 @@
                         }
                         return item.reason;
                     }))].filter(Boolean),
-                  
+                    
                     reason: [...new Set(this.formattedData.map(item => {
                         if (Number(item.reason_exp) === 3 && item.isOther_reason) {
                             return this.getLocalizedOtherReason(item.isOther_reason);
@@ -2849,6 +2849,7 @@
             getApprovalLogsData(item) {
                 try {
                     let logsData = [];
+                    // Chỉ xử lý dữ liệu từ logs (lịch sử)
                     if (item.logs) {
                         const parsedLogs = JSON.parse(item.logs);
                         const approvalRecords = item.approval_record ? JSON.parse(item.approval_record) : [];
@@ -2859,8 +2860,20 @@
                                 const cycleData = cycle
                                 .filter(log => log.approver && log.approver.empno)
                                 .map((log, index) => {
-                                    const recordKey = log.type; // e.g., 'unit', 'dept', etc.
-                                    const approvalRecord = cycleApprovalRecord[recordKey] || '';
+                                    const recordKey = log.type;
+                                    let approvalRecord = cycleApprovalRecord[recordKey] || '';
+                                    
+                                    // --- ĐOẠN CODE FIX LỖI HIỂN THỊ ---
+                                    // Nếu record chứa chữ ký của SYSTEM (AUTO)
+                                    if (approvalRecord && typeof approvalRecord === 'string' && approvalRecord.includes('SYSTEM (AUTO)')) {
+                                        // Nhưng người duyệt dòng này KHÔNG phải là SYSTEM
+                                        // (Ví dụ: người duyệt là Fiona Chang, nhưng record lại là System Auto Close do lệch index)
+                                        if (log.approver.empno !== 'SYSTEM' && log.approver.name !== 'SYSTEM (AUTO)') {
+                                            approvalRecord = ''; // Xóa record hiển thị sai
+                                        }
+                                    }
+                                    // -----------------------------------
+                                    
                                     return {
                                         level: index + 1,
                                         cycle: this.$t('Cycle') + ' ' + (cycleIndex + 1),
@@ -2878,8 +2891,8 @@
                                 });
                                 logsData = [...logsData, ...cycleData];
                             });
-                        } 
-                    } 
+                        }
+                    }
                     
                     return logsData;
                 } catch (error) {

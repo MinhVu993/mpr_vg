@@ -3868,7 +3868,6 @@
             getApprovalLogsData(item) {
                 try {
                     let logsData = [];
-                    
                     // Chỉ xử lý dữ liệu từ logs (lịch sử)
                     if (item.logs) {
                         const parsedLogs = JSON.parse(item.logs);
@@ -3881,7 +3880,13 @@
                                 .filter(log => log.approver && log.approver.empno)
                                 .map((log, index) => {
                                     const recordKey = log.type;
-                                    const approvalRecord = cycleApprovalRecord[recordKey] || '';
+                                    let approvalRecord = cycleApprovalRecord[recordKey] || '';
+                                    
+                                    if (approvalRecord && typeof approvalRecord === 'string' && approvalRecord.includes('SYSTEM (AUTO)')) {
+                                        if (log.approver.empno !== 'SYSTEM' && log.approver.name !== 'SYSTEM (AUTO)') {
+                                            approvalRecord = ''; // Xóa record hiển thị sai
+                                        }
+                                    }
                                     
                                     return {
                                         level: index + 1,
@@ -3895,7 +3900,7 @@
                                         return_reason: log.return_reason || '',
                                         approval_record: approvalRecord,
                                         processed_at: log.processed_at,
-                                        cycleIndex: cycleIndex + 1, // Quan trọng: đảm bảo đây là số
+                                        cycleIndex: cycleIndex + 1,
                                     };
                                 });
                                 logsData = [...logsData, ...cycleData];
@@ -4432,9 +4437,9 @@
             "Loading approver info...":"Loading approver info...",
             "Current":"Current",
             "loadingData":"Loading data...please wait",
-            "Year-End Settings":"Fiscal Year Settlement",
-            "year":"Fiscal Year",
-            "Email Notification Date":"Fiscal Year Settlement Mail Date",
+            "Year-End Settings":"Annual Requirement Consolidation Settings",
+            "year":"Year",
+            "Email Notification Date":"Annual Consolidation Email Date",
             "Reply Deadline":"Reply Deadline",
             "System Update Date":"System Update Date",
             "Historical Settings":"Historical Settings",
@@ -4444,7 +4449,7 @@
             "Email Notify":"Email Notify",
             "System Update":"System Update",
             "Key In New Year":"New Year Form Apply Date",
-            "NY Date Request":"New Year Onboard Date"
+            "NY Date Request":"New Year require onboard Date"
         },
         "vi": {
             "ID": "Mã đơn",
@@ -4561,11 +4566,11 @@
             "Loading approver info...":"Đang tải thông tin người phê duyệt...",
             "Current":"Hiện tại",
             "loadingData":"Đang tải dữ liệu...vui lòng chờ",
-            "Year-End Settings":"Cài đặt quyết toán năm",
-            "year":"Năm tài chính",
-            "Email Notification Date":"Ngày gửi mail quyết toán năm",
-            "Reply Deadline":"Hạn cuối phản hồi",
-            "System Update Date":"Ngày cập nhật hệ thống",
+            "Year-End Settings":"Cài đặt tổng kết năm",
+            "year":"Năm",
+            "Email Notification Date":"Ngày gửi email thông báo tổng kết năm",
+            "Reply Deadline":"Thời hạn phản hồi cuối cùng",
+            "System Update Date":"Ngày cập nhật trạng thái hệ thống",
             "Historical Settings":"Lịch sử cài đặt",
             "Action":"Hành động",
             "NY_Prefix":"Yêu cầu cho Năm Mới",
@@ -4573,7 +4578,7 @@
             "System Update Date must be after or equal to Reply Deadline": "Ngày cập nhật hệ thống phải sau hoặc bằng Hạn chót phản hồi",
             "Email Notify":"Ngày gửi email",
             "System Update":"Ngày cập nhật hệ thống",
-            "Key In New Year":"Ngày nộp form năm mới",
+            "Key In New Year":"Ngày nộp đơn (biểu mẫu) năm mới",
             "NY Date Request":"Ngày dự kiến nhận việc năm mới"
         },
         "cn": {
@@ -4693,10 +4698,10 @@
             "Loading approver info...":"正在加載審批人信息...",
             "Current":"當前",
             "loadingData":"正在加載數據...請稍候",
-            "Year-End Settings": "财务年度结算",
+            "Year-End Settings": "年度結算設定",
             "year":"年度",
-            "Email Notification Date":"年度結算 email 通知日期",
-            "Reply Deadline":"最後回覆期限日期",
+            "Email Notification Date":"年度結算Email通知日期",
+            "Reply Deadline":"最後回覆期限",
             "System Update Date":"系統更新狀態日期",
             "Historical Settings":"歷年設定紀錄",
             "NY_Prefix":"新年度需求申請",
