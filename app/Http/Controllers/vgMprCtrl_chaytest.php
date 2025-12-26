@@ -23,10 +23,11 @@ use App\vgRecruitingReportEmpnoInfoMdl as EmpnoInfo;
 use App\vgRecruitingReportDeptCodeMdl as nameDeptCode;
 use App\vgRecruitingReportDemandMdl as Demand;
 use App\vgRecruitingReportDutyHrmMdl as DutyHrm;
+use App\vgMprUserAccessLogMdl as UserAccessLog;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 
-class vgMprCtrlTemp extends Controller
+class vgMprCtrl extends Controller
 {
     private function getResignData($loc)
     {
@@ -140,7 +141,7 @@ class vgMprCtrlTemp extends Controller
         } elseif ($empno && $dept) {
             $params = new Request([
                 "empno" => $empno,
-                "app_code" => "mpr_",
+                "app_code" => "mpr",
                 "location" => "VG",
                 "custom_data" => json_encode([
                     "custom_dept" => $dept,
@@ -510,12 +511,47 @@ class vgMprCtrlTemp extends Controller
             $historyData = $this->handleChangeHistory($existingMpr, $request);
 
             $activeRct = $request->input("activeRct");
+            // --- XỬ LÝ LƯU LOG NGƯỜI DÙNG ---
+            // Giải mã thông tin người đang thao tác (được gửi lên trong request->submitter)
+            $currentUserData = json_decode($request->submitter, true);
+            $actionType = "create";
 
+            if ($existingMpr) {
+                if (
+                    isset($activeRct) &&
+                    $activeRct !== "" &&
+                    $activeRct !== null
+                ) {
+                    $actionType = "process_new_year"; // Hành động xử lý năm mới
+                } elseif ($isAmendment) {
+                    $actionType = "amendment"; // Hành động điều chỉnh
+                } else {
+                    $actionType = "update"; // Hành động cập nhật thường
+                }
+            }
+
+            UserAccessLog::create([
+                "empno" => $currentUserData["empno"] ?? "Unknown", // Người đang thực hiện
+                "ip_address" => $request->ip(),
+                "user_agent" => $request->header("User-Agent"),
+                "action" => $actionType . " - ReqID: " . $request->req_id,
+            ]);
+            //  -- KẾT THÚC XỬ LÝ LƯU LOG NGƯỜI DÙNG ---
+            $submitterToSave = $request->submitter;
+
+            if (
+                $existingMpr &&
+                isset($activeRct) &&
+                $activeRct !== "" &&
+                $activeRct !== null
+            ) {
+                $submitterToSave = $existingMpr->submitter;
+            }
             $data = [
                 "req_id" => $request->req_id,
                 "supp_type" => $request->supp_type,
                 "key_in_date" => $request->key_in_date,
-                "submitter" => $request->submitter,
+                "submitter" => $submitterToSave,
                 "edu" => $request->edu,
                 "spec" => $request->spec,
                 "w_exp" => $request->w_exp,
@@ -556,16 +592,8 @@ class vgMprCtrlTemp extends Controller
             if ($request->has("deny_temp") && $request->get("deny_temp")) {
                 $data["deny_temp"] = $request->get("deny_temp");
             }
-
-            // --- CẤU HÌNH TRẠNG THÁI VÀ MẢNG DUYỆT (QUAN TRỌNG) ---
-
-            // 1. Đơn Năm Mới (activeRct)
             if (isset($activeRct) && $activeRct !== "" && $activeRct !== null) {
                 $data["status_endyear"] = "waiting_dept";
-                // Không set status/status_amendent để giữ nguyên trạng thái cũ
-
-                // [FIX]: Khởi tạo mảng approval mới cho quy trình End Year (2 cấp)
-                // Nếu không có bước này, hệ thống sẽ dùng lại approval cũ đã completed -> lỗi không cập nhật
                 $endYearApproval = [
                     [
                         "level" => 1,
@@ -676,10 +704,7 @@ class vgMprCtrlTemp extends Controller
                 $data["logs"] = null;
             }
 
-            $mpr = Mpr::updateOrCreate(
-                ["req_id" => $request->req_id],
-                $data
-            );
+            $mpr = Mpr::updateOrCreate(["req_id" => $request->req_id], $data);
 
             if ($request->emailList) {
                 $this->sendEmailNotification($mpr, $request, $isAmendment);
@@ -916,7 +941,7 @@ class vgMprCtrlTemp extends Controller
     {
         $params = new Request([
             "empno" => $req->empno,
-            "app_code" => "mpr_",
+            "app_code" => "mpr",
             "location" => "VG",
             "custom_data" => json_encode([
                 "custom_dept" => $req->dept,
@@ -1124,7 +1149,16 @@ class vgMprCtrlTemp extends Controller
                                 "original" => $mpr->req_id,
                                 "new" => $newMpr->req_id,
                             ]);
-
+                            try {
+                                $this->migrateCompletedMprToDemandSingle(
+                                    $newMpr
+                                );
+                            } catch (\Exception $e) {
+                                \Log::error(
+                                    "Error migrating duplicated MPR to Demand: " .
+                                        $e->getMessage()
+                                );
+                            }
                             // --- BỔ SUNG: CẬP NHẬT ĐƠN CŨ VỀ 0 ĐỂ ĐÓNG ---
                             $denyTempData = [
                                 "fullfilldate" => now()->format("Y-m-d"),
@@ -1168,7 +1202,7 @@ class vgMprCtrlTemp extends Controller
                 }
 
                 try {
-                    // $this->migrateCompletedMprToDemandSingle($mpr);
+                    $this->migrateCompletedMprToDemandSingle($mpr);
                 } catch (\Exception $e) {
                 }
             }
@@ -1234,19 +1268,126 @@ class vgMprCtrlTemp extends Controller
         }
         return null;
     }
-    private function sendMsg($params)
+    private function sendMsg($params, $additionalCc = [])
     {
-        // try {
-        //     $client = new \GuzzleHttp\Client();
+        try {
+            $client = new \GuzzleHttp\Client();
 
+            $formData = http_build_query($params);
+
+            $response = $client->post(
+                "http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg",
+                [
+                    "headers" => [
+                        "Content-Type" => "application/x-www-form-urlencoded",
+                    ],
+                    "body" => $formData,
+                ]
+            );
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (\Exception $e) {
+            throw $e;
+        }
+        
+        // --------------------------------------------------------
+        // try {
+        //     $interceptEmailAddress = "fiona.chang@spg-sportsgear.com";
+
+        //     // CC mặc định
+        //     $ccEmails = [
+        //         "vu.huynh@spg-sportsgear.com",
+        //         "chung.vo@spg-sportsgear.com",
+        //         "vg-hr013@spg-sportsgear.com",
+        //         "vg-hr015@spg-sportsgear.com",
+        //         "vg-hr009@spg-sportsgear.com",
+        //         "judy.yao@spg-sportsgear.com",
+        //         "yang.yu@spg-sportsgear.com",
+        //     ];
+
+        //     if (!empty($additionalCc)) {
+        //         $ccEmails = array_merge($ccEmails, (array) $additionalCc);
+        //         $ccEmails = array_unique($ccEmails);
+        //     }
+
+        //     if (!empty($params["mail_data"])) {
+        //         $mailData = json_decode($params["mail_data"], true);
+        //         if (is_array($mailData)) {
+        //             if (isset($mailData["to"])) {
+        //                 $mailData["to"] = [$interceptEmailAddress];
+        //             }
+
+        //             $mailData["cc"] = $ccEmails;
+
+        //             if (isset($mailData["bcc"])) {
+        //                 unset($mailData["bcc"]);
+        //             }
+
+        //             $params["mail_data"] = json_encode($mailData);
+
+        //             \Log::info("[EMAIL INTERCEPTION] Email configuration", [
+        //                 "to" => $mailData["to"],
+        //                 "cc" => $mailData["cc"],
+        //                 "subject" => $params["msg_subject"] ?? "N/A",
+        //             ]);
+        //         }
+        //     }
+
+        //     $client = new \GuzzleHttp\Client();
         //     $formData = http_build_query($params);
 
-        //     $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
-        //         'headers' => [
-        //             'Content-Type' => 'application/x-www-form-urlencoded'
-        //         ],
-        //         'body' => $formData
-        //     ]);
+        //     $response = $client->post(
+        //         "http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg",
+        //         [
+        //             "headers" => [
+        //                 "Content-Type" => "application/x-www-form-urlencoded",
+        //             ],
+        //             "body" => $formData,
+        //         ]
+        //     );
+
+        //     return json_decode($response->getBody()->getContents(), true);
+        // } catch (\Exception $e) {
+        //     throw $e;
+        // }
+        // /--------------------------------------------------------
+        // try {
+        //     $interceptEmailAddress = "vu.huynh@spg-sportsgear.com";
+        //     if (!empty($params["mail_data"])) {
+        //         $mailData = json_decode($params["mail_data"], true);
+        //         if (is_array($mailData)) {
+        //             if (isset($mailData["to"])) {
+        //                 $mailData["to"] = [$interceptEmailAddress];
+        //             }
+        //             if (isset($mailData["cc"])) {
+        //                 unset($mailData["cc"]);
+        //             }
+        //             if (isset($mailData["bcc"])) {
+        //                 unset($mailData["bcc"]);
+        //             }
+        //             $params["mail_data"] = json_encode($mailData);
+        //             \Log::info(
+        //                 "[EMAIL INTERCEPTION] All emails redirected to: " .
+        //                     $interceptEmailAddress,
+        //                 [
+        //                     "original_data" => $mailData,
+        //                     "subject" => $params["msg_subject"] ?? "N/A",
+        //                 ]
+        //             );
+        //         }
+        //     }
+        //     $client = new \GuzzleHttp\Client();
+        //     $formData = http_build_query($params);
+
+        //     $response = $client->post(
+        //         "http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg",
+        //         [
+        //             "headers" => [
+        //                 "Content-Type" => "application/x-www-form-urlencoded",
+        //             ],
+        //             "body" => $formData,
+        //         ]
+        //     );
 
         //     return json_decode($response->getBody()->getContents(), true);
         // } catch (\Exception $e) {
@@ -2283,7 +2424,7 @@ class vgMprCtrlTemp extends Controller
                 $requestParams = new Request();
                 $requestParams->merge([
                     "empno" => $submitter["empno"],
-                    "app_code" => "MPR_",
+                    "app_code" => "MPR",
                     "location" => $userData["location"] ?? "VN",
                     "custom_data" => json_encode([
                         "custom_dept" => $submitter["dept"] ?? null,
@@ -2858,7 +2999,6 @@ class vgMprCtrlTemp extends Controller
                 return;
             }
 
-            // Cập nhật trạng thái thành declined cho cả status và status_amendent
             if ($mpr->status === "waiting_dept") {
                 $mpr->status = "declined";
             }
@@ -3172,24 +3312,15 @@ class vgMprCtrlTemp extends Controller
                 if (empty($mpr->req_id)) {
                     continue;
                 }
-
-                // skip if already exists in Demand.id_code
                 if (Demand::where("id_code", $mpr->req_id)->exists()) {
                     continue;
                 }
 
                 $submitter = json_decode($mpr->submitter, true) ?: [];
-
-                // dem_dept: submitter.div
                 $dem_dept = $submitter["div"] ?? "";
-
-                // dem_sub_department: submitter.dept
                 $dem_sub_department = $submitter["dept"] ?? "";
 
-                // dem_unit: submitter.unit
                 $dem_unit = $submitter["unit"] ?? "";
-
-                // dem_position: map pos -> TypeApply.type_name.en (fallback to raw)
                 $dem_position = $mpr->pos;
                 $typeApply = TypeApply::where("id", $mpr->pos)
                     ->where("loc", $mpr->loc)
@@ -3213,7 +3344,6 @@ class vgMprCtrlTemp extends Controller
                     }
                 }
 
-                // dem_sub_position: map sub_pos -> SubPos.sub_name.en (fallback to raw)
                 $dem_sub_position = $mpr->sub_pos;
                 if (!empty($mpr->sub_pos)) {
                     $sub = SubPos::where("id", $mpr->sub_pos)
@@ -3238,8 +3368,6 @@ class vgMprCtrlTemp extends Controller
                         }
                     }
                 }
-
-                // dem_amount & stocknumber: sum qty_req excluding 'level'
                 $qtyReq = json_decode($mpr->qty_req, true);
                 if (!is_array($qtyReq)) {
                     $qtyReq = [];
@@ -3252,11 +3380,9 @@ class vgMprCtrlTemp extends Controller
                     $dem_amount += intval($v);
                 }
 
-                // dem_inputdate: date_req (fallback key_in_date)
                 $dem_inputdate =
                     $mpr->date_req ?: $mpr->key_in_date ?: date("Y-m-d");
 
-                // dem_note: spec & isOther_reason.vi
                 $spec = $mpr->spec ?? "";
                 $isOtherVi = "";
                 if (!empty($mpr->isOther_reason)) {
@@ -3275,7 +3401,6 @@ class vgMprCtrlTemp extends Controller
                 if ($isOtherVi !== "") {
                     $dem_note_parts[] = trim($isOtherVi);
                 }
-                // add Level info if available
                 if (isset($qtyReq["level"]) && !empty($qtyReq["level"])) {
                     $dutyHrm = DutyHrm::where(
                         "duty_no",
@@ -3289,9 +3414,7 @@ class vgMprCtrlTemp extends Controller
                                 isset($dutyName["vi"])
                             ) {
                                 $displayName = $dutyName["vi"];
-                                // Xử lý nếu tên bắt đầu bằng "VG"
                                 if (strpos($displayName, "VG") === 0) {
-                                    // Tìm vị trí khoảng cách thứ 2
                                     $firstSpace = strpos($displayName, " ");
                                     if ($firstSpace !== false) {
                                         $secondSpace = strpos(
@@ -3300,7 +3423,6 @@ class vgMprCtrlTemp extends Controller
                                             $firstSpace + 1
                                         );
                                         if ($secondSpace !== false) {
-                                            // Cắt bỏ phần "VG x" và khoảng cách
                                             $displayName = trim(
                                                 substr(
                                                     $displayName,
@@ -3323,13 +3445,11 @@ class vgMprCtrlTemp extends Controller
                                 "Level: " . trim($qtyReq["level"]);
                         }
                     } else {
-                        // Nếu không tìm thấy duty_no tương ứng
                         $dem_note_parts[] = "Level: " . trim($qtyReq["level"]);
                     }
                 }
                 $dem_note = implode("\n", $dem_note_parts);
 
-                // prepare new Demand
                 $demand = new Demand();
                 $demand->id_code = $mpr->req_id;
                 $demand->dem_dept = $dem_dept;
@@ -3383,7 +3503,6 @@ class vgMprCtrlTemp extends Controller
     private function migrateCompletedMprToDemandSingle($mpr)
     {
         try {
-            // --- KHỐI 1: XỬ LÝ ĐƠN ĐIỀU CHỈNH (AMENDMENT) ---
             if (
                 !empty($mpr->req_id_change) &&
                 $mpr->status_amendent === "completed"
@@ -3396,8 +3515,6 @@ class vgMprCtrlTemp extends Controller
                     );
                     return;
                 }
-
-                // Cập nhật số lượng nếu có thay đổi
                 $changeRequests = json_decode($mpr->change_req, true);
                 if (is_array($changeRequests)) {
                     $lastChange = end($changeRequests);
@@ -3409,8 +3526,6 @@ class vgMprCtrlTemp extends Controller
                         $demand->save();
                     }
                 }
-
-                // Xử lý HỦY đơn (deny_temp)
                 if (!empty($mpr->deny_temp)) {
                     $denyTemp = json_decode($mpr->deny_temp, true);
                     if ($denyTemp && isset($denyTemp["fullfilldate"])) {
@@ -3571,7 +3686,6 @@ class vgMprCtrlTemp extends Controller
             if ($isOtherVi !== "") {
                 $dem_note_parts[] = trim($isOtherVi);
             }
-            // add Level info if available
             if (isset($qtyReq["level"]) && !empty($qtyReq["level"])) {
                 $dutyHrm = DutyHrm::where("duty_no", $qtyReq["level"])->first();
                 if ($dutyHrm) {
@@ -3582,9 +3696,7 @@ class vgMprCtrlTemp extends Controller
                             isset($dutyName["vi"])
                         ) {
                             $displayName = $dutyName["vi"];
-                            // Xử lý nếu tên bắt đầu bằng "VG"
                             if (strpos($displayName, "VG") === 0) {
-                                // Tìm vị trí khoảng cách thứ 2
                                 $firstSpace = strpos($displayName, " ");
                                 if ($firstSpace !== false) {
                                     $secondSpace = strpos(
@@ -3651,15 +3763,6 @@ class vgMprCtrlTemp extends Controller
 
             return $demand;
         } catch (\Exception $e) {
-            \Log::error(
-                "Error in migrateCompletedMprToDemandSingle: " .
-                    $e->getMessage(),
-                [
-                    "mpr_id" => $mpr->id,
-                    "req_id" => $mpr->req_id ?? "N/A",
-                    "trace" => $e->getTraceAsString(),
-                ]
-            );
             throw $e;
         }
     }
@@ -3707,11 +3810,8 @@ class vgMprCtrlTemp extends Controller
                 }
             }
 
-            // 3. Tính toán lại số lượng: ưu tiên change_qty nếu có
             if (isset($newQtyFromChange) && $newQtyFromChange >= 0) {
                 $qtyReqJson = json_decode($originalMpr->qty_req, true) ?? [];
-
-                // Map theo pos giống logic cũ
                 switch ($pos) {
                     case 1:
                         $qtyReqJson["workers"] = $newQtyFromChange;
@@ -3729,15 +3829,12 @@ class vgMprCtrlTemp extends Controller
                         $qtyReqJson["tranlator"] = $newQtyFromChange;
                         break;
                     default:
-                        // If mapping not found, try to preserve existing structure but set a generic total if possible
-                        // leave existing keys intact
                         break;
                 }
 
                 $newMpr->qty_req = json_encode($qtyReqJson);
                 $newMpr->stocknumber = $newQtyFromChange;
             } else {
-                // Fallback: giữ logic cũ (dùng stocknumber/original stock)
                 $originalRecruited = intval($originalMpr->recruited ?? 0);
                 $originalStock = intval($originalMpr->stocknumber ?? 0);
 
@@ -3766,7 +3863,6 @@ class vgMprCtrlTemp extends Controller
                     $newMpr->stocknumber = $newQty;
                 } else {
                     $newMpr->stocknumber = $originalMpr->stocknumber;
-                 
                 }
             }
 
@@ -3779,7 +3875,7 @@ class vgMprCtrlTemp extends Controller
             // Reset ngày tạo
             $newMpr->created_at = now();
             $newMpr->updated_at = now();
-             $currentYear = date("Y");
+            $currentYear = date("Y");
             $yearSetting = MprEndYear::where("year", $currentYear)->first();
             if (!$yearSetting) {
                 $yearSetting = MprEndYear::orderBy("year", "desc")->first();
@@ -3790,17 +3886,16 @@ class vgMprCtrlTemp extends Controller
             }
 
             if ($yearSetting) {
-                // Gán ngày theo cấu hình
                 $newMpr->key_in_date =
                     $yearSetting->email_date ?? date("Y-m-d");
                 $newMpr->date_req = $yearSetting->ey_date_req ?? date("Y-m-d");
+                $newMpr->key_new_year =
+                    $yearSetting->key_in_newyear ?? date("Y-m-d");
             } else {
-             
                 $newMpr->key_in_date = date("Y-m-d");
                 $newMpr->date_req = date("Y-m-d");
             }
 
-           
             $newMpr->approval = $originalMpr->approval;
             $newMpr->logs = $originalMpr->logs;
             $newMpr->approval_record = $originalMpr->approval_record;
@@ -3815,7 +3910,6 @@ class vgMprCtrlTemp extends Controller
     }
     private function generateNewReqIdString($targetDate = null)
     {
-       
         $date = $targetDate ? \Carbon\Carbon::parse($targetDate) : now();
         $yymm = $date->format("ym");
         $prefix = "HR-MPR00-{$yymm}-";
@@ -3877,13 +3971,13 @@ class vgMprCtrlTemp extends Controller
                 ]);
             }
 
-            $currentYear = date("Y"); // Hoặc 2025 tùy logic
+            $currentYear = date("Y"); 
             $yearSetting = MprEndYear::where("year", $currentYear)->first();
             if (!$yearSetting) {
                 $yearSetting = MprEndYear::orderBy("year", "desc")->first();
             }
 
-            $emailDateText = ""; // Giá trị mặc định (fallback)
+            $emailDateText = ""; 
 
             if ($yearSetting && !empty($yearSetting->email_date)) {
                 try {
@@ -3971,7 +4065,6 @@ class vgMprCtrlTemp extends Controller
             $groupedData = [];
 
             foreach ($mprs as $item) {
-                // a. Tìm email người duyệt cấp 1 (Dept)
                 $deptEmail = null;
                 if (!empty($item->approval)) {
                     $approvalData = json_decode($item->approval, true);
@@ -3996,8 +4089,6 @@ class vgMprCtrlTemp extends Controller
                 if (!$deptEmail) {
                     continue;
                 }
-
-                // b. Lấy thông tin Unit từ Submitter
                 $unit = "";
                 if (!empty($item->submitter)) {
                     $submitterData = json_decode($item->submitter, true);
@@ -4005,8 +4096,6 @@ class vgMprCtrlTemp extends Controller
                         $unit = $submitterData["unit"] ?? "";
                     }
                 }
-
-                // c. Tính toán số liệu
                 $candidatesCount = 0;
                 if (!empty($item->candidates)) {
                     $cArr = json_decode($item->candidates, true);
@@ -4033,8 +4122,6 @@ class vgMprCtrlTemp extends Controller
                         );
                     }
                 }
-
-                // d. Thêm vào mảng nhóm
                 $groupedData[$deptEmail][] = [
                     "req_id" => $item->req_id,
                     "unit" => $unit, // <--- Đã thêm Unit vào kết quả trả về
@@ -4109,9 +4196,9 @@ class vgMprCtrlTemp extends Controller
                 \Log::info("Processing year-end confirmation for: $email");
                 $emailContent = view("VgMpr-yearEndConfirmationList", [
                     "requests" => $requests,
-                    "deadline" => $deadlineText, // <--- Truyền biến vào đây
+                    "deadline" => $deadlineText,
                 ])->render();
-                $emailSubject = "[MPR] 人員增補單年度結算，請於 {$deadlineText} 前完成作業。"; // Có thể thay ngày vào Subject luôn nếu muốn
+                $emailSubject = "[MPR] 人員增補單年度結算，請於 {$deadlineText} 前完成作業。";
                 $mailData = [
                     "to" => [$email],
                     "subject" => $emailSubject,
@@ -4226,23 +4313,42 @@ class vgMprCtrlTemp extends Controller
             throw $e;
         }
     }
+    private function createSystemSignature($note)
+    {
+        $timestamp = now()->format("Y-m-d H:i:s");
+        return $note;
+    }
     public function runYearEndAutoClose()
     {
         $dbUpdateSuccessCount = 0;
         $dbUpdateFailedCount = 0;
-        $groupedForEmail = []; // Mảng để nhóm các đơn theo email
+        $groupedForEmail = [];
 
-        // 1. Tìm tất cả các đơn đủ điều kiện
-        $mprsToClose = Mpr::where(function ($q) {
-            $q->where("status", "completed")->orWhere(
-                "status_amendent",
-                "completed"
-            );
-        })
-            ->where("stocknumber", ">", 0)
-            ->whereNull("deny_temp")
-            ->whereNull("activeRct")
-            ->whereNull("req_id_oldyear")
+        $mprsToClose = Mpr::where("stocknumber", ">", 0)
+            ->where(function ($q) {
+                $q->whereNull("status_endyear")->orWhere(
+                    "status_endyear",
+                    "!=",
+                    "completed"
+                );
+            })
+            ->where(function ($q) {
+                $q->whereNull("status_endyear")->orWhere(
+                    "status_endyear",
+                    "!=",
+                    "declined"
+                );
+            })
+            ->where(function ($q) {
+                $q->whereNull("status")->orWhere("status", "!=", "declined");
+            })
+            ->where(function ($q) {
+                $q->whereNull("status_amendent")->orWhere(
+                    "status_amendent",
+                    "!=",
+                    "declined"
+                );
+            })
             ->get();
 
         if ($mprsToClose->isEmpty()) {
@@ -4254,6 +4360,7 @@ class vgMprCtrlTemp extends Controller
                 "message" => "No requests found to auto-close.",
             ]);
         }
+
         foreach ($mprsToClose as $mpr) {
             try {
                 $email = null;
@@ -4262,10 +4369,8 @@ class vgMprCtrlTemp extends Controller
                     if (is_array($approvalData)) {
                         foreach ($approvalData as $level) {
                             if (
-                                isset($level["level"]) &&
-                                $level["level"] == 1 &&
-                                isset($level["status"]) &&
-                                $level["status"] === "approved" &&
+                                ($level["level"] ?? null) == 1 &&
+                                ($level["status"] ?? "") === "approved" &&
                                 !empty($level["approver"]["email"])
                             ) {
                                 $email = strtolower(
@@ -4277,28 +4382,25 @@ class vgMprCtrlTemp extends Controller
                     }
                 }
 
-                // --- B. Tính toán số liệu (Thực hiện kể cả khi không có email/approval rỗng) ---
                 $submitter = json_decode($mpr->submitter, true) ?: [];
                 $totalQtyReq = 0;
                 if (!empty($mpr->qty_req)) {
                     $qArr = json_decode($mpr->qty_req, true);
                     if (is_array($qArr)) {
-                        $totalQtyReq = array_sum(
-                            array_filter(
-                                [
-                                    $qArr["workers"] ?? 0,
-                                    $qArr["staff"] ?? 0,
-                                    $qArr["engineers"] ?? 0,
-                                    $qArr["leader"] ?? 0,
-                                    $qArr["tranlator"] ?? 0,
-                                ],
-                                "is_numeric"
-                            )
-                        );
+                        $totalQtyReq = array_sum([
+                            $qArr["workers"] ?? 0,
+                            $qArr["staff"] ?? 0,
+                            $qArr["engineers"] ?? 0,
+                            $qArr["leader"] ?? 0,
+                            $qArr["tranlator"] ?? 0,
+                        ]);
                     }
                 }
+
                 $requestDataRow = [
                     "req_id" => $mpr->req_id,
+                    "status_old" => $mpr->status,
+                    "status_amendent_old" => $mpr->status_amendent,
                     "unit" => $submitter["unit"] ?? "",
                     "total_qty_req" => $totalQtyReq,
                     "recruited" => $mpr->recruited ?? 0,
@@ -4306,12 +4408,78 @@ class vgMprCtrlTemp extends Controller
                     "stocknumber" => $mpr->stocknumber,
                 ];
 
+                $currentApproval = $mpr->approval;
+                if (!empty($currentApproval)) {
+                    $logsArray = [];
+                    if (!empty($mpr->logs)) {
+                        $existingLogs = json_decode($mpr->logs, true);
+                        if (is_array($existingLogs)) {
+                            $logsArray =
+                                array_keys($existingLogs) !==
+                                range(0, count($existingLogs) - 1)
+                                    ? [$existingLogs]
+                                    : $existingLogs;
+                        }
+                    }
+                    $logsArray[] = json_decode($currentApproval, true);
+                    $mpr->logs = json_encode($logsArray);
+                }
+
+                $reasonNote =
+                    "本單未於期限內完成確認，系統已自動結案；如仍有招募需求，請重新送單申請。";
+                $newApprovalCycle = [
+                    [
+                        "level" => 1,
+                        "type" => "hr", // Type hiển thị trên UI
+                        "status" => "approved",
+                        "processed_at" => now()->toDateTimeString(),
+                        "approver" => [
+                            "empno" => "SYSTEM",
+                            "name" => "SYSTEM (AUTO)",
+                            "dept" => "HR",
+                            "email" => "",
+                        ],
+                        "reason_denied" => null,
+                        "note" => $reasonNote,
+                    ],
+                ];
+                $mpr->approval = json_encode($newApprovalCycle);
+
+                $systemSignature = $this->createSystemSignature($reasonNote);
+
+                // Lấy danh sách record hiện tại (của Cycle 1, 2...)
+                $existingRecords = [];
+                if (!empty($mpr->approval_record)) {
+                    $decoded = json_decode($mpr->approval_record, true);
+                    if (is_array($decoded)) {
+                        $existingRecords =
+                            array_keys($decoded) !==
+                            range(0, count($decoded) - 1)
+                                ? [$decoded]
+                                : $decoded;
+                    }
+                }
+
+                $existingRecords[] = [
+                    "dept" => "",
+                    "div" => "",
+                    "hr_rec_sf" => "",
+                    "hr" => $systemSignature, 
+                    "ad" => "",
+                    "gm" => "",
+                ];
+
+                $mpr->approval_record = json_encode($existingRecords);
+
+                // Cập nhật trạng thái
                 $denyTempData = [
                     "fullfilldate" => now()->format("Y-m-d"),
                     "fulfilled" => "yes",
                     "recruited" => intval($mpr->recruited ?? 0),
                     "stocknumber" => 0,
                     "reason" => "Auto-closed by system (Year End)",
+                    "status_old" => $mpr->status,
+                    "status_amendent_old" => $mpr->status_amendent,
                 ];
 
                 $mpr->deny_temp = json_encode($denyTempData);
@@ -4319,20 +4487,22 @@ class vgMprCtrlTemp extends Controller
                 $mpr->fulfilled = "yes";
                 $mpr->fullfilldate = now()->format("Y-m-d");
                 $mpr->activeRct = 0;
+                $mpr->status_endyear = "completed";
+
+                if (!is_null($mpr->status)) {
+                    $mpr->status = "completed";
+                }
+                if (!is_null($mpr->status_amendent)) {
+                    $mpr->status_amendent = "completed";
+                }
+
                 $mpr->save();
-
                 $dbUpdateSuccessCount++;
-
                 // Đồng bộ sang bảng Demand
-                // $this->migrateCompletedMprToDemandSingle($mpr);
+                $this->migrateCompletedMprToDemandSingle($mpr);
 
                 if (!empty($email)) {
                     $groupedForEmail[$email][] = $requestDataRow;
-                } else {
-                    \Log::warning(
-                        "[SCHEDULE] Auto-close success (DB Updated) but NO Level 1 Email found for req_id " .
-                            $mpr->req_id
-                    );
                 }
             } catch (\Exception $e) {
                 $dbUpdateFailedCount++;
@@ -4345,7 +4515,6 @@ class vgMprCtrlTemp extends Controller
             }
         }
 
-        // 3. Gửi email theo nhóm (chỉ gửi cho những đơn tìm được email)
         $emailSentCount = 0;
         $emailFailedCount = 0;
         foreach ($groupedForEmail as $email => $requests) {
@@ -4354,15 +4523,21 @@ class vgMprCtrlTemp extends Controller
                 $emailSentCount++;
             } catch (\Exception $e) {
                 $emailFailedCount++;
-                \Log::error(
-                    "[SCHEDULE] Failed to send grouped auto-close email to $email: " .
-                        $e->getMessage()
-                );
             }
         }
 
-        $message = "Year-End Auto-Close process finished. DB Updates: $dbUpdateSuccessCount successful, $dbUpdateFailedCount failed. Grouped emails sent to $emailSentCount Level 1 Managers ($emailFailedCount failed).";
-        \Log::info("[SCHEDULE] $message");
-        return response()->json(["success" => true, "message" => $message]);
+        $message = "Year-End Auto-Close finished. DB: {$dbUpdateSuccessCount} success, {$dbUpdateFailedCount} failed. Emails: {$emailSentCount} sent, {$emailFailedCount} failed.";
+        \Log::info("[SCHEDULE] {$message}");
+
+        return response()->json([
+            "success" => true,
+            "message" => $message,
+            "summary" => [
+                "db_success" => $dbUpdateSuccessCount,
+                "db_failed" => $dbUpdateFailedCount,
+                "email_sent" => $emailSentCount,
+                "email_failed" => $emailFailedCount,
+            ],
+        ]);
     }
 }

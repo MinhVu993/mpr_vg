@@ -422,7 +422,6 @@
         <span class="text-subtitle-1 font-weight-medium">{{ $t("Approval History") }}</span>
     </div>
     <v-expansion-panels flat>
-        <!-- Current Approval History -->
         <v-expansion-panel>
             <v-expansion-panel-header>
                 <div class="d-flex align-center">
@@ -432,9 +431,9 @@
             <v-expansion-panel-content>
                 <v-stepper v-model="approvalStepper" class="approval-stepper" flat>
                     <v-stepper-header>
-                        <v-stepper-step v-if="editData" :complete="true" :editable="true"
-                        color="primary" :step="0" :key="'submitter-step'"
-                        class="submitter-step" style="pointer-events: none;">
+                        <v-stepper-step v-if="editData" :complete="true" :editable="true" color="primary"
+                        :step="0" :key="'submitter-step'" class="submitter-step"
+                        style="pointer-events: none;">
                         <div>
                             <div class="caption font-weight-bold">
                                 {{ $t('Submitter') }}
@@ -448,7 +447,7 @@
                                                 s = JSON.parse(s);
                                             }
                                             return s ? `${s.empno || ''} - ${s.name || ''} -
-                                                            ${s.dept_sumt || ''}` : '';
+                                                ${s.dept_sumt || ''}` : '';
                                         } catch (e) {
                                             console.error('Error parsing submitter data:', e);
                                             return '';
@@ -457,36 +456,34 @@
                                 }}
                             </div>
                             <div class="caption">
-                                {{ editData.created_at || '' }}
+                                {{ editData.created_at ? editData.created_at.split(' ')[0] : '' }}
                             </div>
                         </div>
                     </v-stepper-step>
                     <template v-for="(step, idx) in approvalStepperSteps">
-                        <v-stepper-step 
-                        v-if="step.approver && step.approver.empno && isLevel1Approved"
-                        :complete="step.status === 'approved'"
-                        :editable="false"
+                        <v-stepper-step v-if="step.approver && step.approver.empno && isLevel1Approved"
+                        :complete="step.status === 'approved'" :editable="false"
                         :rules="step.shouldShowError ? [() => false] : []"
-                        :color="getApprovalStatusColor(step.status)" 
-                        step
+                        :color="getApprovalStatusColor(step.status)" step
                         :error-icon="step.shouldShowError ? 'mdi-cancel' : ''"
-                        complete-icon="mdi-check" 
-                        :key="idx" 
-                        >
+                        complete-icon="mdi-check" :key="idx">
                         <template>
                             <div class="caption">{{ step.levelName }}</div>
                             <div class="caption">
                                 {{ step.approver?.empno }} - {{ step.approver?.name }} -
                                 {{ getApprovalStatusText(step.status) }}
                             </div>
-                            <div class="caption">{{ step.processed_at }}</div>
+                            <div class="caption">
+                                {{ step.processed_at ? step.processed_at.split(' ')[0] : '' }}
+                            </div>
                             <div class="approval-record-container caption">
                                 <div v-if="step.reason_denied" class="record-item error--text">
                                     <v-icon small color="error" class="mr-1">mdi-close</v-icon>
                                     <span class="font-italic">{{ step.reason_denied }}</span>
                                 </div>
                                 <div v-if="step.return_reason" class="record-item warning--text">
-                                    <v-icon small color="#FFA500" class="mr-1">mdi-undo-variant</v-icon>
+                                    <v-icon small color="#FFA500"
+                                    class="mr-1">mdi-undo-variant</v-icon>
                                     <span class="font-italic">{{ step.return_reason }}</span>
                                 </div>
                                 <div v-if="step.approval_record" class="record-item success--text">
@@ -496,101 +493,128 @@
                             </div>
                         </template>
                     </v-stepper-step>
-                    <v-divider 
-                    v-if="idx < approvalStepperSteps.length - 1"
-                    :key="`div-${idx}`">
-                </v-divider>
-            </template>
-        </v-stepper-header>
-    </v-stepper>
-</v-expansion-panel-content>
+                    <v-divider v-if="idx < approvalStepperSteps.length - 1" :key="`div-${idx}`">
+                    </v-divider>
+                </template>
+            </v-stepper-header>
+        </v-stepper>
+    </v-expansion-panel-content>
 </v-expansion-panel>
 
-<!-- Previous Approval History - Hiển thị khi activeRct không rỗng -->
-<v-expansion-panel v-if="showPreviousApprovalHistory">
-    <v-expansion-panel-header>
-        <div class="d-flex align-center">
-            {{ $t("Previous Approval History") }}
-        </div>
+<template>
+  <v-expansion-panel v-if="showPreviousApprovalHistory" class="approval-history-panel mt-2">
+    <v-expansion-panel-header class="py-1" style="min-height: 48px;">
+      <div class="d-flex align-center font-weight-bold text-subtitle-2">
+        <v-icon left small>mdi-history</v-icon>
+        {{ $t("Previous Approval History") }}
+      </div>
     </v-expansion-panel-header>
-    <v-expansion-panel-content>
-        <v-stepper v-model="previousApprovalStepper" class="approval-stepper" flat>
-            <v-stepper-header>
-                <v-stepper-step v-if="editData" :complete="true" :editable="true"
-                color="primary" :step="0" :key="'previous-submitter-step'"
-                class="submitter-step" style="pointer-events: none;">
-                <div>
-                    <div class="caption font-weight-bold">
-                        {{ $t('Submitter') }}
-                    </div>
-                    <div class="caption">
-                        {{
-                            (() => {
-                                try {
-                                    let s = editData?.submitter;
-                                    if (typeof s === 'string') {
-                                        s = JSON.parse(s);
-                                    }
-                                    return s ? `${s.empno || ''} - ${s.name || ''} -
-                                                            ${s.dept_sumt || ''}` : '';
-                                } catch (e) {
-                                    console.error('Error parsing submitter data:', e);
-                                    return '';
-                                }
-                            })()
-                        }}
-                    </div>
-                    <div class="caption">
-                        {{ editData.created_at || '' }}
-                    </div>
-                </div>
-            </v-stepper-step>
-            <template v-for="(step, idx) in previousApprovalStepperSteps">
-                <v-stepper-step :complete="step.status === 'approved'"
-                :editable="false"
-                :rules="step.shouldShowError ? [() => false] : []"
-                :color="getApprovalStatusColor(step.status)" step
-                :error-icon="step.shouldShowError ? 'mdi-cancel' : ''"
-                complete-icon="mdi-check" :key="`prev-${idx}`">
-                <template>
-                    <div class="caption">{{ step.levelName }}</div>
-                    <div class="caption">
-                        {{ step.approver?.empno }} - {{ step.approver?.name }} -
-                        {{ getApprovalStatusText(step.status) }}
-                    </div>
-                    <div class="caption">{{ step.processed_at }}</div>
-                    <div class="approval-record-container caption">
-                        <div v-if="step.reason_denied"
-                        class="record-item error--text">
-                        <v-icon small color="error"
-                        class="mr-1">mdi-close</v-icon>
-                        <span class="font-italic">{{ step.reason_denied
-                        }}</span>
-                    </div>
-                    <div v-if="step.return_reason"
-                    class="record-item warning--text">
-                    <v-icon small color="#FFA500"
-                    class="mr-1">mdi-undo-variant</v-icon>
-                    <span class="font-italic">{{ step.return_reason
-                    }}</span>
-                </div>
-                <div v-if="step.approval_record"
-                class="record-item success--text">
-                <v-icon small color="success"
-                class="mr-1">mdi-check</v-icon>
-                <span class="font-italic">{{ step.approval_record
-                }}</span>
-            </div>
+
+    <v-expansion-panel-content class="pa-0 pt-0">
+      <div v-for="(cycle, cIdx) in previousApprovalCycles" :key="`cycle-${cIdx}`" class="mb-2 mt-1">
+        
+        <div class="d-flex align-center mb-1 ml-2">
+          <v-chip color="primary" text-color="white" x-small label class="font-weight-bold mr-2 elevation-0">
+            {{ cycle.name }}
+          </v-chip>
+          <v-divider></v-divider>
         </div>
-    </template>
-</v-stepper-step>
-<v-divider v-if="idx < previousApprovalStepperSteps.length - 1"
-:key="`prev-div-${idx}`"></v-divider>
+
+        <v-card outlined class="rounded-lg elevation-0 cycle-card mx-2">
+          <v-stepper v-model="previousApprovalStepper" class="approval-stepper transparent elevation-0 pa-0 ma-0" alt-labels>
+            <v-stepper-header class="compact-stepper-header">
+              
+              <v-stepper-step :key="`submitter-${cIdx}`" complete step="0" color="#1976D2" class="submitter-step compact-step" complete-icon="mdi-pencil-outline">
+                <div class="text-center font-weight-bold my-1" style="font-size: 0.8rem;">
+                  {{ $t('Submitter') }}
+                </div>
+
+                <div class="caption text-center grey--text text--darken-2" style="line-height: 1.3;">
+                  <div style="white-space: normal; font-weight: 500;">
+                    {{
+                        (() => {
+                        try {
+                            let s = editData?.submitter;
+                            if (typeof s === 'string') s = JSON.parse(s);
+                            return s ? `${s.name}` : '';
+                        } catch (e) { return ''; }
+                        })()
+                    }}
+                  </div>
+                  <div v-if="editData.created_at" class="text--lighten-1 font-italic mt-1" style="font-size: 0.7rem;">
+                    ({{ editData.created_at.split(' ')[0] }})
+                  </div>
+                </div>
+              </v-stepper-step>
+
+              <v-divider :key="`div-submitter-${cIdx}`"></v-divider>
+
+              <template v-for="(step, sIdx) in cycle.steps">
+                <v-stepper-step 
+                  :key="`step-${cIdx}-${sIdx}`"
+                  :complete="step.status === 'approved'" 
+                  :step="sIdx + 1"
+                  :rules="step.shouldShowError ? [() => false] : []"
+                  :color="getApprovalStatusColor(step.status)"
+                  :error-icon="step.shouldShowError ? 'mdi-close' : ''"
+                  complete-icon="mdi-check"
+                  class="compact-step"
+                >
+                  <div class="text-center font-weight-bold my-1 d-flex align-center justify-center" 
+                       style="font-size: 0.8rem; min-height: 25px; line-height: 1.2;">
+                    {{ step.levelName }}
+                  </div>
+
+                  <div class="caption text-center grey--text text--darken-2 mb-1" style="line-height: 1.3;">
+                    <template v-if="step.approver && step.approver.empno">
+                      <div style="white-space: normal; word-break: break-word;">
+                        {{ step.approver.empno }} - {{ step.approver.name }}
+                      </div>
+                    </template>
+
+                    <div class="font-italic mt-1" :style="{ color: getApprovalStatusColor(step.status) }">
+                      {{ getApprovalStatusText(step.status) }}
+                      <div v-if="step.processed_at" class="grey--text text--lighten-1" style="font-size: 0.7rem;">
+                        ({{ step.processed_at.split(' ')[0] }})
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="d-flex flex-column align-center w-100 mt-1" style="width: 100%">
+                    
+                    <div v-if="step.reason_denied" 
+                         class="caption error--text font-weight-bold px-2 py-1 rounded red lighten-5 d-flex align-center justify-center my-1" 
+                         style="width: 100%; line-height: 1.2; font-size: 0.7rem; white-space: normal; text-align: center;">
+                      <v-icon x-small color="error" class="mr-1">mdi-close-circle-outline</v-icon>
+                      <span>{{ step.reason_denied }}</span>
+                    </div>
+
+                    <div v-if="step.return_reason" 
+                         class="caption warning--text font-weight-bold px-2 py-1 rounded orange lighten-5 d-flex align-center justify-center my-1" 
+                         style="width: 100%; line-height: 1.2; font-size: 0.7rem; white-space: normal; text-align: center;">
+                      <v-icon x-small color="warning" class="mr-1">mdi-undo-variant</v-icon>
+                      <span>{{ step.return_reason }}</span>
+                    </div>
+
+                    <div v-if="step.approval_record" 
+                         class="caption primary--text px-2 py-1 rounded blue lighten-5 d-flex align-center justify-center my-1" 
+                         style="width: 100%; line-height: 1.2; font-size: 0.7rem; white-space: normal; text-align: center;">
+                      <v-icon x-small color="primary" class="mr-1">mdi-comment-text-outline</v-icon>
+                      <span>{{ step.approval_record }}</span>
+                    </div>
+                    
+                  </div>
+                </v-stepper-step>
+
+                <v-divider v-if="sIdx < cycle.steps.length - 1" :key="`div-${cIdx}-${sIdx}`"></v-divider>
+              </template>
+            </v-stepper-header>
+          </v-stepper>
+        </v-card>
+      </div>
+    </v-expansion-panel-content>
+  </v-expansion-panel>
 </template>
-</v-stepper-header>
-</v-stepper>
-</v-expansion-panel-content>
-</v-expansion-panel>
 </v-expansion-panels>
 </v-card-text>
 
@@ -757,8 +781,8 @@ v-model="viewOriginal"
 
 </template>
 <script>
-    import VfaAppFlow from "../../../@global-component/vfa-comp";
-    // import VfaAppFlow from 'D:/source/@global-component/vfa-comp';
+    // import VfaAppFlow from "../../../@global-component/vfa-comp";
+    import VfaAppFlow from 'D:/source/@global-component/vfa-comp';
     export default {
         components: { VfaAppFlow },
         name: "RequestDialog",
@@ -1226,6 +1250,45 @@ v-model="viewOriginal"
             },
         },
         methods: {
+            // Thêm vào methods trong dialog.vue
+            processAsyncTranslation(rawText) {
+                if (!rawText) return "";
+                
+                // 1. Thử lấy từ JSON đa ngôn ngữ trước (nếu data đã chuẩn)
+                let text = this.getLocalizedFromMultiLang(rawText);
+                
+                // 2. Nếu text lấy ra vẫn là chuỗi gốc (không phải JSON hoặc JSON chỉ có 1 ngôn ngữ)
+                // Và ngôn ngữ hiện tại khác với ngôn ngữ gốc (ví dụ đang chọn EN mà text là VI)
+                if (text && typeof text === 'string') {
+                    
+                    // Kiểm tra xem đã có trong cache chưa
+                    const cached = this.getCachedTranslation(text, this.$i18n.locale);
+                    if (cached) {
+                        return cached;
+                    }
+                    
+                    // Nếu chưa có cache, gọi API dịch (chạy ngầm)
+                    // Lưu ý: Ta cần một cơ chế debounce hoặc check để không gọi API liên tục cho cùng 1 text
+                    if (!this._translationPending) this._translationPending = new Set();
+                    const cacheKey = `${text}_${this.$i18n.locale}`;
+                    
+                    if (!this._translationPending.has(cacheKey)) {
+                        this._translationPending.add(cacheKey);
+                        
+                        this.translateApprovalRecord(text, this.$i18n.locale).then(translated => {
+                            if (translated && translated !== text) {
+                                this.setCachedTranslation(text, this.$i18n.locale, translated);
+                                this.$forceUpdate(); // Quan trọng: Re-render lại để hiển thị text đã dịch
+                            }
+                            this._translationPending.delete(cacheKey);
+                        }).catch(() => {
+                            this._translationPending.delete(cacheKey);
+                        });
+                    }
+                }
+                
+                return text;
+            },
             async viewOriginalRequest() {
                 const oldReqId = this.form.req_id_oldyear || (this.editData && this.editData.req_id_oldyear);
                 if (!oldReqId) return;
@@ -1434,12 +1497,16 @@ v-model="viewOriginal"
             getLocalizedFromMultiLang(value) {
                 if (!value) return "";
                 try {
-                    const obj = typeof value === "string" ? JSON.parse(value) : value;
-                    if (typeof obj === "string") return obj;
-                    return obj[this.$i18n.locale] || obj.vi || obj.en || obj.cn || "";
+                    // Thử parse JSON
+                    const obj = (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) 
+                    ? JSON.parse(value) 
+                    : value;
+                    if (typeof obj === 'object' && obj !== null) {
+                        return obj[this.$i18n.locale] || obj['en'] || obj['vi'] || value;
+                    }
+                    return value; // Trả về chuỗi gốc nếu không phải object đa ngữ
                 } catch (e) {
-                    // không phải JSON, trả thẳng
-                    return value;
+                    return value; // Nếu lỗi parse, trả về chuỗi gốc
                 }
             },
             getEffectiveDate() {
@@ -2468,9 +2535,7 @@ v-model="viewOriginal"
             populateForm(data) {
                 if (!data) return;
                 this.form.req_id_oldyear = data.req_id_oldyear || "";
-                // 1. Parse submitter info
                 if (data.activeRct !== null) {
-                    // Parse thành number để đảm bảo kiểu dữ liệu đúng
                     this.form.newYearRecruitment = parseInt(data.activeRct);
                 }
                 const submitter = JSON.parse(data.submitter);
@@ -3319,21 +3384,20 @@ v-model="viewOriginal"
         },
         computed: {
             showPreviousApprovalHistory() {
-                // === KIỂM TRA EMPNO TRƯỚC TIÊN ===
-                if (!this.activeUser?.empno) {
-                    console.warn('empno is empty, hiding previous approval history');
-                    return false;
-                }
+                // if (!this.activeUser?.empno) {
+                //     console.warn('empno is empty, hiding previous approval history');
+                //     return false;
+                // }
                 
-                if (!this.editData) return false;
+                // if (!this.editData) return false;
                 
-                const hasActiveRct = this.editData.activeRct !== null && 
-                this.editData.activeRct !== undefined && 
-                this.editData.activeRct !== '';
+                // const hasActiveRct = this.editData.activeRct !== null && 
+                // this.editData.activeRct !== undefined && 
+                // this.editData.activeRct !== '';
                 
-                if (!hasActiveRct) return false;
+                // if (!hasActiveRct) return false;
                 
-                if (!this.editData.logs) return false;
+                // if (!this.editData.logs) return false;
                 
                 try {
                     const logs = typeof this.editData.logs === 'string' ? 
@@ -3348,24 +3412,28 @@ v-model="viewOriginal"
             previousApprovalStepper() {
                 return 1;
             },
-            
-            previousApprovalStepperSteps() {
-                if (!this.activeUser?.empno) {
-                    console.warn('empno is empty, skipping previous approval history');
-                    return [];
-                }
-                
+            previousApprovalCycles() {
+                if (!this.activeUser?.empno) return [];
                 if (!this.editData || !this.editData.logs) return [];
                 
                 try {
-                    let logs = typeof this.editData.logs === 'string' ? 
+                    let logs = typeof this.editData.logs === 'string' ?
                     JSON.parse(this.editData.logs) : this.editData.logs;
                     
                     if (!Array.isArray(logs) || logs.length === 0) return [];
                     
-                    const previousApprovalData = logs[logs.length - 1];
+                    let approvalRecords = [];
+                    if (this.editData.approval_record) {
+                        try {
+                            approvalRecords = typeof this.editData.approval_record === 'string' 
+                            ? JSON.parse(this.editData.approval_record) 
+                            : this.editData.approval_record;
+                        } catch (e) { console.error("Error parsing approval_record", e); }
+                    }
                     
-                    if (!Array.isArray(previousApprovalData)) return [];
+                    const hasCurrentCycle = this.editData.approval && 
+                    this.editData.approval !== '[]' && 
+                    this.editData.approval !== 'null';
                     
                     const levelNames = {
                         1: this.$t("Department Manager"),
@@ -3376,31 +3444,128 @@ v-model="viewOriginal"
                         6: this.$t("GM Manager")
                     };
                     
-                    return previousApprovalData
-                    .filter(lv => {
-                        if (!lv.approver || !lv.approver.empno) {
-                            return false;
-                        }
-                        return lv.status && ["waiting", "approved", "rejected", "returned"].includes(lv.status);
-                    })
-                    .map(lv => {
-                        const reasonDeniedText = this.getLocalizedFromMultiLang(lv.reason_denied);
-                        const returnReasonText = this.getLocalizedFromMultiLang(lv.return_reason);
+                    return logs.map((cycleLogs, cycleIndex) => {
+                        if (!Array.isArray(cycleLogs)) return null;
+                        
+                        const isLastRecordIndex = cycleIndex === (approvalRecords.length - 1);
+                        const shouldHideRecord = isLastRecordIndex && hasCurrentCycle;
+                        const cycleRecordObj = shouldHideRecord ? {} : (approvalRecords[cycleIndex] || {});
+                        
+                        const steps = cycleLogs
+                        .filter(lv => {
+                            if (!lv.approver || !lv.approver.empno) return false;
+                            return lv.status && ["waiting", "approved", "rejected", "returned"].includes(lv.status);
+                        })
+                        .map(lv => {
+                            // --- ÁP DỤNG DỊCH TỰ ĐỘNG ---
+                            // 1. Xử lý lý do từ chối & trả về
+                            const reasonDeniedText = this.processAsyncTranslation(lv.reason_denied);
+                            const returnReasonText = this.processAsyncTranslation(lv.return_reason);
+                            
+                            // 2. Xử lý ghi chú duyệt (approval_record)
+                            let rawNote = cycleRecordObj[lv.type] || "";
+                            
+                            if (!rawNote && lv.approval_record && !shouldHideRecord) {
+                                rawNote = lv.approval_record;
+                            }
+                            
+                            if (rawNote && typeof rawNote === 'string' && rawNote.includes('SYSTEM (AUTO)')) {
+                                if (lv.approver.empno !== 'SYSTEM') {
+                                    rawNote = ""; 
+                                }
+                            }
+                            
+                            // Gọi hàm dịch cho ghi chú
+                            const finalNote = this.processAsyncTranslation(rawNote);
+                            
+                            return {
+                                level: lv.level,
+                                levelName: levelNames[lv.level] || lv.type || "",
+                                approver: lv.approver || { empno: '', name: '', dept: '' },
+                                status: lv.status,
+                                processed_at: lv.processed_at,
+                                reason_denied: reasonDeniedText, 
+                                return_reason: returnReasonText, 
+                                shouldShowError: lv.status === "rejected",
+                                approval_record: finalNote       
+                            };
+                        });
                         
                         return {
-                            level: lv.level,
-                            levelName: levelNames[lv.level] || lv.type || "",
-                            approver: lv.approver || { empno: '', name: '', dept: '' },
-                            status: lv.status,
-                            processed_at: lv.processed_at,
-                            reason_denied: reasonDeniedText,
-                            return_reason: returnReasonText,
-                            shouldShowError: lv.status === "rejected",
-                            approval_record: lv.approval_record || ""
+                            id: cycleIndex + 1,
+                            name: `${this.$t('Cycle')} ${cycleIndex + 1}`,
+                            steps: steps
                         };
-                    });
+                    }).filter(cycle => cycle && cycle.steps.length > 0);
+                    
                 } catch (e) {
-                    console.error("Error in previousApprovalStepperSteps:", e);
+                    console.error("Error in previousApprovalCycles:", e);
+                    return [];
+                }
+            },
+            
+            getApprovalLogsData(item) {
+                try {
+                    let logsData = [];
+                    // Chỉ xử lý dữ liệu từ logs (lịch sử)
+                    if (item.logs) {
+                        const parsedLogs = JSON.parse(item.logs);
+                        const approvalRecords = item.approval_record ? JSON.parse(item.approval_record) : [];
+                        
+                        // KIỂM TRA: Item có đang hiển thị phần "Current Cycle" ở trên không?
+                        // (Nếu approval khác rỗng/null nghĩa là có Current Cycle)
+                        const hasCurrentCycle = item.approval && item.approval !== '[]' && item.approval !== 'null';
+                        
+                        if (Array.isArray(parsedLogs[0])) {
+                            parsedLogs.forEach((cycle, cycleIndex) => {
+                                const cycleApprovalRecord = approvalRecords[cycleIndex] || {};
+                                
+                                // LOGIC FIX:
+                                // 1. Kiểm tra xem đây có phải là record cuối cùng trong mảng không
+                                const isLastRecordSet = cycleIndex === (approvalRecords.length - 1);
+                                
+                                // 2. Nếu là record cuối VÀ đang có Current Cycle -> Record này thuộc về Current Cycle
+                                // -> Ẩn nó khỏi History để tránh hiển thị sai/trùng lặp.
+                                const shouldHideRecord = isLastRecordSet && hasCurrentCycle;
+                                
+                                const cycleData = cycle
+                                .filter(log => log.approver && log.approver.empno)
+                                .map((log, index) => {
+                                    const recordKey = log.type;
+                                    
+                                    // Áp dụng logic ẩn record tại đây
+                                    let approvalRecord = shouldHideRecord ? '' : (cycleApprovalRecord[recordKey] || '');
+                                    
+                                    // Giữ lại logic cũ (nếu có): Xóa record SYSTEM hiển thị sai ở user thường
+                                    if (approvalRecord && typeof approvalRecord === 'string' && approvalRecord.includes('SYSTEM (AUTO)')) {
+                                        if (log.approver.empno !== 'SYSTEM' && log.approver.name !== 'SYSTEM (AUTO)') {
+                                            approvalRecord = ''; 
+                                        }
+                                    }
+                                    
+                                    return {
+                                        level: index + 1,
+                                        cycle: this.$t('Cycle') + ' ' + (cycleIndex + 1),
+                                        type: this.getApprovalLevelName(log.type),
+                                        empno: log.approver.empno,
+                                        name: log.approver.name,
+                                        dept: log.approver.dept,
+                                        status: log.status || '',
+                                        reason_denied: log.reason_denied || '',
+                                        return_reason: log.return_reason || '',
+                                        approval_record: approvalRecord,
+                                        processed_at: log.processed_at,
+                                        cycleIndex: cycleIndex + 1,
+                                    };
+                                });
+                                logsData = [...logsData, ...cycleData];
+                            });
+                        }
+                    }
+                    
+                    return logsData;
+                } catch (error) {
+                    console.error('Error parsing approval logs:', error);
                     return [];
                 }
             },
@@ -3415,11 +3580,14 @@ v-model="viewOriginal"
                 return false;
             },
             noteText() {
-                const oldId = this.form.req_id_oldyear || (this.editData && this.editData.req_id_oldyear);
+                // SỬA: Đảo thứ tự, ưu tiên check editData trước để tránh hiển thị dữ liệu cũ khi đang await API
+                const oldId = (this.editData && this.editData.req_id_oldyear) || this.form.req_id_oldyear;
+                
                 if (oldId) {
                     return `${this.$t("Based on")} ${oldId} ${this.$t("continue recruitment based on conditions")}`;
                 }
-                return this.editData?.note || ""; 
+                // Nếu không có oldId, trả về note/remark gốc nếu có
+                return this.editData?.note || "";
             },
             disableNewYearRecruitment() {
                 if (!this.editData) return false;
@@ -3436,39 +3604,39 @@ v-model="viewOriginal"
                 return false;
             },
             showNewYearSection() {
+                // 1. Kiểm tra dữ liệu cơ bản
                 if (!this.editData || !this.activeUser?.empno) {
                     return false;
                 }
+                
+                // 2. Ẩn nếu là đơn con (đơn được tạo ra từ năm cũ)
                 if (this.editData.req_id_oldyear && this.editData.req_id_oldyear.trim() !== '') {
                     return false;
                 }
+                
+                // 3. Kiểm tra trạng thái hợp lệ
                 const validStatuses = ['completed', 'waiting_dept', 'waiting_div'];
                 const currentStatus = this.editData.status;
                 const amendmentStatus = this.editData.status_amendent;
                 
+                // Nếu trạng thái không nằm trong danh sách cho phép -> ẩn
                 if (!validStatuses.includes(currentStatus) && !validStatuses.includes(amendmentStatus)) {
                     return false;
                 }
-                const isCompleted = this.editData.status === 'completed';
-                const isWaitingApproval = this.editData.status === 'waiting_dept' || 
-                this.editData.status === 'waiting_div';
                 
-                const hasApprovalHistory = this.editData.logs || 
-                (this.editData.approval && 
-                JSON.parse(this.editData.approval).some(lv => lv.status === 'approved'));
+                // --- LOGIC MỚI: ƯU TIÊN HIỂN THỊ NẾU ĐÃ CÓ KẾT QUẢ ---
+                // Nếu activeRct đã có giá trị (0 hoặc 1), cho phép hiển thị luôn để user xem kết quả
+                const hasActiveRct = this.editData.activeRct !== null && 
+                this.editData.activeRct !== undefined && 
+                this.editData.activeRct !== '';
                 
-                if (isCompleted) {
-                } else if (isWaitingApproval && hasApprovalHistory) {
-                    const hasActiveRct = this.editData.activeRct !== null && 
-                    this.editData.activeRct !== undefined && 
-                    this.editData.activeRct !== '';
-                    
-                    if (!hasActiveRct) {
-                        return false; // Ẩn nếu activeRct rỗng
-                    }
-                } else {
-                    return false;
+                if (hasActiveRct) {
+                    return true;
                 }
+                // -----------------------------------------------------
+                
+                // 4. Nếu chưa có kết quả (activeRct là null), kiểm tra xem người dùng có phải Manager không
+                // Chỉ Manager level 1, 2 mới được thấy để thao tác chọn
                 const currentUserEmpno = String(this.activeUser.empno).trim();
                 
                 if (this.dataFlow && Array.isArray(this.dataFlow) && this.dataFlow.length > 0) {
@@ -4483,7 +4651,8 @@ v-model="viewOriginal"
             "Based on": "Based on",
             "continue recruitment based on conditions": "recruitment conditions to continue",
             "Request new year:": "Annual Requirement Consolidation Settings Process: ",
-            "Request_ori:":"Standard Application Process: "
+            "Request_ori:":"Standard Application Process: ",
+            "Cycle":"Cycle"
         },
         "vi": {
             "Create new request": "Tạo yêu cầu mới",
@@ -4618,7 +4787,8 @@ v-model="viewOriginal"
             "Based on": "Dựa theo đơn",
             "continue recruitment based on conditions": "để tiếp tục tuyển dụng theo điều kiện cũ",
             "Request new year:": "Lưu trình tổng kết nhu cầu tuyển dụng năm: ",
-            "Request_ori:":"Lưu trình phê duyệt tiêu chuẩn："
+            "Request_ori:":"Lưu trình phê duyệt tiêu chuẩn：",
+            "Cycle":"Chu kỳ"
         },
         "cn": {
             "Create new request": "创建新请求",
@@ -4753,7 +4923,8 @@ v-model="viewOriginal"
             "Based on": "依照",
             "continue recruitment based on conditions": "招募條件續招",
             "Request new year:": "年度需求結算流程：",
-            "Request_ori:":"一般申請流程："
+            "Request_ori:":"一般申請流程：",
+            "Cycle": "週期"
         }
     }
 </i18n>
@@ -4870,4 +5041,36 @@ v-model="viewOriginal"
     ::v-deep .custom-radio .v-icon {
         font-size: 28px !important; /* Tăng kích thước nút tròn radio */
     }
+    ::v-deep .compact-stepper-header {
+    height: auto !important;
+    align-items: flex-start; /* Căn chỉnh các bước lên trên cùng */
+    padding: 10px 0 !important;
+}
+::v-deep .compact-stepper-header {
+    height: auto !important;
+    align-items: flex-start; /* Căn chỉnh lên trên cùng để các cột cao thấp khác nhau không bị vỡ */
+    padding: 10px 0 !important;
+}
+
+::v-deep .v-stepper__step.compact-step {
+    padding: 10px 4px !important; 
+    /* Tăng chiều rộng cơ sở lên để chứa tên dài tốt hơn */
+    flex-basis: 180px !important; 
+    min-width: 140px; /* Đảm bảo không bị co quá nhỏ */
+}
+
+::v-deep .v-stepper__label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-top: 8px !important;
+    /* Đảm bảo text bên trong label hiển thị đầy đủ */
+    white-space: normal !important;
+    width: 100%;
+}
+
+::v-deep .v-expansion-panel-content__wrap {
+    padding: 0 !important;
+}
 </style>

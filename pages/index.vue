@@ -2,7 +2,7 @@
     <v-row>
         <v-col cols="12">
             <v-card>
-                <div class="progress-bar" />
+                <!-- <div class="progress-bar" /> -->
                 <v-toolbar dense color="#00838F" dark>
                     <v-toolbar-title class="d-flex" style="align-items: center">
                         <v-icon left>mdi-google-classroom</v-icon>
@@ -221,7 +221,6 @@
 </template>
 <template v-slot:[`item.status`]="{ item }">
     <div class="d-flex align-center flex-wrap">
-        <!-- Year-End To Do: show original status + amendment status (if any) + virtual waiting_dept chip -->
         <template v-if="isYearEndTodo(item) || isYearEndPending(item)">
             <v-tooltip bottom :disabled="!getNextApproverInfoForStatus(item)" v-if="item.status">
                 <template v-slot:activator="{ on, attrs }">
@@ -235,6 +234,7 @@
                     v-on="on"
                     class="mr-1 mb-1"
                     @click="openApprovalDetails(item)"
+                    @mouseenter="loadFlowDataForItem(item)" 
                     style="cursor: pointer"
                     >
                     {{ getStatusWithApprover(item.status, item) }}
@@ -243,19 +243,19 @@
             <span>{{ getNextApproverInfoForStatus(item) }}</span>
         </v-tooltip>
         
-        <!-- 2) Amendment status chip (with tooltip) -->
         <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
             <template v-slot:activator="{ on, attrs }">
                 <v-chip
                 label
                 outlined
-                :color="getAmendmentStatusColor(item.status_amendent)"
+                :color="getAmendmentStatusColor(item.status_amendent, item)"
                 small
                 dark
                 v-bind="attrs"
                 v-on="on"
                 class="mr-1 mb-1"
                 @click="openApprovalDetails(item)"
+                @mouseenter="loadFlowDataForItem(item)"
                 style="cursor: pointer"
                 >
                 {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
@@ -264,7 +264,6 @@
         <span>{{ getNextApproverInfoForAmendment(item) }}</span>
     </v-tooltip>
     
-    <!-- 3) Virtual Year‑End waiting_dept -->
     <v-tooltip bottom :disabled="!getNextApproverInfoForEndYear(item)">
         <template v-slot:activator="{ on, attrs }">
             <v-chip
@@ -277,6 +276,7 @@
             v-on="on"
             class="mr-1 mb-1"
             @click="openApprovalDetails(item)"
+            @mouseenter="loadFlowDataForItem(item)"
             style="cursor: pointer"
             >
             {{ getEndYearStatusWithApprover('waiting_dept', item) }}
@@ -285,6 +285,7 @@
     <span>{{ getNextApproverInfoForEndYear(item) }}</span>
 </v-tooltip>
 </template>
+
 <template v-else>
     <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
         <template v-slot:activator="{ on, attrs }">
@@ -299,21 +300,22 @@
             v-on="on"
             class="mr-1 mb-1"
             @click="openApprovalDetails(item)"
+            @mouseenter="loadFlowDataForItem(item)"
             style="cursor: pointer"
             >
             {{ getStatusWithApprover(item.status, item) }}
         </v-chip>
-        
     </template>
     <span>
         {{ getReturnInfo(item).returned ? getReturnInfo(item).reason : getNextApproverInfoForStatus(item) }}
     </span>
 </v-tooltip>
+
 <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
     <template v-slot:activator="{ on, attrs }">
         <v-chip
         label
-        :color="getAmendmentStatusColor(item.status_amendent)"
+        :color="getAmendmentStatusColor(item.status_amendent, item)"
         small
         outlined
         dark
@@ -321,6 +323,7 @@
         v-on="on"
         class="mr-1 mb-1"
         @click="openApprovalDetails(item)"
+        @mouseenter="loadFlowDataForItem(item)"
         style="cursor: pointer"
         >
         {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
@@ -328,15 +331,28 @@
 </template>
 <span>{{ getNextApproverInfoForAmendment(item) }}</span>
 </v-tooltip>
+
 <v-tooltip bottom :disabled="!getNextApproverInfoForEndYear(item)" v-if="item.status_endyear && !item.req_id_oldyear">
     <template v-slot:activator="{ on: eyOn, attrs: eyAttrs }">
-        <v-chip label :color="getEndYearStatusColor(item.status_endyear)" small outlined dark v-bind="eyAttrs" v-on="eyOn" class="mr-1 mb-1" @click="openApprovalDetails(item)" style="cursor: pointer">
-            {{ getEndYearStatusWithApprover(item.status_endyear, item) }}
-        </v-chip>
-    </template>
-    <span>
-        {{ getNextApproverInfoForEndYear(item) }}
-    </span>
+        <v-chip 
+        label 
+        :color="getEndYearStatusColor(item.status_endyear)" 
+        small 
+        outlined 
+        dark 
+        v-bind="eyAttrs" 
+        v-on="eyOn" 
+        class="mr-1 mb-1" 
+        @click="openApprovalDetails(item)" 
+        @mouseenter="loadFlowDataForItem(item)"
+        style="cursor: pointer"
+        >
+        {{ getEndYearStatusWithApprover(item.status_endyear, item) }}
+    </v-chip>
+</template>
+<span>
+    {{ getNextApproverInfoForEndYear(item) }}
+</span>
 </v-tooltip>
 </template>
 </div>
@@ -1065,7 +1081,7 @@
             
             return {
                 search: '',
-                api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
+                api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
                 storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
                 loading: false,
                 flowLoading: {},
@@ -1099,7 +1115,7 @@
                 pos: [],
                 flowRequestInProgress: {}, 
                 flowRequestQueue: {}, 
-                flowCache: new Map(), 
+                // flowCache: new Map(), 
                 defaultHeaders,
                 parsedCandidates: [],
                 candidateHeaders: [
@@ -1807,10 +1823,8 @@
                     
                     let flowData = this.approvalFlowCache[item.id];
                     if (!flowData) {
-                        this.loadFlowDataForItem(item);
-                        return this.$t('Loading approver info...');
+                        return this.flowLoading[item.id] ? this.$t('Loading approver info...') : null;
                     }
-                    
                     const currentLevel = statusLevels[item.status_endyear];
                     const currentFlow = flowData[currentLevel];
                     
@@ -2216,8 +2230,9 @@
             },
             
             getRecruitmentStatus(item) {
-                const stocknumber = parseInt(item.stocknumber);
-                const recruited = parseInt(item.recruited);
+                // 1. Lấy các giá trị cơ bản
+                const recruited = parseInt(item.recruited) || 0;
+                const stocknumber = parseInt(item.stocknumber) || 0; // Đây là số lượng còn lại (Remaining)
                 const hold = parseInt(item.hold);
                 const resumed = parseInt(item.resumed);
                 const status = item.status;
@@ -2233,17 +2248,14 @@
                         dark: false,
                     };
                 }
+                // --- CASE 2: XỬ LÝ DENY TEMP (ĐÓNG NON / TỪ CHỐI TẠM THỜI) ---
                 const isCompleted = (status === 'completed') && (!statusAmendent);
-                
                 if (item.deny_temp &&
                 typeof item.deny_temp === 'string' &&
                 item.deny_temp.trim() !== '' &&
-                (
-                statusAmendent === 'completed' || (status === 'completed' && activeRctInt !== "") )) 
-                {
+                (statusAmendent === 'completed' || (status === 'completed' && activeRctInt !== ""))) {
                     try {
                         const denyTempData = JSON.parse(item.deny_temp);
-                        
                         if (denyTempData.fullfilldate) {
                             return {
                                 text: this.$t('Closed'),
@@ -2253,131 +2265,124 @@
                             };
                         }
                     } catch (e) {
-                        console.error('Error parsing deny_temp in getRecruitmentStatus:', e);
+                        console.error('Error parsing deny_temp:', e);
                     }
                 }
+                
+                // --- CASE 3: ĐANG TRONG QUY TRÌNH TỔNG KẾT NĂM (YEAR-END PENDING) ---
                 if (statusEndYear && statusEndYear.startsWith('waiting')) {
                     return {
                         text: this.$t('Recruiting'),
                         show: true,
-                        color: '#43A047', 
+                        color: '#43A047',
                         dark: false,
                     };
                 }
+                
+                // --- CASE 4: VẪN ĐANG TUYỂN SAU TỔNG KẾT NĂM ---
                 if (statusEndYear === 'completed' && activeRctInt === 1) {
                     return {
                         text: this.$t('Recruiting'),
                         show: true,
-                        color: '#43A047', 
+                        color: '#43A047',
                         dark: false,
                     };
                 }
-                if (isCompleted) {
-                    if (stocknumber === 0) {
-                        return {
-                            text: this.$t('Closed'),
-                            show: true,
-                            color: '#6c757d', // Xám trung tính
-                        };
+                
+                if (item.status_amendent === 'completed' && this.hasQuantityChange(item)) {
+                    const changeQty = this.getChangeQuantity(item);
+                    if (changeQty !== null && changeQty !== undefined && changeQty !== '') {
+                        const newTotalTarget = parseInt(changeQty);
+                        
+                        if (newTotalTarget > recruited) {
+                            return {
+                                text: this.$t('Recruiting'),
+                                show: true,
+                                color: '#43A047',
+                                dark: false,
+                            };
+                        } else {
+                            return {
+                                text: this.$t('Closed'),
+                                show: true,
+                                color: '#6c757d',
+                            };
+                        }
                     }
-                    if (stocknumber > recruited) {
+                }
+                if ((status === 'completed' && statusAmendent !== 'declined') || (statusAmendent === 'completed')) {
+                    
+                    if (hold === 1 && item.hold_date && resumed === 0) {
+                        // Logic Hold (Tạm dừng)
+                        const daysRemaining = this.calculateDaysRemaining(item.hold_date);
+                        let statusText = this.$t('Recruitment hold');
+                        let detailText = `(${this.formatDate(item.hold_date)} ${this.$t('hold')})`;
+                        
+                        if (daysRemaining > 0) {
+                            detailText += ` ${this.$t('remaining')} \n${daysRemaining} ${this.$t('days')}`;
+                            return {
+                                text: statusText,
+                                detail: detailText,
+                                show: true,
+                                color: '#E65100', // Màu vàng cam
+                                dark: false,
+                            };
+                        } else {
+                            // Xử lý hết hạn hold
+                            if (item.status_amendent !== 'declined' && item.status !== 'declined') {
+                                if (!this.sentNotifications.has(`declined_${item.id}`)) {
+                                    this.sentNotifications.add(`declined_${item.id}`);
+                                    this.handleExpiredHold(item);
+                                }
+                            }
+                            detailText += `\n${this.$t('Hold period expired')}`;
+                            return {
+                                text: statusText,
+                                detail: detailText,
+                                show: true,
+                                color: '#f44336', // Đỏ cảnh báo
+                                dark: false,
+                            };
+                        }
+                    } 
+                    else if (resumed === 1 && item.resumed_date) {
+                        // Logic Resume (Tiếp tục tuyển)
                         return {
                             text: this.$t('Recruiting'),
+                            detail: `(${this.formatDate(item.hold_date)} - ${this.$t('Resumed')}, ${this.formatDate(item.resumed_date)} - ${this.$t('hold')})`,
                             show: true,
-                            color: '#43A047', // Xanh lá, đang tuyển
+                            color: '#2196F3', // Xanh dương
                             dark: false,
                         };
-                    }
-                }
-                
-                if (status === 'completed' && statusAmendent !== 'completed') {
-                    return {
-                        text: this.$t('Recruiting'),
-                        show: true,
-                        color: '#43A047',
-                        dark: false,
-                    };
-                }
-                if (status === 'completed' && statusAmendent === 'completed' && hold === 0 && resumed === 0) {
-                    return {
-                        text: this.$t('Recruiting'),
-                        show: true,
-                        color: '#43A047',
-                        dark: false,
-                    };
-                }
-                
-                if (statusAmendent === 'completed' && stocknumber > recruited) {
-                    return {
-                        text: this.$t('Recruiting'),
-                        detail: '',
-                        show: true,
-                        color: '#43A047',
-                        dark: false,
-                    };
-                }
-                
-                if (statusAmendent === 'completed' && stocknumber === recruited) {
-                    return {
-                        text: this.$t('Closed'),
-                        detail: '',
-                        show: true,
-                        color: '#6c757d',
-                    };
-                }
-                
-                if (hold === 1 && item.hold_date && resumed === 0) {
-                    const daysRemaining = this.calculateDaysRemaining(item.hold_date);
-                    let statusText = this.$t('Recruitment hold');
-                    let detailText = `(${this.formatDate(item.hold_date)} ${this.$t('hold')})`;
-                    
-                    if (daysRemaining > 0) {
-                        detailText += ` ${this.$t('remaining')} \n${daysRemaining} ${this.$t('days')}`;
-                        return {
-                            text: statusText,
-                            detail: detailText,
-                            show: true,
-                            color: '#E65100', // Màu vàng chuẩn cho hold còn hiệu lực
-                            dark: false,
-                        };
-                    } else {
-                        if (item.status_amendent !== 'declined' && item.status !== 'declined') {
-                            if (!this.sentNotifications.has(`declined_${item.id}`)) {
-                                this.sentNotifications.add(`declined_${item.id}`);
-                                this.handleExpiredHold(item);
-                            }
+                    } 
+                    else {
+                        if (stocknumber > 0) {
+                            return {
+                                text: this.$t('Recruiting'),
+                                show: true,
+                                color: '#43A047',
+                                dark: false,
+                            };
+                        } else {
+                            return {
+                                text: this.$t('Closed'),
+                                show: true,
+                                color: '#6c757d',
+                            };
                         }
-                        detailText += `\n${this.$t('Hold period expired')}`;
-                        return {
-                            text: statusText,
-                            detail: detailText,
-                            show: true,
-                            color: '#f44336', // Đỏ cảnh báo hold hết hạn
-                            dark: false,
-                        };
                     }
                 }
                 
-                if (resumed === 1 && item.resumed_date) {
-                    return {
-                        text: this.$t('Recruiting'),
-                        detail: `(${this.formatDate(item.hold_date)} - ${this.$t('Resumed')}, ${this.formatDate(item.resumed_date)} - ${this.$t('hold')})`,
-                        show: true,
-                        color: '#2196F3', // Xanh dương tiêu chuẩn cho recruiting resumed
-                        dark: false,
-                    };
-                }
-                
+                // --- CASE 7: CÓ THAY ĐỔI YÊU CẦU KHÁC (NGOÀI SỐ LƯỢNG) ---
                 if (status === 'completed' && this.hasRequirementChange(item)) {
                     return {
                         text: this.$t('Recruiting'),
                         detail: this.$t('#Change in hiring requirements'),
                         show: true,
-                        color: '#FFC107', // Vàng cho thay đổi yêu cầu tuyển dụng
+                        color: '#FFC107', // Vàng
                         dark: false,
                     };
                 }
-                
                 return {
                     text: '',
                     detail: '',
@@ -2682,7 +2687,7 @@
                     if (res.status === 200) {
                         this.dataMpr = res.data.dataMpr;
                         await this.$nextTick();
-                        this.setDefaultTab();
+                        // this.setDefaultTab();
                         
                     } else {
                         throw new Error('Failed to fetch data');
@@ -2709,7 +2714,7 @@
                         this.subPos = res.data.dataSubPos;
                         this.otherReason = res.data.dataOtherReason;
                         this.settingHistory = res.data.dataEndYear;
-                        this.flowCache.clear();
+                        // this.flowCache.clear();
                         // await this.preloadFlowData();
                         this.filteredItems = [];
                     } else {
@@ -3226,88 +3231,104 @@
             canApproveItemForTodo(item) {
                 if (!this.activeUser || !item) return false;
                 
-                const flowData = this.approvalFlowCache[item.id] || this.generalFlowData;
+                // ------------------------------------------------------------------------------------
+                // [ƯU TIÊN 1] LOGIC CHO NGƯỜI TẠO ĐƠN (SUBMITTER)
+                // Nếu user hiện tại là người tạo đơn VÀ đơn đang bị trả về -> Hiện ở Tab To Do để sửa
+                // ------------------------------------------------------------------------------------
+                if (item.submiterInfo && item.submiterInfo.empno === this.activeUser.empno) {
+                    if (item.status === 'waiting_dept' && this.hasReturnedLevel(item)) {
+                        return true;
+                    }
+                }
+                
+                // ------------------------------------------------------------------------------------
+                // [LOGIC CHO CẤP QUẢN LÝ / NGƯỜI DUYỆT]
+                // ------------------------------------------------------------------------------------
+                
+                // 1. Lấy dữ liệu Flow
+                const flowData = this.approvalFlowCache[item.id];
                 if (!flowData || !Array.isArray(flowData) || flowData.length === 0) {
                     return false;
                 }
                 
-                const isUserInManagers = (managers) => {
-                    if (!Array.isArray(managers)) return false;
-                    return managers.some(manager => {
+                const isUserInFlowLevels = (targetLevelCodes) => {
+                    // (Giữ nguyên logic kiểm tra quyền Manager/Deputy)
+                    const targetLevel = flowData.find(level => 
+                    targetLevelCodes.includes(level.lvl_code) || 
+                    (level.lvl_code && targetLevelCodes.some(code => level.lvl_code.includes(code)))
+                    );
+                    if (!targetLevel || !Array.isArray(targetLevel.managers)) return false;
+                    
+                    return targetLevel.managers.some(manager => {
                         if (manager.empno === this.activeUser.empno) return true;
                         if (Array.isArray(manager.deputies)) {
-                            return manager.deputies.some(deputy => deputy.empno === this.activeUser.empno && deputy.status);
+                            return manager.deputies.some(deputy => 
+                            deputy.empno === this.activeUser.empno && 
+                            deputy.status === true
+                            );
                         }
                         return false;
                     });
                 };
                 
-                const findFlowLevel = (flow, candidates) => {
-                    if (!flow || !Array.isArray(flow)) return null;
-                    for (const c of candidates) {
-                        const exact = flow.find(l => l.lvl_code === c || l.level === c || l.lvl_name?.en === c);
-                        if (exact) return exact;
-                    }
-                    for (const c of candidates) {
-                        const partial = flow.find(l => l.lvl_code && l.lvl_code.indexOf(c) !== -1);
-                        if (partial) return partial;
-                    }
-                    return null;
-                };
+                // ------------------------------------------------------------------------------------
+                // CASE 1: XỬ LÝ ĐƠN YEAR-END (Tổng kết cuối năm)
+                // ------------------------------------------------------------------------------------
+                const isAmendmentActive = item.status_amendent && 
+                item.status_amendent !== 'completed' && 
+                item.status_amendent !== 'declined';
+                
                 if (item.fulfilled === 'no' && !item.req_id_oldyear && !item.deny_temp && 
-                !item.status_endyear && 
+                !item.status_endyear && !isAmendmentActive && 
                 (item.status === 'completed' || item.status_amendent === 'completed')) {
-                    const level = findFlowLevel(flowData, ['mpr_dept', 'dept', 'dept_manager']);
-                    if (level && isUserInManagers(level.managers)) return true;
-                    return false;
+                    
+                    const currentYear = new Date().getFullYear();
+                    const today = dayjs().format('YYYY-MM-DD');
+                    const setting = this.settingHistory ? this.settingHistory.find(s => parseInt(s.year) === currentYear) : null;
+                    
+                    if (setting && setting.email_date && today < setting.email_date) {
+                        return false;
+                    }
+                    return isUserInFlowLevels(['dept_manager', 'mpr_dept', 'dept']);
                 }
+                
+                // ------------------------------------------------------------------------------------
+                // CASE 2, 3, 4: CÁC TRẠNG THÁI DUYỆT THÔNG THƯỜNG
+                // ------------------------------------------------------------------------------------
+                let currentStatus = null;
                 
                 if (item.status_endyear && item.status_endyear !== 'completed' && item.status_endyear !== 'declined') {
-                    const statusToCandidates = {
-                        'waiting_dept': ['mpr_dept', 'dept', 'dept_manager'],
-                        'waiting_div': ['mpr_div', 'division', 'division_manager'],
-                        'waiting_hr_rec_sf': ['mpr_hr_sf', 'hr_rec_sf'],
-                    };
-                    const candidates = statusToCandidates[item.status_endyear];
-                    if (candidates) {
-                        const level = findFlowLevel(flowData, candidates);
-                        if (level && isUserInManagers(level.managers)) return true;
-                    }
-                    return false;
+                    currentStatus = item.status_endyear;
+                } else if (isAmendmentActive) {
+                    currentStatus = item.status_amendent;
+                } else if (item.status && item.status !== 'completed' && item.status !== 'declined') {
+                    currentStatus = item.status;
                 }
                 
-                if (item.status_amendent && item.status_amendent !== 'completed' && item.status_amendent !== 'declined') {
-                    const statusToCandidates = {
-                        'waiting_dept': ['mpr_dept', 'dept', 'dept_manager'],
-                        'waiting_div': ['mpr_div', 'division', 'division_manager'],
-                        'waiting_hr_rec_sf': ['mpr_hr_sf', 'hr_rec_sf'],
-                        'waiting_hr': ['mpr_hr_manager', 'hr_manager'],
-                        'waiting_ad': ['mpr_smp_manager', 'smp_manager'],
-                        'waiting_gm': ['mpr_gm_manager', 'general_manager']
-                    };
-                    const candidates = statusToCandidates[item.status_amendent];
-                    if (candidates) {
-                        const level = findFlowLevel(flowData, candidates);
-                        if (level && isUserInManagers(level.managers)) return true;
-                    }
-                    return false;
-                }
+                if (!currentStatus) return false;
                 
-                if ((!item.status_endyear && !item.status_amendent) && item.status && item.status !== 'completed' && item.status !== 'declined') {
-                    const statusToCandidates = {
-                        'waiting_dept': ['mpr_dept', 'dept', 'dept_manager'],
-                        'waiting_div': ['mpr_div', 'division', 'division_manager'],
-                        'waiting_hr_rec_sf': ['mpr_hr_sf', 'hr_rec_sf'],
-                        'waiting_hr': ['mpr_hr_manager', 'hr_manager'],
-                        'waiting_ad': ['mpr_smp_manager', 'smp_manager'],
-                        'waiting_gm': ['mpr_gm_manager', 'general_manager']
-                    };
-                    const candidates = statusToCandidates[item.status];
-                    if (candidates) {
-                        const level = findFlowLevel(flowData, candidates);
-                        if (level && isUserInManagers(level.managers)) return true;
-                    }
-                    return false;
+                // --- [SỬA ĐỔI MỚI] CHẶN ĐƠN BỊ TRẢ VỀ KHỎI TAB TO DO CỦA MANAGER ---
+                // Nếu đơn đang bị trả về (waiting_dept + returned flag), 
+                // Manager không cần thấy ở To Do (vì đang chờ Submitter sửa).
+                // (Lưu ý: Nếu Manager chính là Submitter thì đã được xử lý ở đầu hàm rồi)
+                if (currentStatus === 'waiting_dept' && this.hasReturnedLevel(item)) {
+                    return false; 
+                }
+                // -------------------------------------------------------------------
+                
+                const statusToLevelCodes = {
+                    'waiting_dept': ['dept_manager', 'mpr_dept', 'dept'],
+                    'waiting_div': ['division_manager', 'mpr_div', 'division'],
+                    'waiting_hr_rec_sf': ['hr_rec_sf', 'mpr_hr_sf'],
+                    'waiting_hr': ['hr_manager', 'mpr_hr_manager'],
+                    'waiting_ad': ['smp_manager', 'mpr_smp_manager'],
+                    'waiting_gm': ['general_manager', 'mpr_gm_manager']
+                };
+                
+                const targetCodes = statusToLevelCodes[currentStatus];
+                
+                if (targetCodes) {
+                    return isUserInFlowLevels(targetCodes);
                 }
                 
                 return false;
@@ -3361,9 +3382,13 @@
                 }
             },
             
-            getAmendmentStatusColor(status) {
+            getAmendmentStatusColor(status, item) { // Thêm tham số item
+                // Kiểm tra nếu bị trả về thì ưu tiên hiển thị màu Returned (amber)
+                if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
+                    return "amber darken-1";
+                }
+                
                 switch (status) {
-                    
                     case "waiting_dept":
                     return "deep-orange darken-1";
                     case "waiting_div":
@@ -3390,13 +3415,13 @@
                 if (status === "declined") {
                     return this.$t("Rejected");
                 }
+                if (status === "completed") {
+                    return this.$t("Approved");
+                }
                 if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
                     return this.$t("Returned");
                 }
                 switch (status) {
-                    case "completed":
-                    return this.$t("Approved");
-                    
                     case "waiting_dept":
                     return this.$t("Pending Dept");
                     case "waiting_div":
@@ -3409,8 +3434,6 @@
                     return this.$t("Pending AD");
                     case "waiting_gm":
                     return this.$t("Pending GM");
-                    case "declined":
-                    return this.$t("Rejected");
                     case "returned":
                     return this.$t("Returned");
                     default:
@@ -3578,7 +3601,8 @@
                 return statusText;
             },
             getAmendmentStatusWithApprover(status, item) {
-                const statusText = this.$t(this.getAmendmentStatusText(status));
+                // Thêm item vào tham số thứ 2
+                const statusText = this.$t(this.getAmendmentStatusText(status, item)); 
                 const approverInfo = this.getApproverNameForAmendment(status, item);
                 
                 if (approverInfo) {
@@ -3658,12 +3682,22 @@
                     return null;
                 }
             },
-            // Thêm method riêng để lấy thông tin cho status chính
             getNextApproverInfoForStatus(item) {
                 try {
                     if (!item.status || item.status === 'completed' || item.status === 'declined') {
                         return null;
                     }
+                    
+                    let flowData = this.approvalFlowCache[item.id];
+                    
+                    // --- SỬA ĐỔI TẠI ĐÂY ---
+                    // XÓA dòng: this.loadFlowDataForItem(item);
+                    // Chỉ kiểm tra nếu chưa có data thì báo đang tải hoặc null, chờ sự kiện mouseenter tải
+                    if (!flowData) {
+                        // Nếu đang có cờ loading thì hiện text, nếu không thì ẩn hoặc hiện text mặc định
+                        return this.flowLoading[item.id] ? this.$t('Loading approver info...') : null;
+                    }
+                    // -----------------------
                     
                     const statusLevels = {
                         'waiting_dept': 0,
@@ -3675,12 +3709,6 @@
                     };
                     
                     if (!statusLevels.hasOwnProperty(item.status)) return null;
-                    
-                    let flowData = this.approvalFlowCache[item.id];
-                    if (!flowData) {
-                        this.loadFlowDataForItem(item);
-                        return this.$t('Loading approver info...');
-                    }
                     
                     const currentLevel = statusLevels[item.status];
                     const currentFlow = flowData[currentLevel];
@@ -3708,7 +3736,6 @@
                 }
             },
             
-            // Thêm method riêng để lấy thông tin cho status_amendent
             getNextApproverInfoForAmendment(item) {
                 try {
                     if (!item.status_amendent || item.status_amendent === 'completed' || item.status_amendent === 'declined') {
@@ -3727,10 +3754,13 @@
                     if (!statusLevels.hasOwnProperty(item.status_amendent)) return null;
                     
                     let flowData = this.approvalFlowCache[item.id];
+                    
+                    // --- SỬA ĐỔI TẠI ĐÂY ---
+                    // XÓA dòng: this.loadFlowDataForItem(item);
                     if (!flowData) {
-                        this.loadFlowDataForItem(item);
-                        return this.$t('Loading approver info...');
+                        return this.flowLoading[item.id] ? this.$t('Loading approver info...') : null;
                     }
+                    // -----------------------
                     
                     const currentLevel = statusLevels[item.status_amendent];
                     const currentFlow = flowData[currentLevel];
@@ -3789,15 +3819,19 @@
                         if (!this.flowRequestQueue[itemId]) {
                             this.flowRequestQueue[itemId] = [];
                         }
-                        this.flowRequestQueue[itemId].push({ resolve, reject });
+                        this.flowRequestQueue[itemId].push({
+                            resolve,
+                            reject
+                        });
                     });
                 }
                 
                 this.flowRequestInProgress[itemId] = true;
                 
+                // ... (Giữ nguyên phần params) ...
                 const params = {
                     id: itemId,
-                    empno: item.submiterInfo?.empno || item.submiterInfo?.empno,
+                    empno: item.submiterInfo?.empno || item.submiterInfo?.empno, // Lưu ý: Code gốc của bạn chỗ này hơi thừa, kiểm tra lại
                     name: item.submiterInfo?.name,
                     dept: item.submiterInfo?.dept_sumt,
                     high_dept: item.submiterInfo?.high_dept,
@@ -3806,7 +3840,12 @@
                 try {
                     const res = await this.$axios.post(this.api + "getDataFlowForItem", params);
                     if (res.data && res.data.flow_data) {
-                        this.approvalFlowCache[itemId] = res.data.flow_data;
+                        
+                        // --- SỬA ĐỔI TẠI ĐÂY ---
+                        // Thay thế: this.approvalFlowCache[itemId] = res.data.flow_data;
+                        // Bằng:
+                        this.$set(this.approvalFlowCache, itemId, res.data.flow_data);
+                        // -----------------------
                         
                         if (this.flowRequestQueue[itemId]) {
                             this.flowRequestQueue[itemId].forEach(request => {
@@ -3819,6 +3858,7 @@
                     }
                     return null;
                 } catch (error) {
+                    // ... (Giữ nguyên phần catch) ...
                     if (this.flowRequestQueue[itemId]) {
                         this.flowRequestQueue[itemId].forEach(request => {
                             request.reject(error);
@@ -3828,7 +3868,10 @@
                     console.error("Error getting flow data:", error);
                     throw error;
                 } finally {
-                    delete this.flowRequestInProgress[itemId];
+                    // --- SỬA ĐỔI THÊM (QUAN TRỌNG) ---
+                    // Xóa cờ đang load cũng nên dùng $delete để đảm bảo sạch sẽ, dù không bắt buộc
+                    this.$delete(this.flowRequestInProgress, itemId);
+                    // delete this.flowRequestInProgress[itemId]; // Cách cũ
                 }
             },
             
@@ -3873,15 +3916,28 @@
                         const parsedLogs = JSON.parse(item.logs);
                         const approvalRecords = item.approval_record ? JSON.parse(item.approval_record) : [];
                         
+                        // Check if Current Cycle exists (this view claims the last record)
+                        const hasCurrentCycle = item.approval && item.approval !== '[]' && item.approval !== 'null';
+                        
                         if (Array.isArray(parsedLogs[0])) {
                             parsedLogs.forEach((cycle, cycleIndex) => {
                                 const cycleApprovalRecord = approvalRecords[cycleIndex] || {};
+                                
+                                // FIX: Logic to prevent "Common" display
+                                // If this is the last available record in the array, AND the Current Cycle is active,
+                                // we assume the Current Cycle (Top Panel) owns this record, so we hide it from History.
+                                const isLastRecordSet = cycleIndex === (approvalRecords.length - 1);
+                                const shouldHideRecord = isLastRecordSet && hasCurrentCycle;
+                                
                                 const cycleData = cycle
                                 .filter(log => log.approver && log.approver.empno)
                                 .map((log, index) => {
                                     const recordKey = log.type;
-                                    let approvalRecord = cycleApprovalRecord[recordKey] || '';
                                     
+                                    // Apply the hiding logic here
+                                    let approvalRecord = shouldHideRecord ? '' : (cycleApprovalRecord[recordKey] || '');
+                                    
+                                    // Existing safety check (keep as backup)
                                     if (approvalRecord && typeof approvalRecord === 'string' && approvalRecord.includes('SYSTEM (AUTO)')) {
                                         if (log.approver.empno !== 'SYSTEM' && log.approver.name !== 'SYSTEM (AUTO)') {
                                             approvalRecord = ''; // Xóa record hiển thị sai
@@ -4000,17 +4056,50 @@
                 }
             },
             async preloadFlowData() {
-                const visibleItems = this.filteredData;
-                const preloadPromises = visibleItems.map(item => {
-                    if (!this.flowCache.has(item.id)) {
-                        return this.getFlowDataForItem(item).catch(err => {
-                            console.error(`Failed to preload flow data for item ${item.id}:`, err);
-                        });
-                    }
-                    return Promise.resolve();
-                });
+                const pendingStatuses = new Set(['waiting_dept','waiting_div','waiting_hr_rec_sf','waiting_hr','waiting_ad','waiting_gm']);
+                const visibleItems = this.filteredData || [];
                 
-                await Promise.all(preloadPromises);
+                const needsFlow = (item) => {
+                    if (!item || !item.id) return false;
+                    if (this.approvalFlowCache[item.id] || this.flowRequestInProgress[item.id]) return false;
+                    // Submitter needs to fix returned item
+                    if (item.submiterInfo && item.submiterInfo.empno === this.activeUser?.empno && item.status === 'waiting_dept' && this.hasReturnedLevel(item)) return true;
+                    // To do (managers...)
+                    if (this.canApproveItemForTodo(item)) return true;
+                    // Year-end / amendment / any waiting status where approver info is useful
+                    if (this.isYearEndPending(item) || this.isYearEndTodo(item)) return true;
+                    if (item.status_amendent && pendingStatuses.has(item.status_amendent)) return true;
+                    if (item.status_endyear && pendingStatuses.has(item.status_endyear)) return true;
+                    if (item.status && pendingStatuses.has(item.status)) return true;
+                    return false;
+                };
+                
+                // limit total items to preload to avoid spikes
+                const MAX_ITEMS = 100;
+                const toLoad = visibleItems.filter(needsFlow).slice(0, MAX_ITEMS);
+                if (toLoad.length === 0) return;
+                
+                const MAX_CONCURRENT = 3; // lower concurrency
+                const pauseMs = 150; // small pause between requests
+                const delay = ms => new Promise(r => setTimeout(r, ms));
+                const queue = [...toLoad];
+                
+                const worker = async () => {
+                    while (queue.length > 0) {
+                        const item = queue.shift();
+                        if (!item) continue;
+                        try {
+                            await this.getFlowDataForItem(item);
+                        } catch (err) {
+                            console.error(`Failed to preload flow data for item ${item.id}:`, err);
+                        }
+                        // small delay to smooth traffic
+                        await delay(pauseMs);
+                    }
+                };
+                
+                const workers = Array(Math.min(toLoad.length, MAX_CONCURRENT)).fill(null).map(() => worker());
+                await Promise.all(workers);
             },
             filterToDoData(data) {
                 
@@ -4264,6 +4353,7 @@
                 await this.fetchFlowData();
                 await this.fetchData();
                 await this.preloadFlowData();
+                this.setDefaultTab();
             }
             catch (error) {
                 console.error('Error in mounted hook:', error);

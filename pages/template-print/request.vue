@@ -342,6 +342,8 @@
                                                                         const response = await this.$axios.get(`${this.api}getMprById/${id}`);
                                                                         if (response.data && response.data.success) {
                                                                             const data = response.data.data;
+                                                                            
+                                                                            // 1. Prepare common data
                                                                             let qtyReqData;
                                                                             try {
                                                                                 qtyReqData = data.qty_req ? JSON.parse(data.qty_req) : {};
@@ -350,7 +352,6 @@
                                                                                 qtyReqData = {};
                                                                             }
                                                                             
-                                                                            // parse logs safely (may be stringified array or array-of-arrays)
                                                                             let parsedLogs = null;
                                                                             try {
                                                                                 parsedLogs = data.logs ? JSON.parse(data.logs) : null;
@@ -359,7 +360,6 @@
                                                                                 parsedLogs = null;
                                                                             }
                                                                             
-                                                                            // Parse deny_temp for recruited value
                                                                             let denyTempData = null;
                                                                             try {
                                                                                 denyTempData = data.deny_temp ? JSON.parse(data.deny_temp) : null;
@@ -368,20 +368,32 @@
                                                                                 denyTempData = null;
                                                                             }
                                                                             
+                                                                            // 2. Handle Logic
                                                                             if (data.req_id_change) {
-                                                                                // ...existing change-request parsing logic...
-                                                                                // (keep existing parsing for compSkill, eitherSkill, engSkill, chnSkill, change_req adjustments)
-                                                                                // After processing, ensure we include activeRct, logsParsed and req_id_oldyear
+                                                                                // --- FIX: Define the missing variables from 'data' ---
+                                                                                // These were missing causing the ReferenceError
+                                                                                let engSkill = data.eng_skill;
+                                                                                let chnSkill = data.chn_skill;
+                                                                                let eitherSkill = data.either_skill;
+                                                                                
+                                                                                // Parse compSkill immediately as the object expects it raw or parsed depending on logic, 
+                                                                                // but looking at usage below "compSkill: compSkill", and the else block uses JSON.parse,
+                                                                                // we should likely parse it here if the assignments below don't parse it again.
+                                                                                // However, the assignment below says 'compSkill: compSkill', so let's parse it here.
+                                                                                let compSkill = data.comp_skill ? JSON.parse(data.comp_skill) : {};
+                                                                                // ----------------------------------------------------
+                                                                                
                                                                                 this.formData = {
                                                                                     submitter: JSON.parse(data.submitter || '{}'),
                                                                                     education: JSON.parse(data.edu || '{}'),
                                                                                     qtyReq: qtyReqData,
+                                                                                    // Fix: use the variables defined above
                                                                                     engSkill: engSkill ? JSON.parse(engSkill || '[]') : null,
                                                                                     chnSkill: chnSkill ? JSON.parse(chnSkill || '[]') : null,
                                                                                     either_skill: eitherSkill,
                                                                                     workExp: JSON.parse(data.w_exp || '{}'),
                                                                                     reasonExp: data.reason_exp,
-                                                                                    compSkill: compSkill,
+                                                                                    compSkill: compSkill, 
                                                                                     positionInfo: JSON.parse(data.pos || '{}'),
                                                                                     approval: JSON.parse(data.approval || '[]'),
                                                                                     req_id: data.req_id,
@@ -399,13 +411,13 @@
                                                                                     status_amendent: data.status_amendent,
                                                                                     denyTempData: denyTempData,
                                                                                     recruited: data.recruited,
-                                                                                    activeRct: data.activeRct || null,            // ensure activeRct included
-                                                                                    logsParsed: parsedLogs,                        // ensure logsParsed included
-                                                                                    req_id_oldyear: data.req_id_oldyear || null ,  // include req_id_oldyear
+                                                                                    activeRct: data.activeRct || null,
+                                                                                    logsParsed: parsedLogs,
+                                                                                    req_id_oldyear: data.req_id_oldyear || null,
                                                                                     key_new_year: data.key_new_year || null,
                                                                                 };
                                                                             } else {
-                                                                                // No change request, use original data - ensure activeRct, logsParsed and req_id_oldyear are included
+                                                                                // No change request - existing working logic
                                                                                 this.formData = {
                                                                                     submitter: JSON.parse(data.submitter || '{}'),
                                                                                     education: JSON.parse(data.edu || '{}'),
@@ -433,9 +445,9 @@
                                                                                     status_amendent: data.status_amendent,
                                                                                     denyTempData: denyTempData,
                                                                                     recruited: data.recruited,
-                                                                                    activeRct: data.activeRct || null,     // include activeRct
-                                                                                    logsParsed: parsedLogs,                 // include parsed logs consistently
-                                                                                    req_id_oldyear: data.req_id_oldyear || null ,
+                                                                                    activeRct: data.activeRct || null,
+                                                                                    logsParsed: parsedLogs,
+                                                                                    req_id_oldyear: data.req_id_oldyear || null,
                                                                                     key_new_year: data.key_new_year || null,
                                                                                 };
                                                                             }
@@ -778,9 +790,6 @@
                                                                         const fd = this.formData || {};
                                                                         let arr = [];
                                                                         
-                                                                        // -----------------------------------------------------------
-                                                                        // LOGIC MỚI: Xử lý cho đơn copy năm mới (req_id_oldyear)
-                                                                        // -----------------------------------------------------------
                                                                         if (fd.req_id_oldyear && level >= 4) {
                                                                             // Tên lấy từ mảng cuối cùng trong logs
                                                                             const logsRaw = fd.logsParsed;
