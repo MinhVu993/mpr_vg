@@ -2,6 +2,7 @@
     {
         "en": { 
             "appName" :"Manpower request",
+            "appname" :"Manpower request",
             "accessDenied": "You do not have permission to access this application.",
             "User manual": "User manual",
             "Go home": "Go home",
@@ -11,6 +12,7 @@
         },
         "cn": {
             "appName" :"人員增補申請",
+            "appname" :"人員增補申請",
             "accessDenied": "您无权访问此应用程序。",
             "User manual": "用户手册",
             "Go home": "回家",
@@ -20,6 +22,7 @@
         },
         "vi": {
             "appName" :"Đơn xin bổ sung công nhân nhân viên",
+            "appname" :"Đơn xin bổ sung công nhân nhân viên",
             "accessDenied": "Bạn không được phép truy cập vào ứng dụng này.",
             "User manual": "Hướng dẫn sử dụng",
             "Go home": "Trang chủ",
@@ -40,14 +43,14 @@
                         <v-icon>{{ item.icon }}</v-icon>
                     </v-list-item-action>
                     <v-list-item-content>
-                        <v-list-item-title v-text="$t(item.title)" />
+                        <v-list-item-title>{{ $t(item.title) }}</v-list-item-title>
                     </v-list-item-content>
                 </v-list-item>
             </v-list>
         </v-navigation-drawer>
         <v-app-bar class="noPrint" dense color="#01a6be" dark :clipped-left="clipped" fixed app>
             <v-app-bar-nav-icon @click.stop="drawer = !drawer" />
-            <v-toolbar-title v-text="$t('appName')" />
+            <v-toolbar-title>{{ $t('appName') }}</v-toolbar-title>
             <v-chip class="ma-2" color="white" label small outlined @click:close="chip4 = false">
                 V.1.4 [Test - demo]
             </v-chip>
@@ -253,7 +256,7 @@ export default {
                 
                 // window.difyChatbotConfig = {
                 //     token: 'RXiPyzrCVrJlGqWA',
-                //     baseUrl: 'http://10.13.34.176',
+                //     baseUrl: 'http://10.13.33.50/',
                 //     dynamicScript: true,
                 //     inputs: {
                 //         username: mpr.name || 'Guest',
@@ -268,7 +271,7 @@ export default {
                 // };
                 // // Load script
                 // const script = document.createElement('script');
-                // script.src = 'http://10.13.34.176/embed.min.js';
+                // script.src = 'http://10.13.33.50//embed.min.js';
                 // script.id = 'RXiPyzrCVrJlGqWA';
                 // script.defer = true;
                 

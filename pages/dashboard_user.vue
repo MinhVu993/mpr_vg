@@ -826,7 +826,7 @@
         data() {
             return {
                 search: '',
-                api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
+                api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
                 storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
                 loading: false,
                 flowLoading: {},
@@ -3309,7 +3309,7 @@
                 }
             },
             getStatusWithApprover(status, item) {
-                const statusText = this.$t(this.getStatusText(status, item));
+                const statusText = this.getStatusText(status, item);
                 const approverInfo = this.getApproverName(status, item);
                 
                 if (approverInfo) {
@@ -3319,7 +3319,7 @@
             },
             getAmendmentStatusWithApprover(status, item) {
                 // Thêm item vào tham số thứ 2
-                const statusText = this.$t(this.getAmendmentStatusText(status, item)); 
+                const statusText = this.getAmendmentStatusText(status, item); 
                 const approverInfo = this.getApproverNameForAmendment(status, item);
                 
                 if (approverInfo) {
@@ -3652,7 +3652,7 @@
                 }
             },
             async preloadFlowData() {
-                 const pendingStatuses = new Set(['waiting_dept','waiting_div','waiting_hr_rec_sf','waiting_hr','waiting_ad','waiting_gm']);
+                const pendingStatuses = new Set(['waiting_dept','waiting_div','waiting_hr_rec_sf','waiting_hr','waiting_ad','waiting_gm']);
                 const visibleItems = this.filteredData || [];
                 
                 const needsFlow = (item) => {
@@ -3744,7 +3744,7 @@
                     if (setting && setting.email_date && today < setting.email_date) {
                         return false;
                     }
-                    return isUserInFlowLevels(['dept_manager', 'mpr_dept', 'dept']);
+                    return isUserInFlowLevels(['dept_manager', 'mpr_dept', 'dept','custom_dept_manager']);
                 }
                 let currentStatus = null;
                 
@@ -3761,8 +3761,8 @@
                     return false; 
                 }
                 const statusToLevelCodes = {
-                    'waiting_dept': ['dept_manager', 'mpr_dept', 'dept'],
-                    'waiting_div': ['division_manager', 'mpr_div', 'division'],
+                    'waiting_dept': ['dept_manager', 'mpr_dept', 'dept','custom_dept_manager'],
+                    'waiting_div': ['division_manager', 'mpr_div', 'division','custom_division_manager'],
                     'waiting_hr_rec_sf': ['hr_rec_sf', 'mpr_hr_sf'],
                     'waiting_hr': ['hr_manager', 'mpr_hr_manager'],
                     'waiting_ad': ['smp_manager', 'mpr_smp_manager'],
@@ -3823,6 +3823,7 @@
             },
             async exportExcel() {
                 try {
+                    // 1. Tạo headers cho file Excel (Lọc bỏ cột select và action)
                     const headers = this.originalHeaders
                     .filter(header => header.value !== 'select' && header.value !== 'action')
                     .map(header => ({
@@ -3830,44 +3831,74 @@
                         key: header.value
                     }));
                     
+                    // 2. Map dữ liệu
                     const data = this.filteredData.map(item => {
                         const row = {};
                         headers.forEach(header => {
                             switch (header.key) {
                                 case 'reason':
                                 if (Number(item.reason_exp) === 3) {
-                                    // Nếu là Other reason, lấy text đã localized
                                     row[header.title] = this.getLocalizedOtherReason(item.isOther_reason);
                                 } else {
-                                    // Nếu không phải Other reason, lấy reason thông thường
                                     row[header.title] = item.reasonInfo?.type || '';
                                 }
                                 break;
+                                
                                 case 'submitter':
-                                row[header.title] = item.submiterInfo ? 
+                                row[header.title] = item.submiterInfo ?
                                 `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';
                                 break;
+                                
+                                // ---------------------------------------------------------
+                                // [PHẦN CHỈNH SỬA] XỬ LÝ TRẠNG THÁI (STATUS)
+                                // ---------------------------------------------------------
                                 case 'status':
-                                row[header.title] = this.getStatusText(item.status, item);
+                                // A. Lấy trạng thái chính (ví dụ: Approved, Completed...)
+                                let statusText = this.getStatusText(item.status, item);
+                                
+                                // B. Ghép trạng thái Sửa đổi (Amendment) nếu có
                                 if (item.status_amendent) {
-                                    row[header.title] += ' / ' + this.getAmendmentStatusText(item.status_amendent);
+                                    statusText += ' / ' + this.getAmendmentStatusText(item.status_amendent, item);
                                 }
+                                
+                                // C. Xử lý trạng thái Năm Mới (Year-End)
+                                if (item.status_endyear) {
+                                    // Trường hợp 1: Đã có trạng thái thực trong DB (vd: waiting_div, completed...)
+                                    statusText += ' / ' + this.getEndYearStatusText(item.status_endyear);
+                                } 
+                                else if (this.isYearEndPending(item) || this.isYearEndTodo(item)) {
+                                    // Trường hợp 2: Trạng thái ẢO (Chưa có trong DB nhưng đủ điều kiện tổng kết năm)
+                                    // Ép hiển thị là "Waiting Dept" (hoặc text tương ứng: 📅 Pending Dept...)
+                                    statusText += ' / ' + this.getEndYearStatusText('waiting_dept');
+                                }
+                                
+                                row[header.title] = statusText;
                                 break;
+                                // ---------------------------------------------------------
+                                
                                 case 'recruited_status':
                                 const recruitmentStatus = this.getRecruitmentStatus(item);
-                                row[header.title] = recruitmentStatus.show ? 
+                                row[header.title] = recruitmentStatus.show ?
                                 `${recruitmentStatus.text}${recruitmentStatus.detail ? ' ' + recruitmentStatus.detail : ''}` : '';
                                 break;
+                                
                                 case 'pos':
                                 row[header.title] = this.getPositionName(item.pos);
                                 break;
+                                
+                                case 'sub_pos':
+                                row[header.title] = this.getSubPositionName(item.sub_pos, true);
+                                break;
+                                
                                 case 'qty_req':
                                 row[header.title] = this.getDisplayQuantity(item.qty_req, item);
                                 break;
+                                
                                 case 'date_req':
                                 case 'key_in_date':
                                 row[header.title] = this.formatDate(item[header.key]);
                                 break;
+                                
                                 default:
                                 row[header.title] = item[header.key];
                             }
@@ -3875,11 +3906,17 @@
                         return row;
                     });
                     
+                    // 3. Tạo file Excel
                     const wb = XLSX.utils.book_new();
                     const ws = XLSX.utils.json_to_sheet(data);
+                    
+                    // Định dạng độ rộng cột
                     const colWidths = headers.map(() => ({ wch: 20 }));
                     ws['!cols'] = colWidths;
+                    
                     XLSX.utils.book_append_sheet(wb, ws, 'Manpower Requests');
+                    
+                    // Tải xuống file
                     const date = new Date().toISOString().split('T')[0];
                     const fileName = `Manpower_Requests_${date}.xlsx`;
                     XLSX.writeFile(wb, fileName);
@@ -3889,6 +3926,7 @@
                         text: this.$t('Export successful'),
                         type: 'success'
                     });
+                    
                 } catch (error) {
                     console.error('Export error:', error);
                     this.$notify({
@@ -4093,7 +4131,14 @@
             "Loading approver info...":"Loading approver info...",
             "Current":"Current",
             "loadingData":"Loading data...please wait",
-            "NY_Prefix":"Req for New Year "
+            "NY_Prefix":"Req for New Year ",
+            "No.": "No.",
+            "Department Level": "Department Level",
+            "Division Level": "Division Level",
+            "HR Rec SF Level": "HR Rec SF Level",
+            "HR Level": "HR Level",
+            "AD Level": "AD Level",
+            "GM Level": "GM Level"
         },
         "vi": {
             "ID": "Mã đơn",
@@ -4212,7 +4257,14 @@
             "Loading approver info...":"Đang tải thông tin người phê duyệt...",
             "Current":"Hiện tại",
             "loadingData":"Đang tải dữ liệu...vui lòng chờ",
-            "NY_Prefix":"Yêu cầu cho Năm Mới "
+            "NY_Prefix":"Yêu cầu cho Năm Mới ",
+            "No.": "Số thứ tự",
+            "Department Level": "Cấp bộ phận",
+            "Division Level": "Cấp sở",
+            "HR Rec SF Level": "Cấp HR Tuyển dụng",
+            "HR Level": "Cấp HR",
+            "AD Level": "Cấp AD",
+            "GM Level": "Cấp GM"
         },
         "cn": {
             "ID": "表單編號",
@@ -4332,7 +4384,14 @@
             "Loading approver info...":"正在加載審批人信息...",
             "Current":"當前",
             "loadingData":"正在加載數據...請稍候",
-            "NY_Prefix":"新年度需求申請"
+            "NY_Prefix":"新年度需求申請",
+            "No.": "序号",
+            "Department Level": "部级",
+            "Division Level": "处级",
+            "HR Rec SF Level": "招聘员",
+            "HR Level": "人事级",
+            "AD Level": "AD級",
+            "GM Level": "GM級"
         }
     }  
 </i18n>       

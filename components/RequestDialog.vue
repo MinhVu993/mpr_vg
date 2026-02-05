@@ -14,7 +14,9 @@
                 </v-toolbar-items>
             </v-toolbar>
             <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :locale="$i18n.locale" :key="flowKey"
-            :appCode="getAppCode" :empno="flowEmpno" :location="flowLocation" @sendAppFlow="handleAppFlow"
+            :appCode="getAppCode" :empno="flowEmpno" :location="flowLocation" 
+            :customDept="user.dept" :customDivision="user.div"
+            @sendAppFlow="handleAppFlow"
             class="mb-2"></VfaAppFlow>
             <v-app-bar v-if="showFlowSign" class="flow-sign-container mb-3" flat dense>
                 <v-icon color="info" class="mr-2">mdi-information-outline</v-icon>
@@ -864,7 +866,7 @@ v-model="viewOriginal"
                 reqId: "",
                 itemsReqId: [],
                 form: {
-                    newYearRecruitment: 1,
+                    newYearRecruitment: null,
                     keyInDate: new Date().toISOString().substr(0, 10),
                     req_id: this.generateReqId(),
                     suppType: "",
@@ -1063,12 +1065,12 @@ v-model="viewOriginal"
             value(newVal) {
                 if (newVal && !this.editData) {
                     this.clearForm();
+                    this.resetActiveUser();
                     this.user = {
                         dept: "",
-                        div: "",
+                        div: this.activeUser.division,
                         unit: "",
                     };
-                    this.resetActiveUser();
                 }
             },
             editData: {
@@ -1912,11 +1914,14 @@ v-model="viewOriginal"
                         ),
                     }));
                     this.itemsDiv = [
-                    ...new Set(
-                    this.departmentData
-                    .filter((dept) => dept.department === this.activeUser.division)
-                    .map((dept) => dept.department)
-                    ),
+                        ...new Set(
+                            this.departmentData
+                                .filter((dept) => {
+                                    if (this.isAdmin || this.editData) return true;
+                                    return dept.department === this.activeUser.division;
+                                })
+                                .map((dept) => dept.department)
+                        ),
                     ];
                 } catch (error) {
                     console.error("Error fetching work experience data:", error);
@@ -1941,7 +1946,8 @@ v-model="viewOriginal"
                     formData.append("req_id", requestId);
                     
                     // 2. Xác định Loại yêu cầu
-                    const hasActiveRct = this.form.newYearRecruitment !== "" && 
+                    const hasActiveRct = this.showNewYearSection && 
+                    this.form.newYearRecruitment !== "" && 
                     this.form.newYearRecruitment !== null && 
                     this.form.newYearRecruitment !== undefined;
                     
@@ -2267,6 +2273,7 @@ v-model="viewOriginal"
             clearForm() {
                 const oldForm = { ...this.form };
                 this.form = {
+                    newYearRecruitment: null,
                     keyInDate: new Date().toISOString().substr(0, 10),
                     req_id: "",
                     req_id_change: "",
@@ -3375,6 +3382,7 @@ v-model="viewOriginal"
                     this.api + "getDataFlowForItem",
                     params
                     );
+                    console.log(res.data);
                     return res.data.flow_data || [];
                 } catch (error) {
                     console.error("Error fetching flow data for item:", error);
@@ -3389,7 +3397,7 @@ v-model="viewOriginal"
                 //     return false;
                 // }
                 
-                // if (!this.editData) return false;
+                if (!this.editData) return false;
                 
                 // const hasActiveRct = this.editData.activeRct !== null && 
                 // this.editData.activeRct !== undefined && 
@@ -3615,7 +3623,7 @@ v-model="viewOriginal"
                 }
                 
                 // 3. Kiểm tra trạng thái hợp lệ
-                const validStatuses = ['completed', 'waiting_dept', 'waiting_div'];
+                const validStatuses = ['completed'];
                 const currentStatus = this.editData.status;
                 const amendmentStatus = this.editData.status_amendent;
                 
@@ -3751,8 +3759,10 @@ v-model="viewOriginal"
                 const suppType = this.form.suppType || '';
                 const empno = this.flowEmpno || '';
                 const locale = this.$i18n ? this.$i18n.locale : '';
+                const div = this.user.div || '';
+                const dept = this.user.dept || '';
                 // include locale so component remounts when language changes
-                return `${this.getAppCode}-${empno}-${suppType}-${changeReasonId}-${locale}`;
+                return `${this.getAppCode}-${empno}-${suppType}-${changeReasonId}-${locale}-${div}-${dept}`;
             },
             getChangeQuantityHint() {
                 const minRecruitedQty = this.editData?.recruited || 0;
@@ -4266,10 +4276,7 @@ v-model="viewOriginal"
             hasEitherSelected() {
                 return this.form.either;
             },
-            flowKey() {
-                return `flow-${this.isEdit ? "edit" : "new"}-${this.isEdit && this.editData ? this.editData.id : "none"
-                }-${this.flowEmpno}-${this.form.suppType}`;
-            },
+
             flowEmpno() {
                 if (this.isEdit && this.editData && this.editData.submitter) {
                     try {
@@ -4478,6 +4485,13 @@ v-model="viewOriginal"
                 const id = this.form.changeReason.id;
                 return ![1, 2, 4, 5].includes(id);
             },
+            isAdmin() {
+                const sessionUser = this.$session.get("mpr");
+                if (sessionUser && sessionUser.app_roles) {
+                    return sessionUser.app_roles.some(r => r.app === "mpr" && r.role === "admin");
+                }
+                return false;
+            },
         },
         mounted() {
             this.$nextTick(() => {
@@ -4541,7 +4555,7 @@ v-model="viewOriginal"
             "Quantity request": "Quantity",
             "Change Quantity": "Change Quantity",
             "Change Reason": "Change Reason",
-            "Req.date": "",
+            "Req.date": "Req. Date",
             "Expansion of Staffing": "Expansion of Staffing",
             "Replacement": "Replacement",
             "Old empno": "Old empno",
@@ -4652,7 +4666,15 @@ v-model="viewOriginal"
             "continue recruitment based on conditions": "recruitment conditions to continue",
             "Request new year:": "Annual Requirement Consolidation Settings Process: ",
             "Request_ori:":"Standard Application Process: ",
-            "Cycle":"Cycle"
+            "Cycle":"Cycle",
+            "Other": "Other",
+            "Note": "Note",
+            "Waiting department": "Waiting for Department",
+            "Waiting Division": "Waiting for Division",
+            "Waiting HR Rec SF": "Waiting for HR Recruitment",
+            "Waiting HR": "Waiting for HR",
+            "No.": "No.",
+            "Settings": "Settings"
         },
         "vi": {
             "Create new request": "Tạo yêu cầu mới",
@@ -4788,7 +4810,12 @@ v-model="viewOriginal"
             "continue recruitment based on conditions": "để tiếp tục tuyển dụng theo điều kiện cũ",
             "Request new year:": "Lưu trình tổng kết nhu cầu tuyển dụng năm: ",
             "Request_ori:":"Lưu trình phê duyệt tiêu chuẩn：",
-            "Cycle":"Chu kỳ"
+            "Cycle":"Chu kỳ",
+            "Waiting department": "Chờ bộ phận",
+            "Waiting Division": "Chờ cấp sở",
+            "Waiting HR Rec SF": "Chờ nhân viên tuyển dụng",
+            "Waiting HR": "Chờ trưởng phòng nhân sự",
+            "No.": "Số thứ tự"
         },
         "cn": {
             "Create new request": "创建新请求",
@@ -4924,7 +4951,12 @@ v-model="viewOriginal"
             "continue recruitment based on conditions": "招募條件續招",
             "Request new year:": "年度需求結算流程：",
             "Request_ori:":"一般申請流程：",
-            "Cycle": "週期"
+            "Cycle": "週期",
+            "Waiting department": "等待部門",
+            "Waiting Division": "等待處級",
+            "Waiting HR Rec SF": "等待招聘專員",
+            "Waiting HR": "等待人資主管",
+            "No.": "序号"
         }
     }
 </i18n>
@@ -5059,16 +5091,15 @@ v-model="viewOriginal"
     min-width: 140px; /* Đảm bảo không bị co quá nhỏ */
 }
 
-::v-deep .v-stepper__label {
+/* ::v-deep .v-stepper__label {
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
     margin-top: 8px !important;
-    /* Đảm bảo text bên trong label hiển thị đầy đủ */
     white-space: normal !important;
     width: 100%;
-}
+} */
 
 ::v-deep .v-expansion-panel-content__wrap {
     padding: 0 !important;

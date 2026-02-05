@@ -1081,7 +1081,7 @@
             
             return {
                 search: '',
-                api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
+                api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
                 storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
                 loading: false,
                 flowLoading: {},
@@ -3289,7 +3289,7 @@
                     if (setting && setting.email_date && today < setting.email_date) {
                         return false;
                     }
-                    return isUserInFlowLevels(['dept_manager', 'mpr_dept', 'dept']);
+                    return isUserInFlowLevels(['dept_manager', 'mpr_dept', 'dept','custom_dept_manager']);
                 }
                 
                 // ------------------------------------------------------------------------------------
@@ -3317,8 +3317,8 @@
                 // -------------------------------------------------------------------
                 
                 const statusToLevelCodes = {
-                    'waiting_dept': ['dept_manager', 'mpr_dept', 'dept'],
-                    'waiting_div': ['division_manager', 'mpr_div', 'division'],
+                    'waiting_dept': ['dept_manager', 'mpr_dept', 'dept','custom_dept_manager'],
+                    'waiting_div': ['division_manager', 'mpr_div', 'division','custom_division_manager'],
                     'waiting_hr_rec_sf': ['hr_rec_sf', 'mpr_hr_sf'],
                     'waiting_hr': ['hr_manager', 'mpr_hr_manager'],
                     'waiting_ad': ['smp_manager', 'mpr_smp_manager'],
@@ -3592,7 +3592,7 @@
             
             getStatusWithApprover(status, item) {
                 
-                const statusText = this.$t(this.getStatusText(status, item));
+                const statusText = this.getStatusText(status, item);
                 const approverInfo = this.getApproverName(status, item);
                 
                 if (approverInfo) {
@@ -3602,7 +3602,7 @@
             },
             getAmendmentStatusWithApprover(status, item) {
                 // Thêm item vào tham số thứ 2
-                const statusText = this.$t(this.getAmendmentStatusText(status, item)); 
+                const statusText = this.getAmendmentStatusText(status, item); 
                 const approverInfo = this.getApproverNameForAmendment(status, item);
                 
                 if (approverInfo) {
@@ -4188,6 +4188,7 @@
             },
             async exportExcel() {
                 try {
+                    // 1. Tạo headers cho file Excel (Lọc bỏ cột select và action)
                     const headers = this.originalHeaders
                     .filter(header => header.value !== 'select' && header.value !== 'action')
                     .map(header => ({
@@ -4195,6 +4196,7 @@
                         key: header.value
                     }));
                     
+                    // 2. Map dữ liệu
                     const data = this.filteredData.map(item => {
                         const row = {};
                         headers.forEach(header => {
@@ -4206,34 +4208,62 @@
                                     row[header.title] = item.reasonInfo?.type || '';
                                 }
                                 break;
+                                
                                 case 'submitter':
-                                row[header.title] = item.submiterInfo ? 
+                                row[header.title] = item.submiterInfo ?
                                 `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';
                                 break;
+                                
+                                // ---------------------------------------------------------
+                                // [PHẦN CHỈNH SỬA] XỬ LÝ TRẠNG THÁI (STATUS)
+                                // ---------------------------------------------------------
                                 case 'status':
-                                row[header.title] = this.getStatusText(item.status, item);
+                                // A. Lấy trạng thái chính (ví dụ: Approved, Completed...)
+                                let statusText = this.getStatusText(item.status, item);
+                                
+                                // B. Ghép trạng thái Sửa đổi (Amendment) nếu có
                                 if (item.status_amendent) {
-                                    row[header.title] += ' / ' + this.getAmendmentStatusText(item.status_amendent);
+                                    statusText += ' / ' + this.getAmendmentStatusText(item.status_amendent, item);
                                 }
+                                
+                                // C. Xử lý trạng thái Năm Mới (Year-End)
+                                if (item.status_endyear) {
+                                    // Trường hợp 1: Đã có trạng thái thực trong DB (vd: waiting_div, completed...)
+                                    statusText += ' / ' + this.getEndYearStatusText(item.status_endyear);
+                                } 
+                                else if (this.isYearEndPending(item) || this.isYearEndTodo(item)) {
+                                    // Trường hợp 2: Trạng thái ẢO (Chưa có trong DB nhưng đủ điều kiện tổng kết năm)
+                                    // Ép hiển thị là "Waiting Dept" (hoặc text tương ứng: 📅 Pending Dept...)
+                                    statusText += ' / ' + this.getEndYearStatusText('waiting_dept');
+                                }
+                                
+                                row[header.title] = statusText;
                                 break;
+                                // ---------------------------------------------------------
+                                
                                 case 'recruited_status':
                                 const recruitmentStatus = this.getRecruitmentStatus(item);
-                                row[header.title] = recruitmentStatus.show ? 
+                                row[header.title] = recruitmentStatus.show ?
                                 `${recruitmentStatus.text}${recruitmentStatus.detail ? ' ' + recruitmentStatus.detail : ''}` : '';
                                 break;
+                                
                                 case 'pos':
                                 row[header.title] = this.getPositionName(item.pos);
                                 break;
+                                
                                 case 'sub_pos':
                                 row[header.title] = this.getSubPositionName(item.sub_pos, true);
                                 break;
+                                
                                 case 'qty_req':
                                 row[header.title] = this.getDisplayQuantity(item.qty_req, item);
                                 break;
+                                
                                 case 'date_req':
                                 case 'key_in_date':
                                 row[header.title] = this.formatDate(item[header.key]);
                                 break;
+                                
                                 default:
                                 row[header.title] = item[header.key];
                             }
@@ -4241,11 +4271,17 @@
                         return row;
                     });
                     
+                    // 3. Tạo file Excel
                     const wb = XLSX.utils.book_new();
                     const ws = XLSX.utils.json_to_sheet(data);
+                    
+                    // Định dạng độ rộng cột
                     const colWidths = headers.map(() => ({ wch: 20 }));
                     ws['!cols'] = colWidths;
+                    
                     XLSX.utils.book_append_sheet(wb, ws, 'Manpower Requests');
+                    
+                    // Tải xuống file
                     const date = new Date().toISOString().split('T')[0];
                     const fileName = `Manpower_Requests_${date}.xlsx`;
                     XLSX.writeFile(wb, fileName);
@@ -4255,6 +4291,7 @@
                         text: this.$t('Export successful'),
                         type: 'success'
                     });
+                    
                 } catch (error) {
                     console.error('Export error:', error);
                     this.$notify({
@@ -4467,6 +4504,7 @@
             "Resumed": "Resumed",
             "#Change in hiring requirements": "#Change in hiring requirements",
             "Select year": "Select year",
+            "Settings": "Settings",
             "Close": "Close",
             "Clear": "Clear",
             "English": "English",
@@ -4539,7 +4577,14 @@
             "Email Notify":"Email Notify",
             "System Update":"System Update",
             "Key In New Year":"New Year Form Apply Date",
-            "NY Date Request":"New Year require onboard Date"
+            "NY Date Request":"New Year require onboard Date",
+            "No.": "No.",
+            "Department Level": "Department Level",
+            "Division Level": "Division Level",
+            "HR Rec SF Level": "HR Rec SF Level",
+            "HR Level": "HR Level",
+            "AD Level": "AD Level",
+            "GM Level": "GM Level"
         },
         "vi": {
             "ID": "Mã đơn",
@@ -4669,7 +4714,14 @@
             "Email Notify":"Ngày gửi email",
             "System Update":"Ngày cập nhật hệ thống",
             "Key In New Year":"Ngày nộp đơn (biểu mẫu) năm mới",
-            "NY Date Request":"Ngày dự kiến nhận việc năm mới"
+            "NY Date Request":"Ngày dự kiến nhận việc năm mới",
+            "No.": "Số thứ tự",
+            "Department Level": "Cấp bộ phận",
+            "Division Level": "Cấp sở",
+            "HR Rec SF Level": "Cấp HR Tuyển dụng",
+            "HR Level": "Cấp HR",
+            "AD Level": "Cấp AD",
+            "GM Level": "Cấp GM"
         },
         "cn": {
             "ID": "表單編號",
@@ -4800,7 +4852,14 @@
             "Email Notify":"Email通知日期",
             "System Update":"系統更新日期",
             "Key In New Year":"新年度表單申請日",
-            "NY Date Request":"新年度希望報到日"
+            "NY Date Request":"新年度希望報到日",
+            "No.":"序号",
+            "Department Level": "部级",
+            "Division Level": "处级",
+            "HR Rec SF Level": "招聘员",
+            "HR Level": "人事级",
+            "AD Level": "AD級",
+            "GM Level": "GM級"
         }
     }  
 </i18n>     
