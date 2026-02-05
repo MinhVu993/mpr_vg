@@ -4138,7 +4138,14 @@
             "HR Rec SF Level": "HR Rec SF Level",
             "HR Level": "HR Level",
             "AD Level": "AD Level",
-            "GM Level": "GM Level"
+            "GM Level": "GM Level",
+            "No data available": "No data available",
+            "Submitter": "Submitter",
+            "Rows per page": "Rows per page",
+            "Cancel request": "Cancel request",
+            "Other": "Other",
+            "Note": "Note",
+            "Settings": "Settings"
         },
         "vi": {
             "ID": "Mã đơn",
@@ -4264,7 +4271,10 @@
             "HR Rec SF Level": "Cấp HR Tuyển dụng",
             "HR Level": "Cấp HR",
             "AD Level": "Cấp AD",
-            "GM Level": "Cấp GM"
+            "GM Level": "Cấp GM",
+            "Other": "Khác",
+            "Note": "Ghi chú",
+            "Settings": "Cài đặt"
         },
         "cn": {
             "ID": "表單編號",
@@ -4391,7 +4401,10 @@
             "HR Rec SF Level": "招聘员",
             "HR Level": "人事级",
             "AD Level": "AD級",
-            "GM Level": "GM級"
+            "GM Level": "GM級",
+            "Other": "其他",
+            "Note": "笔记",
+            "Settings": "设置"
         }
     }  
 </i18n>       

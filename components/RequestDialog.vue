@@ -4628,7 +4628,13 @@ v-model="viewOriginal"
             "Rejected": "Rejected",
             "Processing": "Processing",
             "Returned": "Returned",
+            "approved": "Approved",
+            "returned": "Returned",
             "Unknown status": "Unknown status",
+            "No data available": "No data available",
+            "Submitter": "Submitter",
+            "Rows per page": "Rows per page",
+            "Cancel request": "Cancel request",
             "Cancel date":"Cancellation Date",
             "None":"None",
             "Unit Manager": "Unit Manager",
@@ -4772,7 +4778,13 @@ v-model="viewOriginal"
             "Rejected": "Đã từ chối",
             "Processing": "Đang xử lý",
             "Returned": "Đã trả về",
+            "approved": "Đã phê duyệt",
+            "returned": "Đã trả về",
             "Unknown status": "Trạng thái không xác định",
+            "No data available": "Không có dữ liệu",
+            "Submitter": "Người nộp",
+            "Rows per page": "Số hàng mỗi trang",
+            "Cancel request": "Hủy yêu cầu",
             "Cancel date":"Chọn ngày hủy đơn",
             "None":"Không cần",
             "Unit Manager": "Chủ quản đơn vị",
@@ -4815,7 +4827,10 @@ v-model="viewOriginal"
             "Waiting Division": "Chờ cấp sở",
             "Waiting HR Rec SF": "Chờ nhân viên tuyển dụng",
             "Waiting HR": "Chờ trưởng phòng nhân sự",
-            "No.": "Số thứ tự"
+            "No.": "Số thứ tự",
+            "Other": "Khác",
+            "Note": "Ghi chú",
+            "Settings": "Cài đặt"
         },
         "cn": {
             "Create new request": "创建新请求",
@@ -4914,7 +4929,13 @@ v-model="viewOriginal"
             "Rejected": "已拒绝",
             "Processing": "处理中",
             "Returned": "已退回",
+            "approved": "已批准",
+            "returned": "已退回",
             "Unknown status": "未知状态",
+            "No data available": "暂无数据",
+            "Submitter": "提交人",
+            "Rows per page": "每页行数",
+            "Cancel request": "取消请求",
             "Cancel date": "取消日期",
             "None":"不需要",
             "Unit Manager": "单位经理",
@@ -4956,7 +4977,10 @@ v-model="viewOriginal"
             "Waiting Division": "等待處級",
             "Waiting HR Rec SF": "等待招聘專員",
             "Waiting HR": "等待人資主管",
-            "No.": "序号"
+            "No.": "序号",
+            "Other": "其他",
+            "Note": "笔记",
+            "Settings": "设置"
         }
     }
 </i18n>

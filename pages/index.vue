@@ -4721,7 +4721,8 @@
             "HR Rec SF Level": "Cấp HR Tuyển dụng",
             "HR Level": "Cấp HR",
             "AD Level": "Cấp AD",
-            "GM Level": "Cấp GM"
+            "GM Level": "Cấp GM",
+            "Settings": "Cài đặt"
         },
         "cn": {
             "ID": "表單編號",
@@ -4859,7 +4860,8 @@
             "HR Rec SF Level": "招聘员",
             "HR Level": "人事级",
             "AD Level": "AD級",
-            "GM Level": "GM級"
+            "GM Level": "GM級",
+            "Settings": "设置"
         }
     }  
 </i18n>     
