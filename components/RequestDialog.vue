@@ -806,7 +806,7 @@ v-model="viewOriginal"
         data() {
             return {
                 otherReasonTab: 0,
-                api: "http://gmo021.cansportsvg.com/api/vg-mpr-temp/",
+                api: "http://gmo021.cansportsvg.com/api/vg-mpr/",
                 storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
                 dateKeyInMenu: false,
                 dateRequestMenu: false,
@@ -834,6 +834,7 @@ v-model="viewOriginal"
                 itemsDept: [],
                 itemUnits: [],
                 item_changeReason: [],
+                settingHistory: [],
                 iSuppType: [
                 {
                     id: 1,
@@ -1851,6 +1852,7 @@ v-model="viewOriginal"
                     this.lang = response.data.dataLang;
                     this.unitNames = response.data.dataDeptHrm;
                     this.otherReason = response.data.dataOtherReason;
+                    this.settingHistory = response.data.dataEndYear || [];
                     response.data.dataWps;
                     if (this.lang && this.lang.lang) {
                         try {
@@ -3622,6 +3624,23 @@ v-model="viewOriginal"
                     return false;
                 }
                 
+                // KIỂM TRA THỜI GIAN
+                if (!this.settingHistory || !Array.isArray(this.settingHistory)) {
+                    return false;
+                }
+                const currentYear = new Date().getFullYear();
+                const today = new Date().toISOString().split('T')[0];
+                const setting = this.settingHistory.find(s => parseInt(s.year) === currentYear);
+                
+                if (!setting || !setting.email_date || !setting.deadline_date) {
+                    return false;
+                }
+                
+                const isWithinRange = (today >= setting.email_date) && (today <= setting.deadline_date);
+                if (!isWithinRange) {
+                    return false;
+                }
+                
                 // 3. Kiểm tra trạng thái hợp lệ
                 const validStatuses = ['completed'];
                 const currentStatus = this.editData.status;
@@ -4520,8 +4539,7 @@ v-model="viewOriginal"
                             this.populateForm(this.editData);
                         }
                     });
-                    
-                    // Force update để trigger computed properties
+                   
                     this.$forceUpdate();
                 } else {
                     console.warn('No session user found');
@@ -5114,16 +5132,6 @@ v-model="viewOriginal"
     flex-basis: 180px !important; 
     min-width: 140px; /* Đảm bảo không bị co quá nhỏ */
 }
-
-/* ::v-deep .v-stepper__label {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    margin-top: 8px !important;
-    white-space: normal !important;
-    width: 100%;
-} */
 
 ::v-deep .v-expansion-panel-content__wrap {
     padding: 0 !important;

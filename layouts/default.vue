@@ -72,11 +72,11 @@
             <nuxt />
         </v-container>
     </v-main>
-    <v-footer class="noPrint" :absolute="!fixed" app>
+    <!-- <v-footer class="noPrint" :absolute="!fixed" app>
         <small>&copy; {{ new Date().getFullYear() }} Developed by VG - Project
             team</small>
             <v-spacer></v-spacer>
-        </v-footer>
+        </v-footer> -->
     </v-app>
     <AuthComp ref="authComp" app="mpr" @setUser="setUser" />
 </div>

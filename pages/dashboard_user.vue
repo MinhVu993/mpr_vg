@@ -826,7 +826,7 @@
         data() {
             return {
                 search: '',
-                api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
+                api: 'http://gmo021.cansportsvg.com/api/vg-mpr/',
                 storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
                 loading: false,
                 flowLoading: {},
