@@ -15,7 +15,7 @@
             </v-toolbar>
             <VfaAppFlow v-if="flowEmpno" v-show="true" ref="AppFlow" :locale="$i18n.locale" :key="flowKey"
             :appCode="getAppCode" :empno="flowEmpno" :location="flowLocation" 
-            :customDept="user.dept" :customDivision="user.div"
+            :customDept="user.unit" :customDivision="user.div"
             @sendAppFlow="handleAppFlow"
             class="mb-2"></VfaAppFlow>
             <v-app-bar v-if="showFlowSign" class="flow-sign-container mb-3" flat dense>
@@ -3779,9 +3779,9 @@ v-model="viewOriginal"
                 const empno = this.flowEmpno || '';
                 const locale = this.$i18n ? this.$i18n.locale : '';
                 const div = this.user.div || '';
-                const dept = this.user.dept || '';
+                const unit = this.user.unit || '';
                 // include locale so component remounts when language changes
-                return `${this.getAppCode}-${empno}-${suppType}-${changeReasonId}-${locale}-${div}-${dept}`;
+                return `${this.getAppCode}-${empno}-${suppType}-${changeReasonId}-${locale}-${div}-${unit}`;
             },
             getChangeQuantityHint() {
                 const minRecruitedQty = this.editData?.recruited || 0;
