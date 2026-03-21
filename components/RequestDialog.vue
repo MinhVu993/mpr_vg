@@ -1080,10 +1080,6 @@ v-model="viewOriginal"
                         await this.getDataModel();
                         this.populateForm(newData);
                         const submitter = typeof newData.submitter === "string" ? JSON.parse(newData.submitter) : newData.submiterInfo;
-                        if (submitter) {
-                            this.activeUser.name = submitter.name || "";
-                            this.activeUser.dept_sumt = submitter.dept_sumt || "";
-                        }
                         if (this.isEdit && this.activeUser) {
                             await this.fetchDataFlow();
                         }
@@ -2549,16 +2545,11 @@ v-model="viewOriginal"
                 }
                 const submitter = JSON.parse(data.submitter);
                 if (submitter) {
-                    this.activeUser.name = submitter.name || "";
-                    this.activeUser.dept_sumt = submitter.dept_sumt || "";
-                    
+                    this.user.div = submitter.div;
                     this.$nextTick(() => {
-                        this.user.div = submitter.div;
+                        this.user.dept = submitter.dept;
                         this.$nextTick(() => {
-                            this.user.dept = submitter.dept;
-                            this.$nextTick(() => {
-                                this.user.unit = submitter.unit;
-                            });
+                            this.user.unit = submitter.unit;
                         });
                     });
                 }
@@ -2909,6 +2900,8 @@ v-model="viewOriginal"
                             submitterInfo = {
                                 empno: parsedSubmitter.empno || parsedSubmitter.empNo,
                                 name: parsedSubmitter.name,
+                                unit: parsedSubmitter.unit,
+                                div: parsedSubmitter.div,
                                 dept_sumt: parsedSubmitter.dept_sumt,
                                 division: parsedSubmitter.high_dept || parsedSubmitter.division,
                                 location: parsedSubmitter.location || this.activeUser.location,
@@ -2922,8 +2915,8 @@ v-model="viewOriginal"
                         id: this.editData.id,
                         empno: submitterInfo.empno,
                         name: submitterInfo.name,
-                        dept: submitterInfo.dept_sumt,
-                        high_dept: submitterInfo.division,
+                        dept: submitterInfo.unit || submitterInfo.dept_sumt,
+                        high_dept: submitterInfo.div || submitterInfo.division,
                         app_code: "mpr_",
                         location: submitterInfo.location,
                     };
