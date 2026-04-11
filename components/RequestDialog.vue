@@ -217,7 +217,9 @@
                     :disabled="formDisabled || form.recruitment.reason !== 3"
                     v-model="form.recruitment.otherReasonSelected" :items="otherReasonItems"
                     item-text="text" item-value="id" :label="$t('Please select')" outlined dense
-                    hide-details clearable @change="handleOtherReasonSelect"></v-autocomplete>
+                    :rules="form.recruitment.reason === 3 ? [rules.required] : []"
+                    :required="form.recruitment.reason === 3"
+                    hide-details="auto" clearable @change="handleOtherReasonSelect"></v-autocomplete>
                 </v-col>
                 <v-col cols="12" v-if="form.recruitment.reason === 2"> <!-- For2-->
                     <v-text-field :rules="[rules.required]" required :disabled="formDisabled"
@@ -229,15 +231,15 @@
         </v-card>
     </v-col>
     <v-col cols="12" md="4">
-        <v-file-input :disabled="formDisabled" v-model="form.attachments.dimissionList"
-        :label="$t('Dimission list file')" outlined dense
-        :error="form.recruitment.reason === 2 && !form.attachments.dimissionList"
-        :required="form.recruitment.reason === 2"
-        :rules="form.recruitment.reason === 2 ? [rules.required] : []" hide-details="auto"
-        @change="previewFile('dimissionList', $event)" prepend-inner-icon="mdi-file-account"
-        :clearable="true" accept=".doc,.docx,.pdf,.xls,.xlsx"></v-file-input>
-        <div v-show="filePreview.dimissionList && form.recruitment.reason === 2"
-        class="file-preview mt-2">
+       <v-file-input :disabled="formDisabled" v-model="form.attachments.dimissionList"
+:label="$t('Dimission list file')" outlined dense
+:error="(form.recruitment.reason === 2 || form.recruitment.reason === 3) && !form.attachments.dimissionList"
+:required="form.recruitment.reason === 2 || form.recruitment.reason === 3"
+:rules="(form.recruitment.reason === 2 || form.recruitment.reason === 3) ? [rules.required] : []" hide-details="auto"
+@change="previewFile('dimissionList', $event)" prepend-inner-icon="mdi-file-account"
+:clearable="true" accept=".doc,.docx,.pdf,.xls,.xlsx"></v-file-input>
+        <div v-show="filePreview.dimissionList && (form.recruitment.reason === 2 || form.recruitment.reason === 3)"
+class="file-preview mt-2">
         <v-chip small  class="mb-1">
             <v-icon left small>{{ getFileIcon(form.attachments.dimissionList?.type ||
                 getFileTypeFromName(form.attachments.dimissionList) ) }}</v-icon>
@@ -3923,20 +3925,10 @@ v-model="viewOriginal"
                 return !!this.editData && !this.isCreating;
             },
             disableSaveButton() {
-                // 1. ƯU TIÊN CAO NHẤT: Kiểm tra New Year Recruitment
-                // Nếu đang hiển thị form này, chỉ quan tâm việc đã chọn Radio hay chưa.
-                // Không cần validate các trường khác của form gốc.
-                if (this.showNewYearSection) {
-                    const val = this.form.newYearRecruitment;
-                    // Nếu val là rỗng, null hoặc undefined -> Disable (true)
-                    // Nếu val là 0 hoặc 1 -> Enable (false)
+                 if (this.showNewYearSection) {
                     return (val === "" || val === null || val === undefined);
                 }
-                
-                // Biến dùng chung cho validation bên dưới
-                const reasonSelected = !!(this.form.recruitment && (this.form.recruitment.reason || this.form.recruitment.otherReasonSelected));
-                
-                // 2. Trường hợp là Change Request (Đơn thay đổi)
+                const reasonSelected = !!(this.form.recruitment && this.form.recruitment.reason && (this.form.recruitment.reason !== 3 || this.form.recruitment.otherReasonSelected));
                 if (this.isChange) {
                     const baseValidation =
                     !this.form.pos ||
