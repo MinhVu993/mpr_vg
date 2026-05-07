@@ -4102,7 +4102,7 @@ v-model="viewOriginal"
                     if (this.form.suppType === 1) {
                         return true; // Include all positions
                     } else if (this.form.suppType === 2) {
-                        return type.id !== 1;
+                        return type.id === 3; // Chỉ hiển thị Cán Bộ (Leader)
                     }
                     return true; // Default case, include all positions
                 });
