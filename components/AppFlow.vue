@@ -52,7 +52,7 @@ export default {
                 }),
             };
             await this.$axios
-                .post("http://gmo021.cansportsvg.com/api/vfa/testFlow", params)
+                .post("/api/vfa/testFlow", params)
                 .then((res) => {
                     this.appFlow = res.data.flow_data;
                     this.$emit('sendAppFlow', this.appFlow)

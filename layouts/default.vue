@@ -2,7 +2,6 @@
     {
         "en": { 
             "appName" :"Manpower request",
-            "appname" :"Manpower request",
             "accessDenied": "You do not have permission to access this application.",
             "User manual": "User manual",
             "Go home": "Go home",
@@ -12,7 +11,6 @@
         },
         "cn": {
             "appName" :"人員增補申請",
-            "appname" :"人員增補申請",
             "accessDenied": "您无权访问此应用程序。",
             "User manual": "用户手册",
             "Go home": "回家",
@@ -22,7 +20,6 @@
         },
         "vi": {
             "appName" :"Đơn xin bổ sung công nhân nhân viên",
-            "appname" :"Đơn xin bổ sung công nhân nhân viên",
             "accessDenied": "Bạn không được phép truy cập vào ứng dụng này.",
             "User manual": "Hướng dẫn sử dụng",
             "Go home": "Trang chủ",
@@ -43,16 +40,16 @@
                         <v-icon>{{ item.icon }}</v-icon>
                     </v-list-item-action>
                     <v-list-item-content>
-                        <v-list-item-title>{{ $t(item.title) }}</v-list-item-title>
+                        <v-list-item-title v-text="$t(item.title)" />
                     </v-list-item-content>
                 </v-list-item>
             </v-list>
         </v-navigation-drawer>
         <v-app-bar class="noPrint" dense color="#01a6be" dark :clipped-left="clipped" fixed app>
             <v-app-bar-nav-icon @click.stop="drawer = !drawer" />
-            <v-toolbar-title>{{ $t('appName') }}</v-toolbar-title>
+            <v-toolbar-title v-text="$t('appName')" />
             <v-chip class="ma-2" color="white" label small outlined @click:close="chip4 = false">
-                V.1.4 [Test - demo]
+                V.1.6
             </v-chip>
             <v-spacer />
             <v-btn @click="locale('vi')" text>VI</v-btn>
@@ -72,28 +69,21 @@
             <nuxt />
         </v-container>
     </v-main>
-    <!-- <v-footer class="noPrint" :absolute="!fixed" app>
-        <small>&copy; {{ new Date().getFullYear() }} Developed by VG - Project
-            team</small>
-            <v-spacer></v-spacer>
-        </v-footer> -->
     </v-app>
-    <AuthComp ref="authComp" app="mpr" @setUser="setUser" />
+    <AuthComp ref="authComp" app="mpr" apiUrl="/api" @setUser="setUser" />
 </div>
 </template>
 
 <script>
-// import AuthComp from "../../../@global-component/auth-comp";
-import AuthComp from 'D:/source/@global-component/auth-comp.vue';
+import AuthComp from "../../../@global-component/auth-comp";
+// import AuthComp from 'D:/source/@global-component/auth-comp.vue';
 export default {
     components: {
         AuthComp,
     },
     data() {
         return {
-            apiGlobalUser: "http://gmo021.cansportsvg.com/api/global-user/",
-            storageUrl: 'http://gmo021.cansportsvg.com/api/',
-            tokenApi: 'vg-recuitingReport/getphoto/epm/',
+            apiGlobalUser: "/api/global-user/",
             loaded: false,
             clipped: false,
             drawer: false,
@@ -119,20 +109,20 @@ export default {
             {
                 icon: "mdi-view-dashboard",
                 title: "Main page - User",
-                to: "/dashboard_user",
-                target: "_blank",
+                to: "/dashboard_user", 
+                target: "_blank",  
                 
             },
             {
                 icon: "mdi-information-variant",
                 title: "User manual",
-                href: "http://gmo021.cansportsvg.com/shared/user-manual/mpr/mpr.pdf",
-                target: "_blank",
+                href: "/shared/user-manual/mpr/mpr.pdf",
+                target: "_blank",                    
             },
             {
                 icon: "mdi-home-export-outline",
                 title: "Go home",
-                href: "http://gmo021.cansportsvg.com/"
+                href: "/"
             }
             ];
             
@@ -146,6 +136,7 @@ export default {
                 ...baseItems
                 ];
             }
+            
             return baseItems;
         }
     },
@@ -165,14 +156,14 @@ export default {
                 name: user.name,
                 username: user.username,
                 dept: user.dept,
-                unit_name: user.name,
+                unit_name : user.name,
                 hight_dept: user.high_dept,
                 location: user.location,
                 email: user.email,
                 role: role,
             });
             
-            if (roleItem && authArr.includes(roleItem.role)) {
+            if(roleItem && authArr.includes(roleItem.role)) {
                 this.$router.push({
                     path: "/",
                 })
@@ -187,7 +178,7 @@ export default {
         
         locale(tg) {
             this.$i18n.setLocale(tg);
-            this.$root.$emit('change-locale', tg);
+            $nuxt.$emit("change-locale", tg);
             this.$vuetify.lang.current = tg;
         },
         async checkAppAccess(empno) {
@@ -198,7 +189,9 @@ export default {
                 if (res.status === 200 && res.data.status) {
                     if (res.data.data.length === 0) {
                         alert(`${this.$i18n.t('accessDenied', 'en')}\n ${this.$i18n.t('accessDenied', 'cn')}\n ${this.$i18n.t('accessDenied', 'vi')}`);
-                        window.location.href = "http://gmo021.cansportsvg.com";
+                        if (!this.$config.isDev) {
+                            window.location.href = "/";
+                        }
                     }
                     
                     this.userCompanies = res.data.data.map(item => item.company.code);
@@ -211,14 +204,6 @@ export default {
                 console.error(err);
             }
         },
-        locale(tg) {
-            this.$i18n.setLocale(tg);
-            // đảm bảo emit là string
-            const payload = typeof tg === 'string' ? tg : String(tg);
-            this.$root.$emit('change-locale', payload);
-            this.$vuetify.lang.current = tg;
-        }
-        
     },
     provide() {
         return {
@@ -233,50 +218,12 @@ export default {
             this.isCompaniesLoaded = true;
         }
     },
-    beforeDestroy() {
-        // Cleanup listener khi component bị hủy
-        this.$root.$off('change-locale');
-    },
     mounted() {
-        
-        this.$root.$on('change-locale', (locale) => {
-            this.$i18n.setLocale(locale);
-            this.$vuetify.lang.current = locale;
-        });
         if (this.$session.has("mpr")) {
             this.activeUser = this.$session.get("mpr");
             if (this.activeUser) {
                 this.loaded = true;
                 this.checkAppAccess(this.activeUser.empno);
-                
-                
-                 // Dify chatbot integration
-                //  const mpr = this.$session.get('mpr') || {};
-                // const photoUrl = mpr.empno ? `${this.storageUrl}${this.tokenApi}${mpr.empno}` : null;
-                
-                // window.difyChatbotConfig = {
-                //     token: 'RXiPyzrCVrJlGqWA',
-                //     baseUrl: 'http://10.13.33.50/',
-                //     dynamicScript: true,
-                //     inputs: {
-                //         username: mpr.name || 'Guest',
-                //         lang: mpr.language || 'en',
-                //     },
-                //     systemVariables: {},
-                //     userVariables: {
-                //         empno: mpr.empno || '',
-                //         name: mpr.name || '',
-                //         avatar_url: photoUrl, 
-                //     },
-                // };
-                // // Load script
-                // const script = document.createElement('script');
-                // script.src = 'http://10.13.33.50//embed.min.js';
-                // script.id = 'RXiPyzrCVrJlGqWA';
-                // script.defer = true;
-                
-                // document.body.appendChild(script);
-                
             } else {
                 this.loaded = false;
             }
@@ -285,17 +232,7 @@ export default {
                 path: "/",
             });
         }
+        
     },
 };
 </script>
-
-<style>
- #dify-chatbot-bubble-button {
-    background-color: #1C64F2 !important;
-}
-
-#dify-chatbot-bubble-window {
-    width: 24rem !important;
-    height: 40rem !important;
-} 
-</style>

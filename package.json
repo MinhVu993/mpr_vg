@@ -12,6 +12,7 @@
     "@intlify/vue-i18n-loader": "^2.1.0",
     "@mdi/font": "^7.4.47",
     "@nuxtjs/axios": "^5.13.5",
+    "@nuxtjs/proxy": "^2.1.0",
     "@types/i18next-browser-languagedetector": "^3.0.0",
     "core-js": "^3.9.1",
     "dayjs": "1.10.5",
@@ -49,6 +50,7 @@
     "@vue/runtime-dom": "^3.4.21"
   },
   "resolutions": {
-    "@nuxtjs/vuetify/**/sass": "1.32.12"
+    "@nuxtjs/vuetify/**/sass": "1.32.12",
+    "cssnano": "^5.1.15"
   }
 }

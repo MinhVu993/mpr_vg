@@ -238,7 +238,7 @@
 :rules="(form.recruitment.reason === 2 || form.recruitment.reason === 3) ? [rules.required] : []" hide-details="auto"
 @change="previewFile('dimissionList', $event)" prepend-inner-icon="mdi-file-account"
 :clearable="true" accept=".doc,.docx,.pdf,.xls,.xlsx"></v-file-input>
-        <div v-show="filePreview.dimissionList && (form.recruitment.reason === 2 || form.recruitment.reason === 3)"
+       <div v-show="filePreview.dimissionList && (form.recruitment.reason === 2 || form.recruitment.reason === 3)"
 class="file-preview mt-2">
         <v-chip small  class="mb-1">
             <v-icon left small>{{ getFileIcon(form.attachments.dimissionList?.type ||
@@ -785,8 +785,8 @@ v-model="viewOriginal"
 
 </template>
 <script>
-    // import VfaAppFlow from "../../../@global-component/vfa-comp";
-    import VfaAppFlow from 'D:/source/@global-component/vfa-comp';
+    import VfaAppFlow from "../../../@global-component/vfa-comp";
+    // import VfaAppFlow from 'D:/source/@global-component/vfa-comp';
     export default {
         components: { VfaAppFlow },
         name: "RequestDialog",
@@ -808,8 +808,8 @@ v-model="viewOriginal"
         data() {
             return {
                 otherReasonTab: 0,
-                api: "http://gmo021.cansportsvg.com/api/vg-mpr/",
-                storageUrl: "http://gmo021.cansportsvg.com/api/storage/app/vg-mpr/",
+                api: "/api/vg-mpr/",
+                storageUrl: "/api/storage/app/vg-mpr/",
                 dateKeyInMenu: false,
                 dateRequestMenu: false,
                 autocompleteKey: 0,
@@ -2919,7 +2919,7 @@ v-model="viewOriginal"
                         name: submitterInfo.name,
                         dept: submitterInfo.unit || submitterInfo.dept_sumt,
                         high_dept: submitterInfo.div || submitterInfo.division,
-                        app_code: "mpr_",
+                        app_code: "mpr",
                         location: submitterInfo.location,
                     };
                     params._t = new Date().getTime();
@@ -3372,7 +3372,7 @@ v-model="viewOriginal"
                         name: this.activeUser.name,
                         dept: this.activeUser.dept_sumt,
                         high_dept: this.activeUser.division,
-                        app_code: "mpr_",
+                        app_code: "mpr",
                         location: this.activeUser.location,
                     };
                     const res = await this.$axios.post(
@@ -3762,9 +3762,9 @@ v-model="viewOriginal"
             },
             getAppCode() {
                 if (this.form.changeReason && this.form.changeReason.id === 2) {
-                    return 'mpr_';
+                    return 'mpr';
                 }
-                return this.form.suppType === 1 ? 'mpr_flow2_' : 'mpr_';
+                return this.form.suppType === 1 ? 'mpr_flow2' : 'mpr';
             },
             
             // Update flowKey to include changeReason for proper reactivity
@@ -3925,7 +3925,7 @@ v-model="viewOriginal"
                 return !!this.editData && !this.isCreating;
             },
             disableSaveButton() {
-                 if (this.showNewYearSection) {
+             if (this.showNewYearSection) {
                     return (val === "" || val === null || val === undefined);
                 }
                 const reasonSelected = !!(this.form.recruitment && this.form.recruitment.reason && (this.form.recruitment.reason !== 3 || this.form.recruitment.otherReasonSelected));
@@ -4102,7 +4102,8 @@ v-model="viewOriginal"
                     if (this.form.suppType === 1) {
                         return true; // Include all positions
                     } else if (this.form.suppType === 2) {
-                        return type.id === 3; // Chỉ hiển thị Cán Bộ (Leader)
+                        // return type.id !== 1;
+                         return type.id === 3;
                     }
                     return true; // Default case, include all positions
                 });

@@ -327,7 +327,7 @@
                                                             layout: "print",
                                                             data() {
                                                                 return {
-                                                                    api: 'http://gmo021.cansportsvg.com/api/vg-mpr-temp/',
+                                                                    api: '/api/vg-mpr/',
                                                                     formData: null,
                                                                     duty:[],
                                                                     otherReason: []
@@ -599,29 +599,7 @@
                                                                             this.$refs.oldEmpNo.value = this.formData.old_emp;
                                                                         }
                                                                     }
-                                                                    
-                                                                    // Quantity required
-                                                                    const shouldUseRecruited = this.formData.status_amendent === 'completed' &&
-                                                                    this.formData.denyTempData &&
-                                                                    this.formData.denyTempData.recruited !== undefined;
-                                                                    
-                                                                    if (shouldUseRecruited) {
-                                                                        const recruitedValue = this.formData.recruited || this.formData.denyTempData.recruited;
-                                                                        if (this.formData.qtyReq) {
-                                                                            if (this.formData.qtyReq.workers > 0) this.$refs.workers.value = recruitedValue;
-                                                                            if (this.formData.qtyReq.staff > 0) this.$refs.staff.value = recruitedValue;
-                                                                            if (this.formData.qtyReq.staff_lang > 0) this.$refs.staff.value = recruitedValue;
-                                                                            if (this.formData.qtyReq.tranlator > 0) this.$refs.staff.value = recruitedValue;
-                                                                            if (this.formData.qtyReq.leader > 0) this.$refs.leader.value = recruitedValue;
-                                                                            if (this.formData.qtyReq.engineers > 0) this.$refs.engineers.value = recruitedValue;
-                                                                            if (this.formData.qtyReq.level) {
-                                                                                const levelDutyNo = this.formData.qtyReq.level;
-                                                                                const levelName = this.getLevelName(levelDutyNo);
-                                                                                this.$refs.level.value = levelName;
-                                                                            }
-                                                                        }
-                                                                    } else {
-                                                                        if (this.formData.qtyReq) {
+                                                                    if (this.formData.qtyReq) {
                                                                             if (this.formData.qtyReq.workers > 0) this.$refs.workers.value = this.formData.qtyReq.workers;
                                                                             if (this.formData.qtyReq.staff > 0) this.$refs.staff.value = this.formData.qtyReq.staff;
                                                                             if (this.formData.qtyReq.staff_lang > 0) this.$refs.staff.value = this.formData.qtyReq.staff_lang;
@@ -634,7 +612,41 @@
                                                                                 this.$refs.level.value = levelName;
                                                                             }
                                                                         }
-                                                                    }
+                                                                    // Quantity required
+                                                                    // const shouldUseRecruited = this.formData.status_amendent === 'completed' &&
+                                                                    // this.formData.denyTempData &&
+                                                                    // this.formData.denyTempData.recruited !== undefined;
+                                                                    
+                                                                    // if (shouldUseRecruited) {
+                                                                    //     const recruitedValue = this.formData.recruited || this.formData.denyTempData.recruited;
+                                                                    //     if (this.formData.qtyReq) {
+                                                                    //         if (this.formData.qtyReq.workers > 0) this.$refs.workers.value = recruitedValue;
+                                                                    //         if (this.formData.qtyReq.staff > 0) this.$refs.staff.value = recruitedValue;
+                                                                    //         if (this.formData.qtyReq.staff_lang > 0) this.$refs.staff.value = recruitedValue;
+                                                                    //         if (this.formData.qtyReq.tranlator > 0) this.$refs.staff.value = recruitedValue;
+                                                                    //         if (this.formData.qtyReq.leader > 0) this.$refs.leader.value = recruitedValue;
+                                                                    //         if (this.formData.qtyReq.engineers > 0) this.$refs.engineers.value = recruitedValue;
+                                                                    //         if (this.formData.qtyReq.level) {
+                                                                    //             const levelDutyNo = this.formData.qtyReq.level;
+                                                                    //             const levelName = this.getLevelName(levelDutyNo);
+                                                                    //             this.$refs.level.value = levelName;
+                                                                    //         }
+                                                                    //     }
+                                                                    // } else {
+                                                                    //     if (this.formData.qtyReq) {
+                                                                    //         if (this.formData.qtyReq.workers > 0) this.$refs.workers.value = this.formData.qtyReq.workers;
+                                                                    //         if (this.formData.qtyReq.staff > 0) this.$refs.staff.value = this.formData.qtyReq.staff;
+                                                                    //         if (this.formData.qtyReq.staff_lang > 0) this.$refs.staff.value = this.formData.qtyReq.staff_lang;
+                                                                    //         if (this.formData.qtyReq.tranlator > 0) this.$refs.staff.value = this.formData.qtyReq.tranlator;
+                                                                    //         if (this.formData.qtyReq.leader > 0) this.$refs.leader.value = this.formData.qtyReq.leader;
+                                                                    //         if (this.formData.qtyReq.engineers > 0) this.$refs.engineers.value = this.formData.qtyReq.engineers;
+                                                                    //         if (this.formData.qtyReq.level) {
+                                                                    //             const levelDutyNo = this.formData.qtyReq.level;
+                                                                    //             const levelName = this.getLevelName(levelDutyNo);
+                                                                    //             this.$refs.level.value = levelName;
+                                                                    //         }
+                                                                    //     }
+                                                                    // }
                                                                     
                                                                     // Language skills
                                                                     if (this.formData.either_skill) {

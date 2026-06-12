@@ -5,13 +5,7 @@ import cn from "vuetify/es5/locale/zh-Hant";
 
 export default {
   publicRuntimeConfig: {
-    isDev: true,
-    globalUserApi:
-    process.env.GLOBAL_USER_API ||
-    "http://gmo021.cansportsvg.com/api/global-user/",
-    storageUrl:
-    process.env.STORAGE_URL ||
-    "http://gmo021.cansportsvg.com/api/storage/app/",
+    isDev: process.env.NODE_ENV !== 'production'
   },
   // Disable server-side rendering: https://go.nuxtjs.dev/ssr-mode
   loading: {
@@ -20,15 +14,15 @@ export default {
   },
   ssr: false,
   server: {
-    host: process.env.HOST || "10.13.34.160",
+    host: process.env.HOST || "gmo021.cansportsvg.com",
     // gmo021.cansportsvg.com
     // 10.13.34.176
-    port: 3047,
+    port: 3048,
   },
   // Target: https://go.nuxtjs.dev/config-target
   target: "static",
   router: {
-    base: "/exp/mpr",
+    base: "/vg/hr/mpr",
   },
   generate: {
     dir: "./dist",
@@ -84,14 +78,24 @@ export default {
     "nuxtjs-mdi-font",
   ],
   axios: {
+    baseURL: '/',
+    browserBaseURL: '/',
+    proxy: true,
     headers: {
       common: {
         http_x_vg_authentication: "vg-serect-token",
       },
     },
   },
+  proxy: {
+    '/api/': { 
+      target: process.env.API_URL || 'http://gmo021.cansportsvg.com', 
+      pathRewrite: { '^/api/': '/api/' },
+      changeOrigin: true
+    }
+  },
   // Modules: https://go.nuxtjs.dev/config-modules
-  modules: ["@nuxtjs/axios", "nuxt-i18n"],
+  modules: ["@nuxtjs/axios", "@nuxtjs/proxy", "nuxt-i18n"],
   i18n: {
     defaultLocale: "en",
     vueI18nLoader: true,
@@ -114,7 +118,7 @@ export default {
           primary: colors.blue.darken2,
           accent: colors.grey.darken3,
           secondary: colors.amber.darken3,
-          info: colors.blue.lighten1,
+          info: colors.teal.lighten1,
           warning: colors.amber.base,
           error: colors.deepOrange.accent4,
           success: colors.green.accent3,

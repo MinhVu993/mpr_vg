@@ -482,6 +482,58 @@
 :is-change="isChange"
 @requestUpdated="getAllData" /> <!-- Add @requestUpdated handler -->
 
+<!-- Accept Confirmation Dialog -->
+<v-dialog v-model="confirmAcceptDialog" max-width="500px">
+    <v-card>
+        <v-card-title style="background-color: #01a6be; color: white;">
+            <v-icon left dark>mdi-check</v-icon>
+            {{ $t('Confirm Action') }}
+            <v-spacer></v-spacer>
+            <v-btn icon dark @click="confirmAcceptDialog = false">
+                <v-icon>mdi-close</v-icon>
+            </v-btn>
+        </v-card-title>
+        <v-card-text class="pt-4">
+            {{ $t('Are you sure you want to accept this request?') }}
+        </v-card-text>
+        <v-card-actions>
+            <v-btn color="grey darken-1" text @click="confirmAcceptDialog = false">
+                {{ $t('Cancel') }}
+            </v-btn>
+            <v-spacer></v-spacer>
+            <v-btn color="#01a6be" @click="confirmAccept">
+                {{ $t('Confirm') }}
+            </v-btn>
+        </v-card-actions>
+    </v-card>
+</v-dialog>
+
+<!-- Deny Dialog with Reason -->
+<v-dialog v-model="confirmDenyDialog" max-width="500px">
+    <v-card>
+        <v-card-title class="error white--text">
+            <v-icon left dark>mdi-alert</v-icon>
+            {{ $t('Deny Request') }}
+            <v-btn icon dark @click="confirmDenyDialog = false">
+                <v-icon>mdi-close</v-icon>
+            </v-btn>
+        </v-card-title>
+        <v-card-text class="pt-4">
+            <v-textarea v-model="denyReason" :label="$t('Reason')"
+            :placeholder="$t('Please provide a reason for denying this request')" outlined rows="3"
+            ></v-textarea>
+        </v-card-text>
+        <v-card-actions>
+            <v-btn color="grey darken-1" text @click="confirmDenyDialog = false">
+                {{ $t('Cancel') }}
+            </v-btn>
+            <v-spacer></v-spacer>
+            <v-btn color="error" @click="confirmDeny" :disabled="!denyReason.trim()">
+                {{ $t('Confirm Denial') }}
+            </v-btn>
+        </v-card-actions>
+    </v-card>
+</v-dialog>
 <v-dialog v-model="approvalDialog" max-width="1400px">
     <v-card>
         <v-card-title style="background-color: #00838F; color: white;">
@@ -536,7 +588,7 @@
                 <v-expansion-panel 
                 v-for="(cycle, cycleIndex) in groupedApprovalData" 
                 :key="cycleIndex" 
-                v-show="selectedItemForHistory && !selectedItemForHistory.req_id_oldyear"
+                v-show="selectedItem && !selectedItem.req_id_oldyear"
                 >
                 <v-expansion-panel-header>
                     <div class="d-flex align-center">
@@ -569,6 +621,35 @@
             </v-expansion-panel>
         </v-expansion-panels>
     </v-card-text>
+</v-card>
+</v-dialog>
+
+<!-- Return Dialog -->
+<v-dialog v-model="confirmReturnDialog" max-width="500px" transition="dialog">
+    <v-card elevation="2" class="rounded">
+        <v-card-title class="warning white--text">
+            <v-icon left dark>mdi-alert</v-icon>
+            {{ $t('Return Request') }}
+            <v-spacer></v-spacer>
+            <v-btn icon dark @click="confirmReturnDialog = false">
+                <v-icon>mdi-close</v-icon>
+            </v-btn>
+        </v-card-title>
+        <v-card-text class="pt-4">
+            <v-textarea v-model="returnReason" :label="$t('Return reason')"
+            :placeholder="$t('Please provide a reason for returning this request')" 
+            outlined rows="3"  class="mb-4">
+        </v-textarea>
+    </v-card-text>
+    <v-card-actions>
+        <v-btn color="grey darken-1" text @click="confirmReturnDialog = false">
+            {{ $t('Cancel') }}
+        </v-btn>
+        <v-spacer></v-spacer>
+        <v-btn color="warning" @click="confirmReturn" :disabled="!returnReason.trim()">
+            {{ $t('Confirm Return') }}
+        </v-btn>
+    </v-card-actions>
 </v-card>
 </v-dialog>
 
@@ -1010,14 +1091,13 @@
                 cancelReason: '',
                 selectIdMpr: null,
                 appDialog: false,
-                denyReason: '',
-                returnReason: '',
+                confirmAcceptDialog: false,
+                confirmDenyDialog: false,
                 selectedItemForAction: null,
-                selectedItemForAccept: null,
+                denyReason: '',
                 dataMpr: [],
                 filteredItems: [],
-                selectedItem: null,
-                selectedItemForHistory: null,
+                selectedItem: null, 
                 isEdit: false,
                 isChange: false,
                 selectedYears: [new Date().getFullYear().toString()],
@@ -1026,9 +1106,12 @@
                 selectedApprovalData: [],
                 
                 dataFlow: '',
+                selectedItemForAccept: null,
                 activeUser: '',
                 approvalFlowCache: {},
                 generalFlowData: null,
+                confirmReturnDialog: false,
+                returnReason: '',
                 pos: [],
                 flowRequestInProgress: {}, 
                 flowRequestQueue: {}, 
@@ -1149,13 +1232,13 @@
             
             currentApprovalData() {
                 try {
-                    if (!this.selectedItemForHistory?.approval) return [];
-                    const approvalData = JSON.parse(this.selectedItemForHistory.approval);
+                    if (!this.selectedItem?.approval) return [];
+                    const approvalData = JSON.parse(this.selectedItem.approval);
                     let currentApprovalRecord = {};
                     
-                    if (this.selectedItemForHistory.approval_record) {
+                    if (this.selectedItem.approval_record) {
                         try {
-                            const allApprovalRecords = JSON.parse(this.selectedItemForHistory.approval_record);
+                            const allApprovalRecords = JSON.parse(this.selectedItem.approval_record);
                             currentApprovalRecord = allApprovalRecords[allApprovalRecords.length - 1] || {};
                         } catch(e) {
                             console.error('Error parsing current approval record:', e);
@@ -3015,8 +3098,80 @@
                     return this.$t('Changed quantity');
                 }
             },
-            // Removed redundant approval methods (delegated to RequestDialog)
-
+            async openAcceptDialog(item) {
+                this.selectedItemForAccept = item;
+                try {
+                    const flowData = await this.getFlowDataForItem(item);
+                    if (flowData) {
+                        this.dataFlow = flowData;
+                        this.confirmAcceptDialog = true;
+                    }
+                } catch (error) {
+                    console.error("Error in openAcceptDialog:", error);
+                }
+            },
+            async confirmAccept() {
+                if (!this.selectedItemForAccept) return;
+                
+                let params = {
+                    user_empno: this.activeUser.empno,
+                    dataReq: {
+                        dataFlow: this.dataFlow,
+                        id: this.selectedItemForAccept.id,
+                        status: this.selectedItemForAccept.status,
+                        status_amendent: this.selectedItemForAccept.status_amendent,
+                        approval: this.selectedItemForAccept.approval,
+                        
+                    }
+                };
+                const res = await this.$axios.post(this.api + "acceptRequest", params);
+                if (res.status === 200) {
+                    await this.getAllData();
+                }
+                this.confirmAcceptDialog = false;
+                this.selectedItemForAccept = null;
+            },
+            async openDenyDialog(item) {
+                this.selectedItemForAction = item;
+                this.denyReason = '';
+                try {
+                    const flowData = await this.getFlowDataForItem(item);
+                    if (flowData) {
+                        this.dataFlow = flowData;
+                        this.confirmDenyDialog = true;
+                    }
+                } catch (error) {
+                    console.error("Error in openDenyDialog:", error);
+                }
+            },
+            async confirmDeny() {
+                if (!this.denyReason.trim()) {
+                    return;
+                }
+                try {
+                    const response = await this.$axios.post(this.api + 'denyRequest', {
+                        id: this.selectedItemForAction.id,
+                        reason: this.denyReason,
+                        user_empno: this.activeUser.empno,
+                        dataReq: {
+                            dataFlow: this.dataFlow,
+                            id: this.selectedItemForAction.id,
+                            status: this.selectedItemForAction.status,
+                            approval: this.selectedItemForAction.approval,
+                            status_amendent: this.selectedItemForAction.status_amendent,
+                        }
+                    });
+                    
+                    if (response.data.success) {
+                        await this.getAllData();
+                        this.confirmDenyDialog = false;
+                        this.selectedItemForAction = null;
+                        this.denyReason = '';
+                    }
+                } catch (error) {
+                    console.error('Error denying request:', error);
+                }
+            },
             
             getApprovalStatusColor(status) {
                 const normalizedStatus = status.toLowerCase();
@@ -3134,7 +3289,7 @@
                     if (setting && setting.email_date && today < setting.email_date) {
                         return false;
                     }
-                    return isUserInFlowLevels(['dept_manager', 'mpr_dept', 'dept','custom_dept_manager']);
+                    return isUserInFlowLevels(['dept_manager', 'mpr_dept', 'dept']);
                 }
                 
                 // ------------------------------------------------------------------------------------
@@ -3162,8 +3317,8 @@
                 // -------------------------------------------------------------------
                 
                 const statusToLevelCodes = {
-                    'waiting_dept': ['dept_manager', 'mpr_dept', 'dept','custom_dept_manager'],
-                    'waiting_div': ['division_manager', 'mpr_div', 'division','custom_division_manager'],
+                    'waiting_dept': ['dept_manager', 'mpr_dept', 'dept'],
+                    'waiting_div': ['division_manager', 'mpr_div', 'division'],
                     'waiting_hr_rec_sf': ['hr_rec_sf', 'mpr_hr_sf'],
                     'waiting_hr': ['hr_manager', 'mpr_hr_manager'],
                     'waiting_ad': ['smp_manager', 'mpr_smp_manager'],
@@ -3333,8 +3488,51 @@
                 return statusLevels[status] || 0;
             },
             
-            // Removed redundant return methods (delegated to RequestDialog)
-
+            async openReturnDialog(item) {
+                this.selectedItemForAction = item;
+                this.returnReason = '';
+                try {
+                    const flowData = await this.getFlowDataForItem(item);
+                    if (flowData) {
+                        this.dataFlow = flowData;
+                        this.confirmReturnDialog = true;
+                    }
+                } catch (error) {
+                    console.error("Error in openReturnDialog:", error);
+                }
+            },
+            
+            async confirmReturn() {
+                if (!this.returnReason.trim()) {
+                    return;
+                }
+                
+                try {
+                    const response = await this.$axios.post(this.api + 'returnRequest', {
+                        id: this.selectedItemForAction.id,
+                        reason: this.returnReason,
+                        returnToLevel: 'waiting_dept', // Luôn trả đơn cho unit level
+                        user_empno: this.activeUser.empno,
+                        dataReq: {
+                            dataFlow: this.dataFlow,
+                            id: this.selectedItemForAction.id,
+                            status: this.selectedItemForAction.status,
+                            status_amendent: this.selectedItemForAction.status_amendent,
+                            approval: this.selectedItemForAction.approval,
+                        }
+                    });
+                    
+                    if (response.data.success) {
+                        await this.getAllData();
+                        this.confirmReturnDialog = false;
+                        this.selectedItemForAction = null;
+                        this.returnReason = '';
+                    }
+                } catch (error) {
+                    console.error('Error returning request:', error);
+                    this.$store.dispatch('showError', this.$t('Failed to return request'));
+                }
+            },
             getNextApproverInfo(item) {
                 try {
                     if ((item.status === 'completed' || item.status === 'declined') && 
@@ -3394,7 +3592,7 @@
             
             getStatusWithApprover(status, item) {
                 
-                const statusText = this.getStatusText(status, item);
+                const statusText = this.$t(this.getStatusText(status, item));
                 const approverInfo = this.getApproverName(status, item);
                 
                 if (approverInfo) {
@@ -3404,7 +3602,7 @@
             },
             getAmendmentStatusWithApprover(status, item) {
                 // Thêm item vào tham số thứ 2
-                const statusText = this.getAmendmentStatusText(status, item); 
+                const statusText = this.$t(this.getAmendmentStatusText(status, item)); 
                 const approverInfo = this.getApproverNameForAmendment(status, item);
                 
                 if (approverInfo) {
@@ -3693,7 +3891,7 @@
             
             async openApprovalDetails(item) {
                 try {
-                    this.selectedItemForHistory = item;
+                    this.selectedItem = item;
                     // Lấy dữ liệu lịch sử từ logs
                     this.selectedApprovalData = this.getApprovalLogsData(item);
                     // Sắp xếp dữ liệu lịch sử
@@ -4379,14 +4577,7 @@
             "Email Notify":"Email Notify",
             "System Update":"System Update",
             "Key In New Year":"New Year Form Apply Date",
-            "NY Date Request":"New Year require onboard Date",
-            "No.": "No.",
-            "Department Level": "Department Level",
-            "Division Level": "Division Level",
-            "HR Rec SF Level": "HR Rec SF Level",
-            "HR Level": "HR Level",
-            "AD Level": "AD Level",
-            "GM Level": "GM Level"
+            "NY Date Request":"New Year require onboard Date"
         },
         "vi": {
             "ID": "Mã đơn",
@@ -4516,15 +4707,7 @@
             "Email Notify":"Ngày gửi email",
             "System Update":"Ngày cập nhật hệ thống",
             "Key In New Year":"Ngày nộp đơn (biểu mẫu) năm mới",
-            "NY Date Request":"Ngày dự kiến nhận việc năm mới",
-            "No.": "Số thứ tự",
-            "Department Level": "Cấp bộ phận",
-            "Division Level": "Cấp sở",
-            "HR Rec SF Level": "Cấp HR Tuyển dụng",
-            "HR Level": "Cấp HR",
-            "AD Level": "Cấp AD",
-            "GM Level": "Cấp GM",
-            "Settings": "Cài đặt"
+            "NY Date Request":"Ngày dự kiến nhận việc năm mới"
         },
         "cn": {
             "ID": "表單編號",
@@ -4655,15 +4838,7 @@
             "Email Notify":"Email通知日期",
             "System Update":"系統更新日期",
             "Key In New Year":"新年度表單申請日",
-            "NY Date Request":"新年度希望報到日",
-            "No.":"序号",
-            "Department Level": "部级",
-            "Division Level": "处级",
-            "HR Rec SF Level": "招聘员",
-            "HR Level": "人事级",
-            "AD Level": "AD級",
-            "GM Level": "GM級",
-            "Settings": "设置"
+            "NY Date Request":"新年度希望報到日"
         }
     }  
 </i18n>     

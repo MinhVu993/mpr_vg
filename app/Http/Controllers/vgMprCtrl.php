@@ -23,7 +23,6 @@ use App\vgRecruitingReportEmpnoInfoMdl as EmpnoInfo;
 use App\vgRecruitingReportDeptCodeMdl as nameDeptCode;
 use App\vgRecruitingReportDemandMdl as Demand;
 use App\vgRecruitingReportDutyHrmMdl as DutyHrm;
-use App\vgMprUserAccessLogMdl as UserAccessLog;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 
@@ -122,7 +121,9 @@ class vgMprCtrlTemp extends Controller
         $empno = $req->input("empno");
         $high_dept = $req->input("high_dept");
         $role = $req->input("role");
-     
+
+        
+
         $dataMprQuery = MprTemp::where("loc", $loc)->orderBy("id", "desc");
         $dataMpr = $dataMprQuery->get();
 
@@ -511,28 +512,7 @@ class vgMprCtrlTemp extends Controller
             $historyData = $this->handleChangeHistory($existingMpr, $request);
 
             $activeRct = $request->input("activeRct");
-// --- XỬ LÝ LƯU LOG NGƯỜI DÙNG ---
-                // Giải mã thông tin người đang thao tác (được gửi lên trong request->submitter)
-                $currentUserData = json_decode($request->submitter, true);
-                $actionType = "create";
-                
-                if ($existingMpr) {
-                    if (isset($activeRct) && $activeRct !== "" && $activeRct !== null) {
-                        $actionType = "process_new_year"; // Hành động xử lý năm mới
-                    } elseif ($isAmendment) {
-                        $actionType = "amendment"; // Hành động điều chỉnh
-                    } else {
-                        $actionType = "update"; // Hành động cập nhật thường
-                    }
-                }
 
-                UserAccessLog::create([
-                    'empno' => $currentUserData['empno'] ?? 'Unknown', // Người đang thực hiện
-                    'ip_address' => $request->ip(),
-                    'user_agent' => $request->header('User-Agent'),
-                    'action' => $actionType . " - ReqID: " . $request->req_id,
-                ]);
-        //  -- KẾT THÚC XỬ LÝ LƯU LOG NGƯỜI DÙNG ---
             $submitterToSave = $request->submitter;
 
             if ($existingMpr && isset($activeRct) && $activeRct !== "" && $activeRct !== null) {
@@ -715,7 +695,6 @@ class vgMprCtrlTemp extends Controller
                     "approval" => $data["approval"], // Trả về approval mới để check
                 ],
             ]);
-            
         } catch (\Exception $e) {
             \Log::error("Error in saveManpower:", [
                 "error" => $e->getMessage(),
@@ -1280,91 +1259,48 @@ class vgMprCtrlTemp extends Controller
         //     throw $e;
         // }
 // --------------------------------------------------------
-        // try {
-        //     $interceptEmailAddress = "fiona.chang@spg-sportsgear.com";
-
-        //     // CC mặc định
-        //     $ccEmails = [
-        //         "vu.huynh@spg-sportsgear.com",
-        //         "chung.vo@spg-sportsgear.com",
-        //         "vg-hr013@spg-sportsgear.com",
-        //         "vg-hr015@spg-sportsgear.com",
-        //         "vg-hr009@spg-sportsgear.com",
-        //         "judy.yao@spg-sportsgear.com",
-        //         "yang.yu@spg-sportsgear.com",
-        //     ];
-
-        //     if (!empty($additionalCc)) {
-        //         $ccEmails = array_merge($ccEmails, (array) $additionalCc);
-        //         $ccEmails = array_unique($ccEmails); 
-        //     }
-
-        //     if (!empty($params["mail_data"])) {
-        //         $mailData = json_decode($params["mail_data"], true);
-        //         if (is_array($mailData)) {
-        //             if (isset($mailData["to"])) {
-        //                 $mailData["to"] = [$interceptEmailAddress];
-        //             }
-
-        //             $mailData["cc"] = $ccEmails;
-
-        //             if (isset($mailData["bcc"])) {
-        //                 unset($mailData["bcc"]);
-        //             }
-
-        //             $params["mail_data"] = json_encode($mailData);
-
-        //             \Log::info("[EMAIL INTERCEPTION] Email configuration", [
-        //                 "to" => $mailData["to"],
-        //                 "cc" => $mailData["cc"],
-        //                 "subject" => $params["msg_subject"] ?? "N/A",
-        //             ]);
-        //         }
-        //     }
-
-        //     $client = new \GuzzleHttp\Client();
-        //     $formData = http_build_query($params);
-
-        //     $response = $client->post(
-        //         "http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg",
-        //         [
-        //             "headers" => [
-        //                 "Content-Type" => "application/x-www-form-urlencoded",
-        //             ],
-        //             "body" => $formData,
-        //         ]
-        //     );
-
-        //     return json_decode($response->getBody()->getContents(), true);
-        // } catch (\Exception $e) {
-        //     throw $e;
-        // }
-// /--------------------------------------------------------
         try {
-            $interceptEmailAddress = "vu.huynh@spg-sportsgear.com";
+            $interceptEmailAddress = "fiona.chang@spg-sportsgear.com";
+
+            // CC mặc định
+            $ccEmails = [
+                "vu.huynh@spg-sportsgear.com",
+                "chung.vo@spg-sportsgear.com",
+                "vg-hr013@spg-sportsgear.com",
+                "vg-hr015@spg-sportsgear.com",
+                "vg-hr009@spg-sportsgear.com",
+                "judy.yao@spg-sportsgear.com",
+                "yang.yu@spg-sportsgear.com",
+            ];
+
+            if (!empty($additionalCc)) {
+                $ccEmails = array_merge($ccEmails, (array) $additionalCc);
+                $ccEmails = array_unique($ccEmails); // Loại bỏ email trùng
+            }
+
             if (!empty($params["mail_data"])) {
                 $mailData = json_decode($params["mail_data"], true);
                 if (is_array($mailData)) {
                     if (isset($mailData["to"])) {
                         $mailData["to"] = [$interceptEmailAddress];
                     }
-                    if (isset($mailData["cc"])) {
-                        unset($mailData["cc"]);
-                    }
+
+                    $mailData["cc"] = $ccEmails;
+
                     if (isset($mailData["bcc"])) {
                         unset($mailData["bcc"]);
                     }
+
                     $params["mail_data"] = json_encode($mailData);
-                    \Log::info(
-                        "[EMAIL INTERCEPTION] All emails redirected to: " .
-                            $interceptEmailAddress,
-                        [
-                            "original_data" => $mailData,
-                            "subject" => $params["msg_subject"] ?? "N/A",
-                        ]
-                    );
+
+                    \Log::info("[EMAIL INTERCEPTION] Email configuration", [
+                        "to" => $mailData["to"],
+                        "cc" => $mailData["cc"],
+                        "subject" => $params["msg_subject"] ?? "N/A",
+                    ]);
                 }
             }
+
             $client = new \GuzzleHttp\Client();
             $formData = http_build_query($params);
 
@@ -1382,6 +1318,49 @@ class vgMprCtrlTemp extends Controller
         } catch (\Exception $e) {
             throw $e;
         }
+// /--------------------------------------------------------
+        // try {
+        //     $interceptEmailAddress = "vu.huynh@spg-sportsgear.com";
+        //     if (!empty($params["mail_data"])) {
+        //         $mailData = json_decode($params["mail_data"], true);
+        //         if (is_array($mailData)) {
+        //             if (isset($mailData["to"])) {
+        //                 $mailData["to"] = [$interceptEmailAddress];
+        //             }
+        //             if (isset($mailData["cc"])) {
+        //                 unset($mailData["cc"]);
+        //             }
+        //             if (isset($mailData["bcc"])) {
+        //                 unset($mailData["bcc"]);
+        //             }
+        //             $params["mail_data"] = json_encode($mailData);
+        //             \Log::info(
+        //                 "[EMAIL INTERCEPTION] All emails redirected to: " .
+        //                     $interceptEmailAddress,
+        //                 [
+        //                     "original_data" => $mailData,
+        //                     "subject" => $params["msg_subject"] ?? "N/A",
+        //                 ]
+        //             );
+        //         }
+        //     }
+        //     $client = new \GuzzleHttp\Client();
+        //     $formData = http_build_query($params);
+
+        //     $response = $client->post(
+        //         "http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg",
+        //         [
+        //             "headers" => [
+        //                 "Content-Type" => "application/x-www-form-urlencoded",
+        //             ],
+        //             "body" => $formData,
+        //         ]
+        //     );
+
+        //     return json_decode($response->getBody()->getContents(), true);
+        // } catch (\Exception $e) {
+        //     throw $e;
+        // }
     }
     public function denyRequest(Request $req)
     {
@@ -2413,7 +2392,7 @@ class vgMprCtrlTemp extends Controller
                 $requestParams = new Request();
                 $requestParams->merge([
                     "empno" => $submitter["empno"],
-                    "app_code" => "mpr_",
+                    "app_code" => "MPR_",
                     "location" => $userData["location"] ?? "VN",
                     "custom_data" => json_encode([
                         "custom_dept" => $submitter["dept"] ?? null,
