@@ -14,7 +14,7 @@ export default {
   },
   ssr: false,
   server: {
-    host: process.env.HOST || "gmo021.cansportsvg.com",
+    host: process.env.HOST || "0.0.0.0",
     // gmo021.cansportsvg.com
     // 10.13.34.176
     port: 3048,

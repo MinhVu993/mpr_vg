@@ -11,16 +11,19 @@ use App\vfaChangeReportMdl as vfaChangeReportMdl;
 use App\vfaManagerCustomDeputiesMdl as managerCustomDeputiesMdl;
 use App\msgCenterMsgDataTbl as msgMdl;
 use App\vfaUpdatedManagerMdl;
+// hrm
+use App\hrmManagerMdl;
 // FACADE
 use Illuminate\Support\Facades\Log;
 
 use App\Http\Controllers\systemLogCtrl;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
+use GuzzleHttp\Client;
 
 class vfaCtrl extends Controller
 {
-
   public function sendReport(Request $request)
   {
 
@@ -165,6 +168,8 @@ class vfaCtrl extends Controller
 
     return $html;
   }
+
+
   public function getDataPendingReport(Request $request)
   {
     // 1. Lấy change report chưa reported
@@ -180,7 +185,7 @@ class vfaCtrl extends Controller
     // 4. Gộp dữ liệu
     $result = $reports->map(function ($item) use ($updatedManagers) {
       return [
-        'change_report'   => $item,
+        'change_report' => $item,
         'updated_manager' => $updatedManagers->get($item->id_new_data),
       ];
     });
@@ -880,6 +885,350 @@ class vfaCtrl extends Controller
     ];
   }
 
+  public function getHrmDeptNotExistInVfa()
+  {
+    // Cập nhật dữ liệu từ HRM trước khi chạy báo cáo (Theo yêu cầu)
+    $this->GetHrmManagerData();
+
+    // date('N') trả về 1 (Thứ 2) đến 7 (Chủ nhật)
+    if (date('N') == 7) {
+      return response()->json([
+        'status' => 'skipped',
+        'message' => 'Today is Sunday. The synchronization process is disabled.'
+      ]);
+    }
+    // =========================
+    // 1️⃣ Lấy dữ liệu AA (VFA)
+    // =========================
+    $managerArr = vfaUpdatedManagerMdl::all();
+
+    // Lấy group_empno từ user table
+    $empnos = $managerArr->pluck('empno')->toArray();
+
+    $userGroupMap = userMdl::whereIn('empno', $empnos)
+      ->get(['empno', 'group_empno'])
+      ->keyBy('empno');
+
+    // Chuẩn hoá AA thành map để lookup nhanh
+    // key = empno | group_empno
+    $managerMap = [];
+
+    foreach ($managerArr as $m) {
+      $groupEmpno = $userGroupMap[$m->empno]->group_empno ?? null;
+      $deptCodes = json_decode($m->dept_code ?? '[]', true);
+      if (!is_array($deptCodes))
+        $deptCodes = [];
+
+      // Hàm helper để gộp dữ liệu tránh ghi đè
+      $mergeToMap = function ($id, $codes) use (&$managerMap) {
+        if (!$id)
+          return;
+        if (!isset($managerMap[$id])) {
+          $managerMap[$id] = ['dept_codes' => []];
+        }
+        $managerMap[$id]['dept_codes'] = array_unique(array_merge(
+          $managerMap[$id]['dept_codes'],
+          $codes
+        ));
+      };
+
+      $mergeToMap($m->empno, $deptCodes);
+      if ($groupEmpno) {
+        $mergeToMap($groupEmpno, $deptCodes);
+      }
+    }
+
+    // =========================
+    // 2️⃣ Lấy dữ liệu BB (Từ manager_hrm_tbl vừa được Sync ở trên)
+    // =========================
+    $hrmManagers = hrmManagerMdl::all();
+    $hrmData = $hrmManagers->map(function ($m) {
+      return [
+        'id' => $m->dept,
+        'manager_id' => $m->manager_id,
+        'manager_name' => $m->manager_name,
+        'manager_eng_name' => $m->manager_eng_name,
+      ];
+    })->toArray();
+
+    $result = [];
+    $countNoManagerInHrm = 0;
+    $countManagerNotInVfa = 0;
+    $countAlreadyInVfa = 0;
+
+    // =========================
+    // 3️⃣ So sánh BB ↔ AA
+    // =========================
+    foreach ($hrmData as $dept) {
+
+      $managerId = $dept['manager_id'] ?? null;
+      $deptId = $dept['id'] ?? null;
+
+      if (!$managerId || !$deptId) {
+        $countNoManagerInHrm++;
+        continue;
+      }
+
+      if (substr($deptId, 0, 2) === 'Z-') {
+        continue;
+      }
+
+      // ❌ Không tìm thấy manager trong VFA
+      if (!isset($managerMap[$managerId])) {
+        $countManagerNotInVfa++;
+        continue;
+      }
+
+      $deptCodes = $managerMap[$managerId]['dept_codes'];
+
+      // ❌ Dept chưa tồn tại trong VFA
+      if (!in_array($deptId, $deptCodes)) {
+        $result[] = [
+          'manager_id' => $managerId,
+          'manager_name' => $dept['manager_name'] ?? '',
+          'manager_eng_name' => $dept['manager_eng_name'] ?? '',
+          'dept_id' => $deptId,
+        ];
+      } else {
+        $countAlreadyInVfa++;
+      }
+    }
+
+    // =========================
+    // 3.5️⃣ Lấy dữ liệu Rotation (Mới thêm)
+    // =========================
+    $rotationRecords = hrmManagerMdl::whereRaw('manager_id <> manager_id_old')->get();
+    $rotationData = [];
+    foreach ($rotationRecords as $r) {
+      $rotationData[] = [
+        'dept_id' => $r->dept,
+        'old_manager' => $r->manager_id_old . ' - ' . $r->manager_name_old . ' - ' . $r->manager_eng_name_old,
+        'new_manager' => $r->manager_id . ' - ' . $r->manager_name . ' - ' . $r->manager_eng_name,
+      ];
+    }
+
+
+    // =========================
+    // 4️⃣ Response & Email
+    // =========================
+    $title = '[VFA] Warning: The list of managers on HRM does not yet exist on VFA.';
+    $diagnostics = [
+      'total_hrm_departments' => count($hrmData),
+      'skipped_no_manager_id' => $countNoManagerInHrm,
+      'manager_rotations_detected' => count($rotationData),
+    ];
+
+    $msgBody = $this->generateHrmSyncEmailBody($diagnostics, $result, $rotationData);
+
+    msgMdl::insert([
+      'msg_type' => 'm',
+      'msg_method' => 'both',
+      'msg_subject' => $title,
+      'msg_body' => $msgBody,
+      'target' => 'VG-EXPAT-LU-TEST',
+      'mail_template' => 'msgCenterMailTemplate',
+      'mail_data' => json_encode([
+        'to' => ['triet.bui@spg-sportsgear.com', 'lu.nguyen@spg-sportsgear.com', 'khang.vu@spg-sportsgear.com', 'hai.ho@spg-sportsgear.com', 'phong.luu@spg-sportsgear.com', 'vu.huynh@spg-sportsgear.com'],
+        // 'to' => ['lu.nguyen@spg-sportsgear.com'],
+        'bcc' => ['lu.nguyen@spg-sportsgear.com'],
+        'subject' => $title,
+        'msgBody' => $msgBody,
+      ]),
+    ]);
+
+    // Tự động gọi kiểm tra bộ phận thiếu quản lý và gửi mail
+    $this->CheckDeptMissManagementOnVFA();
+
+    return response()->json([
+      'title' => $title,
+      'total_missing' => count($result),
+      'diagnostics' => $diagnostics,
+      'data' => $result,
+    ]);
+  }
+
+
+
+  public function GetHrmManagerData()
+  {
+    // =========================
+    // 1️⃣ Lấy dữ liệu BB (HRM)
+    // =========================
+    try {
+      $client = new Client();
+      $url = 'http://gmo021.cansportsvg.com/hrm-organization-v1/parsed_departments_comprehensive.json';
+      $hrmResponse = $client->get($url, ['timeout' => 60]);
+
+      if ($hrmResponse->getStatusCode() == 200) {
+        $hrmDataRaw = $hrmResponse->json() ?? [];
+        Log::info("VFA-Sync: HRM Data count: " . count($hrmDataRaw));
+
+        // =========================
+        // 2️⃣ Đồng bộ & Theo dõi thay đổi theo DEPT
+        // =========================
+        $changes = [];
+        $new_depts = 0;
+        $manager_rotations = 0;
+
+        // Lấy dữ liệu hiện tại theo dept (Duy nhất mỗi bộ phận 1 dòng)
+        $existingDepts = hrmManagerMdl::all()->keyBy('dept');
+
+        foreach ($hrmDataRaw as $item) {
+          $deptCode = $item['id'] ?? null;
+          $managerId = $item['manager_id'] ?? null;
+
+          if (!$deptCode)
+            continue;
+
+          $existing = $existingDepts->get($deptCode);
+
+          if ($existing) {
+            // Trường hợp: Bộ phận đã có trong DB
+            // Luôn lưu lại thông tin cũ hiện tại trong bảng vào các cột _old (Theo yêu cầu: Luôn đẩy sang old mỗi lần gọi API)
+            $oldManagerId = $existing->manager_id;
+            $oldManagerName = $existing->manager_name;
+            $oldManagerEngName = $existing->manager_eng_name;
+
+            $existing->update([
+              'manager_id' => $managerId,
+              'manager_name' => $item['manager_name'] ?? '',
+              'manager_eng_name' => $item['manager_eng_name'] ?? '',
+              'manager_id_old' => $oldManagerId,
+              'manager_name_old' => $oldManagerName,
+              'manager_eng_name_old' => $oldManagerEngName,
+              'updated_at' => now(),
+            ]);
+
+            // Vẫn theo dõi Rotation để báo cáo nếu có sự thay đổi thực sự về manager_id
+            if ($oldManagerId != $managerId) {
+              $changes[] = [
+                'dept' => $deptCode,
+                'type' => 'Manager Rotation',
+                'old_manager' => $oldManagerId . ' - ' . $oldManagerName . ' - ' . $oldManagerEngName,
+                'new_manager' => $managerId . ' - ' . ($item['manager_name'] ?? '') . ' - ' . ($item['manager_eng_name'] ?? ''),
+              ];
+              $manager_rotations++;
+            }
+          } else {
+            // Trường hợp: Bộ phận mới hoàn toàn
+            hrmManagerMdl::create([
+              'dept' => $deptCode,
+              'manager_id' => $managerId,
+              'manager_name' => $item['manager_name'] ?? '',
+              'manager_eng_name' => $item['manager_eng_name'] ?? '',
+              // Khi mới thì thông tin quản lý cũ để trống hoặc bằng hiện tại tùy mục đích
+              'manager_id_old' => $managerId,
+              'manager_name_old' => $item['manager_name'] ?? '',
+              'manager_eng_name_old' => $item['manager_eng_name'] ?? '',
+              'created_at' => now(),
+              'updated_at' => now(),
+            ]);
+
+            $changes[] = [
+              'dept' => $deptCode,
+              'type' => 'New Department',
+              'manager' => $managerId . ' - ' . ($item['manager_name'] ?? ''),
+            ];
+            $new_depts++;
+          }
+        }
+
+        return response()->json([
+          'status' => 'success',
+          'summary' => [
+            'total_from_api' => count($hrmDataRaw),
+            'new_departments' => $new_depts,
+            'manager_rotations' => $manager_rotations,
+          ],
+          'changes' => $changes,
+          'message' => 'Data synchronized by department.'
+        ]);
+
+      } else {
+        Log::error("VFA-Sync: HRM API error. Status: " . $hrmResponse->getStatusCode());
+        return response()->json(['status' => 'error', 'message' => 'HRM API error'], 500);
+      }
+    } catch (\Exception $e) {
+      Log::error("VFA-Sync ERROR: " . $e->getMessage());
+      return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+    }
+  }
+
+
+  public function GetRawHrmData()
+  {
+    try {
+      $client = new Client();
+      $url = 'http://gmo021.cansportsvg.com/hrm-organization-v1/parsed_departments_comprehensive.json';
+      $hrmResponse = $client->get($url, ['timeout' => 60]);
+
+      if ($hrmResponse->getStatusCode() == 200) {
+        return response()->json($hrmResponse->json() ?? []);
+      } else {
+        return response()->json(['error' => 'HRM API error', 'status' => $hrmResponse->getStatusCode()], 500);
+      }
+    } catch (\Exception $e) {
+      return response()->json(['error' => $e->getMessage()], 500);
+    }
+  }
+
+
+
+
+
+  private function generateHrmSyncEmailBody($diagnostics, $missingData, $rotationData = [])
+  {
+    $html = '<h3>HRM Sync Statistics:</h3>';
+    $html .= '<ul>';
+    $html .= '<li>Total number of managers on HRM: ' . $diagnostics['total_hrm_departments'] . '</li>';
+    $html .= '<li>Skipped (Missing ID/Manager ID): ' . ($diagnostics['skipped_no_manager_id'] ?? 0) . '</li>';
+    $html .= '<li>Manager rotations detected: ' . ($diagnostics['manager_rotations_detected'] ?? 0) . '</li>';
+    $html .= '</ul>';
+
+    // 1. Table: Missing in VFA
+    if (!empty($missingData)) {
+      $html .= '<h3>List of pending managers for VFA: ' . count($missingData) . '</h3>';
+      $html .= '<table border="1" style="border-collapse: collapse; width: 800px; margin-bottom: 20px;">';
+      $html .= '<thead style="background-color: #f2f2f2;"><tr>';
+      $html .= '<th style="padding: 8px; text-align: left;">Manager ID</th>';
+      $html .= '<th style="padding: 8px; text-align: left;">Manager Name</th>';
+      $html .= '<th style="padding: 8px; text-align: left;">Dept ID</th>';
+      $html .= '</tr></thead>';
+      $html .= '<tbody>';
+      foreach ($missingData as $item) {
+        $nameDisplay = trim(($item['manager_name'] ?? '') . ' ' . ($item['manager_eng_name'] ?? ''));
+        $html .= '<tr>';
+        $html .= '<td style="padding: 8px;">' . ($item['manager_id'] ?? '') . '</td>';
+        $html .= '<td style="padding: 8px;">' . $nameDisplay . '</td>';
+        $html .= '<td style="padding: 8px;">' . ($item['dept_id'] ?? '') . '</td>';
+        $html .= '</tr>';
+      }
+      $html .= '</tbody></table>';
+    }
+
+    // 2. Table: Manager Rotations (New)
+    if (!empty($rotationData)) {
+      $html .= '<h3>List of Manager Rotations (Changed): ' . count($rotationData) . '</h3>';
+      $html .= '<table border="1" style="border-collapse: collapse; width: 800px;">';
+      $html .= '<thead style="background-color: #e3f2fd;"><tr>';
+      $html .= '<th style="padding: 8px; text-align: left;">Dept ID</th>';
+      $html .= '<th style="padding: 8px; text-align: left;">Old Manager</th>';
+      $html .= '<th style="padding: 8px; text-align: left;">New Manager</th>';
+      $html .= '</tr></thead>';
+      $html .= '<tbody>';
+      foreach ($rotationData as $item) {
+        $html .= '<tr>';
+        $html .= '<td style="padding: 8px;">' . ($item['dept_id'] ?? '') . '</td>';
+        $html .= '<td style="padding: 8px; color: #d32f2f;">' . ($item['old_manager'] ?? '') . '</td>';
+        $html .= '<td style="padding: 8px; color: #2e7d32;"><b>' . ($item['new_manager'] ?? '') . '</b></td>';
+        $html .= '</tr>';
+      }
+      $html .= '</tbody></table>';
+    }
+
+    return $html;
+  }
+
   public function getDataByEmpnoForApprovalManager($empno)
   {
     // chỉ lấy những manager có empno giống hoặc chứa $empnoSearch
@@ -1143,7 +1492,8 @@ class vfaCtrl extends Controller
         if ($d['lvl_type'] === 'custom') {
           $c1 = in_array($lvl_code, $a['levels']);
           $c2 = in_array($custom_data['custom_dept'], $a['dept_code']);
-          if ($lvl_code === 'custom_division') $c2 = $c2 && $a['division_code'] == $a['division_code'];
+          if ($lvl_code === 'custom_division')
+            $c2 = $c2 && $a['division_code'] == $a['division_code'];
           return $c1 && $c2;
         }
         return false;
@@ -1219,7 +1569,8 @@ class vfaCtrl extends Controller
         if ($d['lvl_type'] === 'normal') {
           $c1 = in_array($lvl_code, $a['levels']); // dept_manager
           $c2 = in_array($emp['dept'], $a['dept_code']);
-          if ($lvl_code === 'division_manager') $c2 = $c2 && ($a['division_code'] == $emp['high_dept']);
+          if ($lvl_code === 'division_manager')
+            $c2 = $c2 && ($a['division_code'] == $emp['high_dept']);
           return $c1 && $c2;
         }
         if ($d['lvl_type'] === 'defined') {
@@ -1228,7 +1579,8 @@ class vfaCtrl extends Controller
         if ($d['lvl_type'] === 'custom') {
           $c1 = in_array($lvl_code, $a['levels']);
           $c2 = in_array($custom_data['custom_dept'], $a['dept_code']);
-          if ($lvl_code === 'custom_division') $c2 = $c2 && $a['division_code'] == $a['division_code'];
+          if ($lvl_code === 'custom_division')
+            $c2 = $c2 && $a['division_code'] == $a['division_code'];
           return $c1 && $c2;
         }
         return false;
@@ -1259,6 +1611,375 @@ class vfaCtrl extends Controller
   public function getManager()
   {
     return vfaUpdatedManagerMdl::all(['id', 'empno', 'name']);
+  }
+
+  public function getFlowUpdatedBulk(Request $req)
+  {
+    $empnos = $req->empnos;
+    if (!is_array($empnos))
+      $empnos = [$req->empno];
+    $app_code = $req->app_code;
+    $location = $req->location;
+    $custom_data = json_decode($req->custom_data, true) ?? [];
+
+    $appFlowConfig = flowMdl::select(['app_code', 'location', 'flow_data'])
+      ->where(['app_code' => $app_code, 'location' => $location])
+      ->first();
+
+    if (!$appFlowConfig)
+      return [];
+
+    $baseFlowData = json_decode($appFlowConfig->flow_data, true);
+    $lvlData = lvlMdl::select(['lvl_type', 'lvl_name', 'lvl_code'])
+      ->whereIn('lvl_code', $baseFlowData)
+      ->get()
+      ->keyBy('lvl_code');
+
+    $emps = userMdl::select(['empno', 'group_empno', 'dept', 'high_dept'])
+      ->whereIn('empno', $empnos)
+      ->orWhereIn('group_empno', $empnos)
+      ->get();
+
+    $empMap = [];
+    foreach ($emps as $e) {
+      $empMap[$e->empno] = $e;
+      if ($e->group_empno)
+        $empMap[$e->group_empno] = $e;
+    }
+
+    $allApprovers = vfaUpdatedManagerMdl::select(['empno', 'name', 'dept_code', 'division_code', 'levels', 'deputies', 'status'])
+      ->where('location', $location)
+      ->get()
+      ->map(function ($a) {
+        // Chuyển sang array để tránh lỗi "Indirect modification of overloaded element"
+        $data = $a->toArray();
+        $data['levels'] = json_decode($a->levels, true) ?: [];
+        $data['dept_code'] = json_decode($a->dept_code, true) ?: [];
+        $data['deputies'] = is_string($a->deputies) ? (json_decode($a->deputies, true) ?: []) : ($a->deputies ?: []);
+        return $data;
+      });
+
+    $approverEmpnos = $allApprovers->pluck('empno')->unique()->toArray();
+    $approverGroupMap = userMdl::whereIn('empno', $approverEmpnos)
+      ->get(['group_empno', 'empno'])
+      ->keyBy('empno');
+
+    // Chỉnh sửa trực tiếp trên mảng
+    $allApprovers = $allApprovers->map(function ($m) use ($approverGroupMap) {
+      $m['group_empno'] = $approverGroupMap[$m['empno']]->group_empno ?? null;
+      return $m;
+    });
+
+
+    $results = [];
+    $allManagerEmpnos = collect();
+
+    foreach ($empnos as $empno) {
+      $emp = $empMap[$empno] ?? null;
+      if (!$emp) {
+        $results[$empno] = [];
+        continue;
+      }
+
+      $res = [];
+      foreach ($baseFlowData as $lvl_code) {
+        $lvl = $lvlData->get($lvl_code);
+        if (!$lvl)
+          continue;
+
+        $d = $lvl->toArray();
+        $d['lvl_name'] = json_decode($d['lvl_name']);
+
+        $managers = $allApprovers->filter(function ($a) use ($lvl_code, $emp, $lvl, $custom_data) {
+          if ($lvl['lvl_type'] === 'normal') {
+            $c1 = in_array($lvl_code, $a['levels']);
+            $c2 = in_array($emp['dept'], $a['dept_code']);
+            if ($lvl_code === 'division_manager') {
+              $c2 = $c2 && ($a['division_code'] == $emp['high_dept']);
+            }
+            return $c1 && $c2;
+          }
+          if ($lvl['lvl_type'] === 'defined') {
+            return in_array($lvl_code, $a['levels']);
+          }
+          if ($lvl['lvl_type'] === 'custom') {
+            $c1 = in_array($lvl_code, $a['levels']);
+            $c2 = in_array($custom_data['custom_dept'] ?? '', $a['dept_code']);
+            if ($lvl_code === 'custom_division')
+              $c2 = $c2 && $a['division_code'] == ($custom_data['custom_division'] ?? '');
+            return $c1 && $c2;
+          }
+          return false;
+        })->unique('empno')->values();
+
+        foreach ($managers as $m) {
+          $allManagerEmpnos->push($m['empno']);
+          if (!empty($m['deputies'])) {
+            foreach ($m['deputies'] as $dep) {
+              if (!empty($dep['empno']))
+                $allManagerEmpnos->push($dep['empno']);
+            }
+          }
+        }
+
+        $d['managers'] = $managers;
+        $res[] = $d;
+      }
+      $results[$empno] = $res;
+    }
+
+    $uniqueEmpnos = $allManagerEmpnos->unique()->filter()->toArray();
+    $emailMap = userMdl::whereIn('empno', $uniqueEmpnos)
+      ->pluck('email', 'empno')
+      ->toArray();
+
+    $defaultEmail = 'lu.nguyen@spg-sportsgear.com';
+
+    foreach ($results as $empno => &$flowData) {
+      foreach ($flowData as &$lvl) {
+        foreach ($lvl['managers'] as &$m) {
+          $m['email'] = $emailMap[$m['empno']] ?? $defaultEmail;
+          if (!empty($m['deputies'])) {
+            foreach ($m['deputies'] as &$dep) {
+              $dep['email'] = $emailMap[$dep['empno']] ?? $defaultEmail;
+            }
+          }
+        }
+      }
+    }
+
+    return $results;
+  }
+
+
+
+  public function CheckDeptMissManagementOnVFA()
+  {
+    // 1. Lấy dữ liệu từ userMdl (globalUserMdl) - lấy các cặp dept và high_dept duy nhất
+    $userMdlData = userMdl::select('dept as depts', 'high_dept as high_depts')
+      ->whereNotNull('dept')
+      ->distinct()
+      ->get();
+
+    // 2. Lấy dữ liệu từ vfaUpdatedManagerMdl
+    $vfaData = vfaUpdatedManagerMdl::select('dept_code', 'division_code')->get();
+
+    // 3. Xử lý tiền dữ liệu VFA để so sánh nhanh hơn
+    $vfaProcessed = [];
+    foreach ($vfaData as $vfa) {
+      $deptsArray = json_decode($vfa->dept_code, true);
+      if (!is_array($deptsArray)) {
+        $deptsArray = $vfa->dept_code ? [$vfa->dept_code] : [];
+      }
+      $vfaProcessed[] = [
+        'dept_codes' => $deptsArray,
+        'division_code' => $vfa->division_code
+      ];
+    }
+
+    // 4. Lọc các cặp chưa tồn tại trong VFA
+    $missManagement = [];
+
+    foreach ($userMdlData as $userPair) {
+      $isFound = false;
+
+      foreach ($vfaProcessed as $vfa) {
+        // Kiểm tra depts có trong danh sách dept_codes của VFA không
+        $deptMatch = false;
+        foreach ($vfa['dept_codes'] as $vfaDept) {
+          $uDept = (string) $userPair->depts;
+          $vDept = (string) $vfaDept;
+          if ($uDept == $vDept || ($vDept !== '' && stripos($uDept, $vDept) !== false) || ($uDept !== '' && stripos($vDept, $uDept) !== false)) {
+            $deptMatch = true;
+            break;
+          }
+        }
+
+        // Kiểm tra high_depts có khớp với division_code của VFA không
+        $divMatch = false;
+        $uHigh = (string) $userPair->high_depts;
+        $vDiv = (string) $vfa['division_code'];
+        if ($uHigh == $vDiv || ($vDiv !== '' && stripos($uHigh, $vDiv) !== false) || ($uHigh !== '' && stripos($vDiv, $uHigh) !== false)) {
+          $divMatch = true;
+        }
+
+        if ($deptMatch && $divMatch) {
+          $isFound = true;
+          break;
+        }
+      }
+
+      if (!$isFound) {
+        $missManagement[] = $userPair;
+      }
+    }
+
+    // 5. Gửi mail nếu có danh sách thiếu
+    if (!empty($missManagement)) {
+      $msgBody = $this->generateMissManagementTable($missManagement);
+
+      msgMdl::insert([
+        'msg_type' => 'm',
+        'msg_method' => 'both',
+        'msg_subject' => "[VFA] Warning: Departments/High Depts missing management on VFA.",
+        'msg_body' => $msgBody,
+        'target' => 'VG-EXPAT-LU-TEST',
+        'mail_template' => 'msgCenterMailTemplate',
+        'mail_data' => json_encode([
+          'to' => ['triet.bui@spg-sportsgear.com', 'lu.nguyen@spg-sportsgear.com', 'khang.vu@spg-sportsgear.com', 'hai.ho@spg-sportsgear.com', 'phong.luu@spg-sportsgear.com', 'vu.huynh@spg-sportsgear.com'],
+          // 'to' => ['lu.nguyen@spg-sportsgear.com'],
+          'subject' => "[VFA] Warning: Departments/High Depts missing management on VFA.",
+          'msgBody' => $msgBody,
+        ]),
+      ]);
+    }
+
+    // 6. Tự động gọi hàm checkListManagerNotYetInGlobalUser
+    $managerCheckRes = $this->checkListManagerNotYetInGlobalUser();
+    $managerCheckData = $managerCheckRes->getData();
+
+    return response()->json([
+      'miss_management' => [
+        'count' => count($missManagement),
+        'list' => $missManagement,
+        'email_status' => !empty($missManagement) ? 'Sent to lu.nguyen@spg-sportsgear.com' : 'No missing management found'
+      ],
+      'manager_not_in_global_user' => $managerCheckData
+    ]);
+  }
+
+  public function checkListManagerNotYetInGlobalUser()
+  {
+    try {
+      $client = new Client();
+      $apiUrl = 'http://gmo021.cansportsvg.com:6006/api/employees?all=true&expand=ad_account%2Cemail%2Cunit_code';
+      $response = $client->get($apiUrl, ['timeout' => 60]);
+      $employees = json_decode($response->getBody()->getContents(), true);
+
+      if (empty($employees)) {
+        return response()->json(['message' => 'API returned empty data'], 200);
+      }
+
+      // 1. Lọc lấy danh sách employee_number bắt đầu bằng TW || CN
+      $filteredEmployees = array_filter($employees, function ($emp) {
+        $empNo = $emp['employee_number'] ?? '';
+        return strpos($empNo, 'TW') === 0 || strpos($empNo, 'CN') === 0;
+      });
+
+      if (empty($filteredEmployees)) {
+        return response()->json(['message' => 'No employees starting with TW or CN found in API'], 200);
+      }
+
+      // 2. Lấy toàn bộ empno và group_empno từ userMdl để so sánh (tối ưu hiệu năng)
+      $existingEmpNos = userMdl::pluck('empno')->filter()->toArray();
+      $existingGroupEmpNos = userMdl::pluck('group_empno')->filter()->toArray();
+      $allExisting = array_unique(array_merge($existingEmpNos, $existingGroupEmpNos));
+      $allExistingMap = array_flip($allExisting); // Dùng hash map để tìm kiếm nhanh O(1)
+
+      $missingEmployees = [];
+      foreach ($filteredEmployees as $emp) {
+        $empNo = $emp['employee_number'];
+        if (!isset($allExistingMap[$empNo])) {
+          $missingEmployees[] = [
+            'employee_number' => $empNo,
+            'employee_name' => $emp['employee_name'] ?? 'Unknown',
+            'email' => $emp['email'] ?? 'N/A',
+            'ad_account' => $emp['ad_account'] ?? 'N/A',
+            'unit_code' => $emp['unit_code'] ?? 'N/A'
+          ];
+        }
+      }
+
+      // 3. Nếu có nhân viên thiếu, gửi mail
+      if (!empty($missingEmployees)) {
+        $msgBody = $this->generateMissingEmployeesTable($missingEmployees);
+
+        msgMdl::insert([
+          'msg_type' => 'm',
+          'msg_method' => 'both',
+          'msg_subject' => "[VFA] Warning: List of TW/CN employees is not yet available on Global User.",
+          'msg_body' => $msgBody,
+          'target' => 'VG-EXPAT-LU-TEST',
+          'mail_template' => 'msgCenterMailTemplate',
+          'mail_data' => json_encode([
+            'to' => ['triet.bui@spg-sportsgear.com', 'lu.nguyen@spg-sportsgear.com', 'khang.vu@spg-sportsgear.com', 'hai.ho@spg-sportsgear.com', 'phong.luu@spg-sportsgear.com', 'vu.huynh@spg-sportsgear.com'],
+            // 'to' => ['lu.nguyen@spg-sportsgear.com'],
+            'subject' => "[VFA] Warning: List of TW/CN employees is not yet available on Global User.",
+            'msgBody' => $msgBody,
+          ]),
+        ]);
+
+        return response()->json([
+          'status' => 'success',
+          'missing_count' => count($missingEmployees),
+          'missing_list' => $missingEmployees,
+          'message' => 'Mail sent to lu.nguyen@spg-sportsgear.com'
+        ]);
+      }
+
+      return response()->json([
+        'status' => 'success',
+        'message' => 'All employees are already in the system.'
+      ]);
+
+    } catch (\Exception $e) {
+      return response()->json([
+        'status' => 'error',
+        'message' => $e->getMessage()
+      ], 500);
+    }
+  }
+
+  private function generateMissingEmployeesTable($data)
+  {
+    $html = '<h3>List of TW/CN employees is not yet available on Global User.:</h3>';
+    $html .= '<table border="1" style="border-collapse: collapse; width: 100%;">';
+    $html .= '<thead style="background-color: #f2f2f2;">';
+    $html .= '<tr>
+    <th>Emp No</th>
+    <th>Name</th>
+    <th>Email</th>
+    <th>Ad Account</th>
+    <th>Unit</th>
+    </tr>';
+    $html .= '</thead><tbody>';
+
+    foreach ($data as $emp) {
+      $html .= '<tr>';
+      $html .= '<td style="padding: 8px;">' . $emp['employee_number'] . '</td>';
+      $html .= '<td style="padding: 8px;">' . $emp['employee_name'] . '</td>';
+      $html .= '<td style="padding: 8px;">' . $emp['email'] . '</td>';
+      $html .= '<td style="padding: 8px;">' . $emp['ad_account'] . '</td>';
+      $html .= '<td style="padding: 8px;">' . $emp['unit_code'] . '</td>';
+      $html .= '</tr>';
+    }
+
+    $html .= '</tbody></table>';
+    return $html;
+  }
+
+  private function generateMissManagementTable($data)
+  {
+    $html = '<h3>List of departments/high depts not yet managed on VFA:</h3>';
+    $html .= '<table border="1" style="border-collapse: collapse; width: 100%; border-color: #ccc;">';
+    $html .= '<thead style="background-color: #f2f2f2;">';
+    $html .= '<tr>
+    <th style="padding: 8px; text-align: left;">No.</th>
+    <th style="padding: 8px; text-align: left;">Dept</th>
+    <th style="padding: 8px; text-align: left;">High Dept (Division)</th>
+    </tr>';
+    $html .= '</thead><tbody>';
+
+    foreach ($data as $index => $item) {
+      $html .= '<tr>';
+      $html .= '<td style="padding: 8px; text-align: center;">' . ($index + 1) . '</td>';
+      $html .= '<td style="padding: 8px;">' . ($item->depts ?? 'N/A') . '</td>';
+      $html .= '<td style="padding: 8px;">' . ($item->high_depts ?? 'N/A') . '</td>';
+      $html .= '</tr>';
+    }
+
+    $html .= '</tbody></table>';
+    return $html;
   }
 }
 // utils

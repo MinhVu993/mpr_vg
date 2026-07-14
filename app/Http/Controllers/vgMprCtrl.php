@@ -23,10 +23,11 @@ use App\vgRecruitingReportEmpnoInfoMdl as EmpnoInfo;
 use App\vgRecruitingReportDeptCodeMdl as nameDeptCode;
 use App\vgRecruitingReportDemandMdl as Demand;
 use App\vgRecruitingReportDutyHrmMdl as DutyHrm;
+use App\vgMprUserAccessLogMdl as UserAccessLog;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 
-class vgMprCtrlTemp extends Controller
+class vgMprCtrl extends Controller
 {
     private function getResignData($loc)
     {
@@ -48,7 +49,7 @@ class vgMprCtrlTemp extends Controller
         $div = $req->input("div");
         $status = $req->input("status");
 
-        $data = MprTemp::select("req_id")
+        $data = Mpr::select("req_id")
             ->where("status", $status)
             ->whereRaw('JSON_EXTRACT(submitter, "$.high_dept") = ?', [$div])
             ->where(function ($query) use ($status) {
@@ -78,7 +79,7 @@ class vgMprCtrlTemp extends Controller
                 );
             }
 
-            $mpr = MprTemp::where("req_id", $req_id)
+            $mpr = Mpr::where("req_id", $req_id)
                 ->where("status", "completed")
                 ->first();
 
@@ -122,9 +123,7 @@ class vgMprCtrlTemp extends Controller
         $high_dept = $req->input("high_dept");
         $role = $req->input("role");
 
-        
-
-        $dataMprQuery = MprTemp::where("loc", $loc)->orderBy("id", "desc");
+        $dataMprQuery = Mpr::where("loc", $loc)->orderBy("id", "desc");
         $dataMpr = $dataMprQuery->get();
 
         $dataResign = $this->getResignData($loc);
@@ -142,7 +141,7 @@ class vgMprCtrlTemp extends Controller
         } elseif ($empno && $dept) {
             $params = new Request([
                 "empno" => $empno,
-                "app_code" => "mpr_",
+                "app_code" => "mpr",
                 "location" => "VG",
                 "custom_data" => json_encode([
                     "custom_dept" => $dept,
@@ -297,7 +296,7 @@ class vgMprCtrlTemp extends Controller
                                                 if (
                                                     $currentLevel >= 2 &&
                                                     $deputy["empno"] ===
-                                                        $empno &&
+                                                    $empno &&
                                                     !empty($deputy["status"]) &&
                                                     $deputy["status"] === true
                                                 ) {
@@ -307,13 +306,11 @@ class vgMprCtrlTemp extends Controller
                                                 if (
                                                     $currentLevel < 2 &&
                                                     $deputy["empno"] ===
-                                                        $empno &&
+                                                    $empno &&
                                                     !empty($deputy["status"]) &&
                                                     $deputy["status"] ===
-                                                        true &&
-                                                    !empty(
-                                                        $manager["dept_code"]
-                                                    ) &&
+                                                    true &&
+                                                    !empty($manager["dept_code"]) &&
                                                     in_array(
                                                         $itemDept,
                                                         $manager["dept_code"]
@@ -338,7 +335,7 @@ class vgMprCtrlTemp extends Controller
                     $submitter = json_decode($mpr->submitter, true);
                     return isset($submitter["div"]) &&
                         strtolower(trim($submitter["div"])) ===
-                            strtolower(trim($dept));
+                        strtolower(trim($dept));
                 })
                 ->values();
         }
@@ -487,7 +484,7 @@ class vgMprCtrlTemp extends Controller
                 );
             }
 
-            $existingMpr = MprTemp::where("req_id", $request->req_id)->first();
+            $existingMpr = Mpr::where("req_id", $request->req_id)->first();
             $isAmendment = $request->input("is_amendment") === "true";
 
             // Xử lý file
@@ -506,23 +503,53 @@ class vgMprCtrlTemp extends Controller
                 $att_dis = $filename;
             }
 
-            $mpr = MprTemp::where("req_id", $request->req_id)->first();
+            $mpr = Mpr::where("req_id", $request->req_id)->first();
             $recruited = $mpr ? $mpr->recruited : 0;
             $stocknumber = $request->total_qty - $recruited;
             $historyData = $this->handleChangeHistory($existingMpr, $request);
 
             $activeRct = $request->input("activeRct");
+            // --- XỬ LÝ LƯU LOG NGƯỜI DÙNG ---
+            // Giải mã thông tin người đang thao tác (được gửi lên trong request->submitter)
+            $currentUserData = json_decode($request->submitter, true);
+            $actionType = "create";
 
+            if ($existingMpr) {
+                if (
+                    isset($activeRct) &&
+                    $activeRct !== "" &&
+                    $activeRct !== null
+                ) {
+                    $actionType = "process_new_year"; // Hành động xử lý năm mới
+                } elseif ($isAmendment) {
+                    $actionType = "amendment"; // Hành động điều chỉnh
+                } else {
+                    $actionType = "update"; // Hành động cập nhật thường
+                }
+            }
+
+            UserAccessLog::create([
+                "empno" => $currentUserData["empno"] ?? "Unknown", // Người đang thực hiện
+                "ip_address" => $request->ip(),
+                "user_agent" => $request->header("User-Agent"),
+                "action" => $actionType . " - ReqID: " . $request->req_id,
+            ]);
+            //  -- KẾT THÚC XỬ LÝ LƯU LOG NGƯỜI DÙNG ---
             $submitterToSave = $request->submitter;
 
-            if ($existingMpr && isset($activeRct) && $activeRct !== "" && $activeRct !== null) {
+            if (
+                $existingMpr &&
+                isset($activeRct) &&
+                $activeRct !== "" &&
+                $activeRct !== null
+            ) {
                 $submitterToSave = $existingMpr->submitter;
             }
             $data = [
                 "req_id" => $request->req_id,
                 "supp_type" => $request->supp_type,
                 "key_in_date" => $request->key_in_date,
-                 "submitter" => $submitterToSave,
+                "submitter" => $submitterToSave,
                 "edu" => $request->edu,
                 "spec" => $request->spec,
                 "w_exp" => $request->w_exp,
@@ -675,10 +702,7 @@ class vgMprCtrlTemp extends Controller
                 $data["logs"] = null;
             }
 
-            $mpr = MprTemp::updateOrCreate(
-                ["req_id" => $request->req_id],
-                $data
-            );
+            $mpr = Mpr::updateOrCreate(["req_id" => $request->req_id], $data);
 
             if ($request->emailList) {
                 $this->sendEmailNotification($mpr, $request, $isAmendment);
@@ -859,7 +883,7 @@ class vgMprCtrlTemp extends Controller
                 "id" => [
                     "required",
                     function ($attribute, $value, $fail) {
-                        if (!MprTemp::find($value)) {
+                        if (!Mpr::find($value)) {
                             $fail("The selected record does not exist.");
                         }
                     },
@@ -867,7 +891,7 @@ class vgMprCtrlTemp extends Controller
                 "req_id" => [
                     "required",
                     function ($attribute, $value, $fail) use ($request) {
-                        $exists = MprTemp::where("req_id", $value)
+                        $exists = Mpr::where("req_id", $value)
                             ->where("id", "!=", $request->id)
                             ->exists();
                         if ($exists) {
@@ -887,7 +911,7 @@ class vgMprCtrlTemp extends Controller
                 );
             }
 
-            $mpr = MprTemp::find($request->id);
+            $mpr = Mpr::find($request->id);
             $oldReqId = $mpr->req_id;
             $mpr->req_id = $request->req_id;
             $mpr->save();
@@ -915,13 +939,14 @@ class vgMprCtrlTemp extends Controller
     {
         $params = new Request([
             "empno" => $req->empno,
-            "app_code" => "mpr_",
-            "location" => "VG",
+            "app_code" => "mpr",
+            "location" => "vg",
             "custom_data" => json_encode([
                 "custom_dept" => $req->dept,
                 "custom_division" => $req->high_dept,
             ]),
         ]);
+        // dd($params);
         $vfaController = new vfaCtrl();
         try {
             $flowResponse = $vfaController->getFlowUpdated($params);
@@ -931,6 +956,7 @@ class vgMprCtrlTemp extends Controller
                     500
                 );
             }
+            // dd($flowResponse);
             return response()->json($flowResponse);
         } catch (\Exception $e) {
             return response()->json(["error" => $e->getMessage()], 500);
@@ -939,77 +965,386 @@ class vgMprCtrlTemp extends Controller
     //
     public function acceptRequest(Request $req)
     {
-        try {
-            $validator = Validator::make($req->all(), [
-                "user_empno" => "required|string",
-                "dataReq" => "required",
-            ]);
+        // try {
+        //     $validator = Validator::make($req->all(), [
+        //         "user_empno" => "required|string",
+        //         "dataReq" => "required",
+        //     ]);
 
-            if ($validator->fails()) {
-                return response()->json(
-                    ["success" => false, "errors" => $validator->errors()],
-                    400
-                );
+        //     if ($validator->fails()) {
+        //         return response()->json(
+        //             ["success" => false, "errors" => $validator->errors()],
+        //             400
+        //         );
+        //     }
+
+        //     $dataReq = $req["dataReq"];
+        //     $dataFlow = $dataReq["dataFlow"];
+        //     $status = $dataReq["status"];
+        //     $approval = json_decode($dataReq["approval"], true);
+        //     $id = $dataReq["id"];
+        //     $user_empno = $req->user_empno;
+
+        //     $mpr = Mpr::find($id);
+        //     if (!$mpr) {
+        //         throw new \Exception("MPR record not found");
+        //     }
+
+        //     // --- XÁC ĐỊNH LOẠI YÊU CẦU ---
+
+        //     // 1. Kiểm tra End Year Request (có status_endyear đang chạy)
+        //     $isEndYearRequest =
+        //         !empty($mpr->status_endyear) &&
+        //         $mpr->status_endyear !== "completed" &&
+        //         $mpr->status_endyear !== "declined";
+
+        //     // 2. Kiểm tra Amendment (nếu không phải End Year)
+        //     $isAmendmentRequest =
+        //         !empty($dataReq["status_amendent"]) && !$isEndYearRequest;
+        //     $amendmentStatus = $dataReq["status_amendent"] ?? null;
+
+        //     // Cập nhật thông tin bổ sung
+        //     if (isset($dataReq["approval_record"])) {
+        //         $approvalRecord = json_decode(
+        //             $dataReq["approval_record"],
+        //             true
+        //         );
+        //         if (!is_array($approvalRecord) || !isset($approvalRecord[0])) {
+        //             $approvalRecord = [$approvalRecord];
+        //         }
+        //         $mpr->approval_record = json_encode($approvalRecord);
+        //         $mpr->save();
+        //     }
+
+        //     if (
+        //         ($status === "waiting_hr" || $status === "waiting_hr_rec_sf") &&
+        //         isset($dataReq["sub_pos"])
+        //     ) {
+        //         $mpr->sub_pos = $dataReq["sub_pos"];
+        //         $mpr->save();
+        //     }
+
+        //     // --- CẤU HÌNH LUỒNG DUYỆT (FLOW) ---
+
+        //     if ($isEndYearRequest) {
+        //         // Flow End Year: Dept -> Div -> Completed (2 cấp)
+        //         $statusFlow = [
+        //             "waiting_dept" => ["next" => "waiting_div", "level" => 1],
+        //             "waiting_div" => ["next" => "completed", "level" => 2],
+        //         ];
+        //         $currentStatus = $mpr->status_endyear;
+        //     } elseif ($isAmendmentRequest) {
+        //         $statusFlow = [
+        //             "waiting_dept" => ["next" => "waiting_div", "level" => 1],
+        //             "waiting_div" => [
+        //                 "next" => "waiting_hr_rec_sf",
+        //                 "level" => 2,
+        //             ],
+        //             "waiting_hr_rec_sf" => [
+        //                 "next" => "waiting_hr",
+        //                 "level" => 3,
+        //             ],
+        //             "waiting_hr" => ["next" => "completed", "level" => 4],
+        //         ];
+        //         $currentStatus = $amendmentStatus;
+        //     } else {
+        //         $statusFlow = [
+        //             "waiting_dept" => ["next" => "waiting_div", "level" => 1],
+        //             "waiting_div" => [
+        //                 "next" => "waiting_hr_rec_sf",
+        //                 "level" => 2,
+        //             ],
+        //             "waiting_hr_rec_sf" => [
+        //                 "next" => "waiting_hr",
+        //                 "level" => 3,
+        //             ],
+        //             "waiting_hr" => ["next" => "waiting_ad", "level" => 4],
+        //             "waiting_ad" => ["next" => "waiting_gm", "level" => 5],
+        //             "waiting_gm" => ["next" => "completed", "level" => 6],
+        //         ];
+        //         if ($mpr->supp_type == 1) {
+        //             $statusFlow = [
+        //                 "waiting_dept" => [
+        //                     "next" => "waiting_div",
+        //                     "level" => 1,
+        //                 ],
+        //                 "waiting_div" => [
+        //                     "next" => "waiting_hr_rec_sf",
+        //                     "level" => 2,
+        //                 ],
+        //                 "waiting_hr_rec_sf" => [
+        //                     "next" => "waiting_hr",
+        //                     "level" => 3,
+        //                 ],
+        //                 "waiting_hr" => ["next" => "completed", "level" => 4],
+        //             ];
+        //         }
+        //         $currentStatus = $status;
+        //     }
+
+        //     // --- CẬP NHẬT TRẠNG THÁI NGƯỜI DUYỆT HIỆN TẠI ---
+        //     if (!isset($statusFlow[$currentStatus])) {
+        //         return response()->json(
+        //             ["success" => false, "message" => "Invalid status"],
+        //             400
+        //         );
+        //     }
+
+        //     $currentLevelIndex = $statusFlow[$currentStatus]["level"] - 1;
+        //     if (isset($approval[$currentLevelIndex])) {
+        //         $approval[$currentLevelIndex]["status"] = "approved";
+        //         $approval[$currentLevelIndex]["processed_at"] = now()->toDateTimeString();
+
+        //         if (!empty($dataFlow[$currentLevelIndex]["managers"])) {
+        //             $currentApprover = $this->findApprover(
+        //                 $dataFlow[$currentLevelIndex]["managers"],
+        //                 $user_empno
+        //             );
+        //             if ($currentApprover) {
+        //                 $approval[$currentLevelIndex]["approver"] = $currentApprover;
+        //             }
+        //         }
+        //     }
+
+        //     $nextStatus = $statusFlow[$currentStatus]["next"];
+
+        //     // Reset trạng thái level tiếp theo (nếu chưa hoàn thành)
+        //     if ($nextStatus !== "completed") {
+        //         $nextLevelIndex = $statusFlow[$currentStatus]["level"];
+        //         if (isset($approval[$nextLevelIndex])) {
+        //             $approval[$nextLevelIndex]["status"] = "waiting";
+        //         }
+        //     }
+
+        //     // --- LƯU TRẠNG THÁI MỚI ---
+        //     if ($isEndYearRequest) {
+        //         $mpr->status_endyear = $nextStatus;
+        //     } elseif ($isAmendmentRequest) {
+        //         $mpr->status_amendent = $nextStatus;
+        //     } else {
+        //         $mpr->status = $nextStatus;
+        //     }
+
+        //     $mpr->approval = json_encode($approval);
+        //     $mpr->save();
+
+        //     // --- XỬ LÝ KHI HOÀN THÀNH (COMPLETED) ---
+        //     if ($nextStatus === "completed") {
+        //         // Lấy giá trị activeRct an toàn
+        //         $activeRctVal = $mpr->activeRct;
+        //         $activeRctInt = is_numeric($activeRctVal)
+        //             ? intval($activeRctVal)
+        //             : null;
+
+        //         // TRƯỜNG HỢP 1: Nhân đôi đơn nếu Tiếp tục tuyển dụng (activeRct == 1)
+        //         if ($activeRctInt === 1) {
+        //             $newMpr = $this->duplicateForNewYear($mpr);
+        //             if ($newMpr) {
+        //                 try {
+        //                     \Log::info("New Year Cloned MPR created", [
+        //                         "original" => $mpr->req_id,
+        //                         "new" => $newMpr->req_id,
+        //                     ]);
+        //                     try {
+        //                         $this->migrateCompletedMprToDemandSingle(
+        //                             $newMpr
+        //                         );
+        //                     } catch (\Exception $e) {
+        //                         \Log::error(
+        //                             "Error migrating duplicated MPR to Demand: " .
+        //                                 $e->getMessage()
+        //                         );
+        //                     }
+        //                     // --- BỔ SUNG: CẬP NHẬT ĐƠN CŨ VỀ 0 ĐỂ ĐÓNG ---
+        //                     $denyTempData = [
+        //                         "fullfilldate" => now()->format("Y-m-d"),
+        //                         "fulfilled" => "yes",
+        //                         "recruited" => intval($mpr->recruited ?? 0),
+        //                         "stocknumber" => 0, // Đưa tồn về 0
+        //                         "reason" =>
+        //                         "Closed - Transferred to New Year Request: " .
+        //                             $newMpr->req_id,
+        //                     ];
+
+        //                     $mpr->deny_temp = json_encode($denyTempData);
+        //                     $mpr->stocknumber = 0; // Quan trọng: Set stock về 0
+        //                     $mpr->fulfilled = "yes";
+        //                     $mpr->fullfilldate = now()->format("Y-m-d");
+        //                     $mpr->save();
+        //                     // ---------------------------------------------
+        //                 } catch (\Exception $e) {
+        //                     \Log::error(
+        //                         "Error cloning MPR: " . $e->getMessage()
+        //                     );
+        //                 }
+        //             }
+        //         }
+
+        //         // TRƯỜNG HỢP 2: Đóng đơn nếu Hủy tuyển dụng (activeRct == 0) - KHẮC PHỤC LỖI KHÔNG LƯU DENY_TEMP
+        //         elseif (isset($activeRctInt) && $activeRctInt === 0) {
+        //             $denyTempData = [
+        //                 "fullfilldate" => now()->format("Y-m-d"),
+        //                 "fulfilled" => "yes",
+        //                 "recruited" => intval($mpr->recruited ?? 0),
+        //                 "stocknumber" => 0, // Đưa tồn về 0
+        //                 "reason" => "Cancelled by End Year Decision",
+        //             ];
+
+        //             $mpr->deny_temp = json_encode($denyTempData);
+        //             $mpr->stocknumber = 0;
+        //             $mpr->fulfilled = "yes";
+        //             $mpr->fullfilldate = now()->format("Y-m-d");
+        //             $mpr->save();
+        //         }
+
+        //         try {
+        //             $this->migrateCompletedMprToDemandSingle($mpr);
+        //         } catch (\Exception $e) {
+        //         }
+        //     }
+
+        //     // Gửi email
+        //     $this->sendAcceptEmailNotification(
+        //         $mpr,
+        //         $nextStatus,
+        //         $dataFlow,
+        //         $statusFlow,
+        //         $currentStatus,
+        //         $isAmendmentRequest
+        //     );
+
+        //     return response()->json([
+        //         "success" => true,
+        //         "message" => "Request accepted successfully",
+        //         "data" => [
+        //             "id" => $id,
+        //             "status" => $mpr->status,
+        //             "status_amendent" => $mpr->status_amendent,
+        //             "status_endyear" => $mpr->status_endyear,
+        //             "approval" => $approval,
+        //         ],
+        //     ]);
+        // } catch (\Exception $e) {
+        //     return response()->json(
+        //         [
+        //             "success" => false,
+        //             "message" => "Error accepting request: " . $e->getMessage(),
+        //         ],
+        //         500
+        //     );
+        // }
+         try {
+        $validator = Validator::make($req->all(), [
+            "user_empno" => "required|string",
+            "dataReq" => "required",
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(
+                ["success" => false, "errors" => $validator->errors()],
+                400
+            );
+        }
+
+        $dataReq = $req["dataReq"];
+        $dataFlow = $dataReq["dataFlow"];
+        $status = $dataReq["status"];
+        $approval = json_decode($dataReq["approval"], true);
+        $id = $dataReq["id"];
+        $user_empno = $req->user_empno;
+
+        $mpr = Mpr::find($id);
+        if (!$mpr) {
+            throw new \Exception("MPR record not found");
+        }
+
+        // --- XÁC ĐỊNH LOẠI YÊU CẦU ---
+
+        // 1. Kiểm tra End Year Request (có status_endyear đang chạy)
+        $isEndYearRequest =
+            !empty($mpr->status_endyear) &&
+            $mpr->status_endyear !== "completed" &&
+            $mpr->status_endyear !== "declined";
+
+        // 2. Kiểm tra Amendment (nếu không phải End Year)
+        // FIX: Fallback to database if status_amendent not in request
+        $isAmendmentRequest =
+            !empty($dataReq["status_amendent"]) && !$isEndYearRequest;
+        
+        // Nếu request không có status_amendent nhưng database có, coi đó là amendment
+        if (!$isAmendmentRequest && !empty($mpr->status_amendent) && 
+            $mpr->status_amendent !== "completed" && 
+            $mpr->status_amendent !== "declined") {
+            $isAmendmentRequest = true;
+        }
+
+        $amendmentStatus = $dataReq["status_amendent"] ?? $mpr->status_amendent ?? null;
+
+        // Cập nhật thông tin bổ sung
+        if (isset($dataReq["approval_record"])) {
+            $approvalRecord = json_decode(
+                $dataReq["approval_record"],
+                true
+            );
+            if (!is_array($approvalRecord) || !isset($approvalRecord[0])) {
+                $approvalRecord = [$approvalRecord];
             }
+            $mpr->approval_record = json_encode($approvalRecord);
+            $mpr->save();
+        }
 
-            $dataReq = $req["dataReq"];
-            $dataFlow = $dataReq["dataFlow"];
-            $status = $dataReq["status"];
-            $approval = json_decode($dataReq["approval"], true);
-            $id = $dataReq["id"];
-            $user_empno = $req->user_empno;
+        if (
+            ($status === "waiting_hr" || $status === "waiting_hr_rec_sf") &&
+            isset($dataReq["sub_pos"])
+        ) {
+            $mpr->sub_pos = $dataReq["sub_pos"];
+            $mpr->save();
+        }
 
-            $mpr = MprTemp::find($id);
-            if (!$mpr) {
-                throw new \Exception("MPR record not found");
-            }
+        // --- CẤU HÌNH LUỒNG DUYỆT (FLOW) ---
 
-            // --- XÁC ĐỊNH LOẠI YÊU CẦU ---
-
-            // 1. Kiểm tra End Year Request (có status_endyear đang chạy)
-            $isEndYearRequest =
-                !empty($mpr->status_endyear) &&
-                $mpr->status_endyear !== "completed" &&
-                $mpr->status_endyear !== "declined";
-
-            // 2. Kiểm tra Amendment (nếu không phải End Year)
-            $isAmendmentRequest =
-                !empty($dataReq["status_amendent"]) && !$isEndYearRequest;
-            $amendmentStatus = $dataReq["status_amendent"] ?? null;
-
-            // Cập nhật thông tin bổ sung
-            if (isset($dataReq["approval_record"])) {
-                $approvalRecord = json_decode(
-                    $dataReq["approval_record"],
-                    true
-                );
-                if (!is_array($approvalRecord) || !isset($approvalRecord[0])) {
-                    $approvalRecord = [$approvalRecord];
-                }
-                $mpr->approval_record = json_encode($approvalRecord);
-                $mpr->save();
-            }
-
-            if (
-                ($status === "waiting_hr" || $status === "waiting_hr_rec_sf") &&
-                isset($dataReq["sub_pos"])
-            ) {
-                $mpr->sub_pos = $dataReq["sub_pos"];
-                $mpr->save();
-            }
-
-            // --- CẤU HÌNH LUỒNG DUYỆT (FLOW) ---
-
-            if ($isEndYearRequest) {
-                // Flow End Year: Dept -> Div -> Completed (2 cấp)
+        if ($isEndYearRequest) {
+            // Flow End Year: Dept -> Div -> Completed (2 cấp)
+            $statusFlow = [
+                "waiting_dept" => ["next" => "waiting_div", "level" => 1],
+                "waiting_div" => ["next" => "completed", "level" => 2],
+            ];
+            $currentStatus = $mpr->status_endyear;
+        } elseif ($isAmendmentRequest) {
+            $statusFlow = [
+                "waiting_dept" => ["next" => "waiting_div", "level" => 1],
+                "waiting_div" => [
+                    "next" => "waiting_hr_rec_sf",
+                    "level" => 2,
+                ],
+                "waiting_hr_rec_sf" => [
+                    "next" => "waiting_hr",
+                    "level" => 3,
+                ],
+                "waiting_hr" => ["next" => "completed", "level" => 4],
+            ];
+            $currentStatus = $amendmentStatus;
+        } else {
+            $statusFlow = [
+                "waiting_dept" => ["next" => "waiting_div", "level" => 1],
+                "waiting_div" => [
+                    "next" => "waiting_hr_rec_sf",
+                    "level" => 2,
+                ],
+                "waiting_hr_rec_sf" => [
+                    "next" => "waiting_hr",
+                    "level" => 3,
+                ],
+                "waiting_hr" => ["next" => "waiting_ad", "level" => 4],
+                "waiting_ad" => ["next" => "waiting_gm", "level" => 5],
+                "waiting_gm" => ["next" => "completed", "level" => 6],
+            ];
+            if ($mpr->supp_type == 1) {
                 $statusFlow = [
-                    "waiting_dept" => ["next" => "waiting_div", "level" => 1],
-                    "waiting_div" => ["next" => "completed", "level" => 2],
-                ];
-                $currentStatus = $mpr->status_endyear;
-            } elseif ($isAmendmentRequest) {
-                $statusFlow = [
-                    "waiting_dept" => ["next" => "waiting_div", "level" => 1],
+                    "waiting_dept" => [
+                        "next" => "waiting_div",
+                        "level" => 1,
+                    ],
                     "waiting_div" => [
                         "next" => "waiting_hr_rec_sf",
                         "level" => 2,
@@ -1020,195 +1355,161 @@ class vgMprCtrlTemp extends Controller
                     ],
                     "waiting_hr" => ["next" => "completed", "level" => 4],
                 ];
-                $currentStatus = $amendmentStatus;
-            } else {
-                $statusFlow = [
-                    "waiting_dept" => ["next" => "waiting_div", "level" => 1],
-                    "waiting_div" => [
-                        "next" => "waiting_hr_rec_sf",
-                        "level" => 2,
-                    ],
-                    "waiting_hr_rec_sf" => [
-                        "next" => "waiting_hr",
-                        "level" => 3,
-                    ],
-                    "waiting_hr" => ["next" => "waiting_ad", "level" => 4],
-                    "waiting_ad" => ["next" => "waiting_gm", "level" => 5],
-                    "waiting_gm" => ["next" => "completed", "level" => 6],
-                ];
-                if ($mpr->supp_type == 1) {
-                    $statusFlow = [
-                        "waiting_dept" => [
-                            "next" => "waiting_div",
-                            "level" => 1,
-                        ],
-                        "waiting_div" => [
-                            "next" => "waiting_hr_rec_sf",
-                            "level" => 2,
-                        ],
-                        "waiting_hr_rec_sf" => [
-                            "next" => "waiting_hr",
-                            "level" => 3,
-                        ],
-                        "waiting_hr" => ["next" => "completed", "level" => 4],
-                    ];
-                }
-                $currentStatus = $status;
             }
+            $currentStatus = $status;
+        }
 
-            // --- CẬP NHẬT TRẠNG THÁI NGƯỜI DUYỆT HIỆN TẠI ---
-            if (!isset($statusFlow[$currentStatus])) {
-                return response()->json(
-                    ["success" => false, "message" => "Invalid status"],
-                    400
-                );
-            }
-
-            $currentLevelIndex = $statusFlow[$currentStatus]["level"] - 1;
-            if (isset($approval[$currentLevelIndex])) {
-                $approval[$currentLevelIndex]["status"] = "approved";
-                $approval[$currentLevelIndex][
-                    "processed_at"
-                ] = now()->toDateTimeString();
-
-                if (!empty($dataFlow[$currentLevelIndex]["managers"])) {
-                    $currentApprover = $this->findApprover(
-                        $dataFlow[$currentLevelIndex]["managers"],
-                        $user_empno
-                    );
-                    if ($currentApprover) {
-                        $approval[$currentLevelIndex][
-                            "approver"
-                        ] = $currentApprover;
-                    }
-                }
-            }
-
-            $nextStatus = $statusFlow[$currentStatus]["next"];
-
-            // Reset trạng thái level tiếp theo (nếu chưa hoàn thành)
-            if ($nextStatus !== "completed") {
-                $nextLevelIndex = $statusFlow[$currentStatus]["level"];
-                if (isset($approval[$nextLevelIndex])) {
-                    $approval[$nextLevelIndex]["status"] = "waiting";
-                }
-            }
-
-            // --- LƯU TRẠNG THÁI MỚI ---
-            if ($isEndYearRequest) {
-                $mpr->status_endyear = $nextStatus;
-            } elseif ($isAmendmentRequest) {
-                $mpr->status_amendent = $nextStatus;
-            } else {
-                $mpr->status = $nextStatus;
-            }
-
-            $mpr->approval = json_encode($approval);
-            $mpr->save();
-
-            // --- XỬ LÝ KHI HOÀN THÀNH (COMPLETED) ---
-            if ($nextStatus === "completed") {
-                // Lấy giá trị activeRct an toàn
-                $activeRctVal = $mpr->activeRct;
-                $activeRctInt = is_numeric($activeRctVal)
-                    ? intval($activeRctVal)
-                    : null;
-
-                // TRƯỜNG HỢP 1: Nhân đôi đơn nếu Tiếp tục tuyển dụng (activeRct == 1)
-                if ($activeRctInt === 1) {
-                    $newMpr = $this->duplicateForNewYear($mpr);
-                    if ($newMpr) {
-                        try {
-                            \Log::info("New Year Cloned MPR created", [
-                                "original" => $mpr->req_id,
-                                "new" => $newMpr->req_id,
-                            ]);
-                            try {
-                                // $this->migrateCompletedMprToDemandSingle($newMpr);
-                            } catch (\Exception $e) {
-                                \Log::error(
-                                    "Error migrating duplicated MPR to Demand: " .
-                                        $e->getMessage()
-                                );
-                            }
-                            // --- BỔ SUNG: CẬP NHẬT ĐƠN CŨ VỀ 0 ĐỂ ĐÓNG ---
-                            $denyTempData = [
-                                "fullfilldate" => now()->format("Y-m-d"),
-                                "fulfilled" => "yes",
-                                "recruited" => intval($mpr->recruited ?? 0),
-                                "stocknumber" => 0, // Đưa tồn về 0
-                                "reason" =>
-                                    "Closed - Transferred to New Year Request: " .
-                                    $newMpr->req_id,
-                            ];
-
-                            $mpr->deny_temp = json_encode($denyTempData);
-                            $mpr->stocknumber = 0; // Quan trọng: Set stock về 0
-                            $mpr->fulfilled = "yes";
-                            $mpr->fullfilldate = now()->format("Y-m-d");
-                            $mpr->save();
-                            // ---------------------------------------------
-                        } catch (\Exception $e) {
-                            \Log::error(
-                                "Error cloning MPR: " . $e->getMessage()
-                            );
-                        }
-                    }
-                }
-
-                // TRƯỜNG HỢP 2: Đóng đơn nếu Hủy tuyển dụng (activeRct == 0) - KHẮC PHỤC LỖI KHÔNG LƯU DENY_TEMP
-                elseif (isset($activeRctInt) && $activeRctInt === 0) {
-                    $denyTempData = [
-                        "fullfilldate" => now()->format("Y-m-d"),
-                        "fulfilled" => "yes",
-                        "recruited" => intval($mpr->recruited ?? 0),
-                        "stocknumber" => 0, // Đưa tồn về 0
-                        "reason" => "Cancelled by End Year Decision",
-                    ];
-
-                    $mpr->deny_temp = json_encode($denyTempData);
-                    $mpr->stocknumber = 0;
-                    $mpr->fulfilled = "yes";
-                    $mpr->fullfilldate = now()->format("Y-m-d");
-                    $mpr->save();
-                }
-
-                try {
-                    // $this->migrateCompletedMprToDemandSingle($mpr);
-                } catch (\Exception $e) {
-                }
-            }
-
-            // Gửi email
-            $this->sendAcceptEmailNotification(
-                $mpr,
-                $nextStatus,
-                $dataFlow,
-                $statusFlow,
-                $currentStatus,
-                $isAmendmentRequest
-            );
-
-            return response()->json([
-                "success" => true,
-                "message" => "Request accepted successfully",
-                "data" => [
-                    "id" => $id,
-                    "status" => $mpr->status,
-                    "status_amendent" => $mpr->status_amendent,
-                    "status_endyear" => $mpr->status_endyear,
-                    "approval" => $approval,
-                ],
-            ]);
-        } catch (\Exception $e) {
+        // --- CẬP NHẬT TRẠNG THÁI NGƯỜI DUYỆT HIỆN TẠI ---
+        if (!isset($statusFlow[$currentStatus])) {
             return response()->json(
-                [
-                    "success" => false,
-                    "message" => "Error accepting request: " . $e->getMessage(),
-                ],
-                500
+                ["success" => false, "message" => "Invalid status"],
+                400
             );
         }
+
+        $currentLevelIndex = $statusFlow[$currentStatus]["level"] - 1;
+        if (isset($approval[$currentLevelIndex])) {
+            $approval[$currentLevelIndex]["status"] = "approved";
+            $approval[$currentLevelIndex]["processed_at"] = now()->toDateTimeString();
+
+            if (!empty($dataFlow[$currentLevelIndex]["managers"])) {
+                $currentApprover = $this->findApprover(
+                    $dataFlow[$currentLevelIndex]["managers"],
+                    $user_empno
+                );
+                if ($currentApprover) {
+                    $approval[$currentLevelIndex]["approver"] = $currentApprover;
+                }
+            }
+        }
+
+        $nextStatus = $statusFlow[$currentStatus]["next"];
+
+        // Reset trạng thái level tiếp theo (nếu chưa hoàn thành)
+        if ($nextStatus !== "completed") {
+            $nextLevelIndex = $statusFlow[$currentStatus]["level"];
+            if (isset($approval[$nextLevelIndex])) {
+                $approval[$nextLevelIndex]["status"] = "waiting";
+            }
+        }
+
+        // --- LƯU TRẠNG THÁI MỚI ---
+        if ($isEndYearRequest) {
+            $mpr->status_endyear = $nextStatus;
+        } elseif ($isAmendmentRequest) {
+            $mpr->status_amendent = $nextStatus;
+        } else {
+            $mpr->status = $nextStatus;
+        }
+
+        $mpr->approval = json_encode($approval);
+        $mpr->save();
+
+        // --- XỬ LÝ KHI HOÀN THÀNH (COMPLETED) ---
+        if ($nextStatus === "completed") {
+            // Lấy giá trị activeRct an toàn
+            $activeRctVal = $mpr->activeRct;
+            $activeRctInt = is_numeric($activeRctVal)
+                ? intval($activeRctVal)
+                : null;
+
+            // TRƯỜNG HỢP 1: Nhân đôi đơn nếu Tiếp tục tuyển dụng (activeRct == 1)
+            if ($activeRctInt === 1) {
+                $newMpr = $this->duplicateForNewYear($mpr);
+                if ($newMpr) {
+                    try {
+                        \Log::info("New Year Cloned MPR created", [
+                            "original" => $mpr->req_id,
+                            "new" => $newMpr->req_id,
+                        ]);
+                        try {
+                            $this->migrateCompletedMprToDemandSingle(
+                                $newMpr
+                            );
+                        } catch (\Exception $e) {
+                            \Log::error(
+                                "Error migrating duplicated MPR to Demand: " .
+                                    $e->getMessage()
+                            );
+                        }
+                        // --- BỔ SUNG: CẬP NHẬT ĐƠN CŨ VỀ 0 ĐỂ ĐÓNG ---
+                        $denyTempData = [
+                            "fullfilldate" => now()->format("Y-m-d"),
+                            "fulfilled" => "yes",
+                            "recruited" => intval($mpr->recruited ?? 0),
+                            "stocknumber" => 0, // Đưa tồn về 0
+                            "reason" =>
+                            "Closed - Transferred to New Year Request: " .
+                                $newMpr->req_id,
+                        ];
+
+                        $mpr->deny_temp = json_encode($denyTempData);
+                        $mpr->stocknumber = 0; // Quan trọng: Set stock về 0
+                        $mpr->fulfilled = "yes";
+                        $mpr->fullfilldate = now()->format("Y-m-d");
+                        $mpr->save();
+                        // ---------------------------------------------
+                    } catch (\Exception $e) {
+                        \Log::error(
+                            "Error cloning MPR: " . $e->getMessage()
+                        );
+                    }
+                }
+            }
+
+            // TRƯỜNG HỢP 2: Đóng đơn nếu Hủy tuyển dụng (activeRct == 0)
+            elseif (isset($activeRctInt) && $activeRctInt === 0) {
+                $denyTempData = [
+                    "fullfilldate" => now()->format("Y-m-d"),
+                    "fulfilled" => "yes",
+                    "recruited" => intval($mpr->recruited ?? 0),
+                    "stocknumber" => 0,
+                    "reason" => "Cancelled by End Year Decision",
+                ];
+
+                $mpr->deny_temp = json_encode($denyTempData);
+                $mpr->stocknumber = 0;
+                $mpr->fulfilled = "yes";
+                $mpr->fullfilldate = now()->format("Y-m-d");
+                $mpr->save();
+            }
+
+            try {
+                $this->migrateCompletedMprToDemandSingle($mpr);
+            } catch (\Exception $e) {
+            }
+        }
+
+        // Gửi email
+        $this->sendAcceptEmailNotification(
+            $mpr,
+            $nextStatus,
+            $dataFlow,
+            $statusFlow,
+            $currentStatus,
+            $isAmendmentRequest
+        );
+
+        return response()->json([
+            "success" => true,
+            "message" => "Request accepted successfully",
+            "data" => [
+                "id" => $id,
+                "status" => $mpr->status,
+                "status_amendent" => $mpr->status_amendent,
+                "status_endyear" => $mpr->status_endyear,
+                "approval" => $approval,
+            ],
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(
+            [
+                "success" => false,
+                "message" => "Error accepting request: " . $e->getMessage(),
+            ],
+            500
+        );
+    }
     }
     private function findApprover($managers, $user_empno)
     {
@@ -1243,65 +1544,32 @@ class vgMprCtrlTemp extends Controller
     private function sendMsg($params, $additionalCc = [])
     {
         // try {
-        //     $client = new \GuzzleHttp\Client();
-
-        //     $formData = http_build_query($params);
-
-        //     $response = $client->post("http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg", [
-        //         'headers' => [
-        //             'Content-Type' => 'application/x-www-form-urlencoded'
-        //         ],
-        //         'body' => $formData
+        //     // Validate params
+        //     if (empty($params)) {
+        //         throw new \Exception("Parameters cannot be empty");
+        //     }
+        //     $msgCenterCtrl = new msgCenterCtrl();
+            
+        //     $request = new Request();
+        //     foreach ($params as $key => $value) {
+        //         $request->merge([$key => $value]);
+        //     }
+        //     $result = $msgCenterCtrl->sendOutMsg($request);
+        //     \Log::info("Message sent successfully via msgCenterCtrl", [
+        //         'target' => $params['target'] ?? 'N/A',
+        //         'msg_type' => $params['msg_type'] ?? 'N/A',
         //     ]);
-
-        //     return json_decode($response->getBody()->getContents(), true);
+        //     return $result ?? ['success' => true];
         // } catch (\Exception $e) {
+        //     \Log::error("Error in sendMsg: " . $e->getMessage(), [
+        //         'params' => $params,
+        //         'trace' => $e->getTraceAsString(),
+        //     ]);
         //     throw $e;
         // }
-// --------------------------------------------------------
-        try {
-            $interceptEmailAddress = "fiona.chang@spg-sportsgear.com";
-
-            // CC mặc định
-            $ccEmails = [
-                "vu.huynh@spg-sportsgear.com",
-                "chung.vo@spg-sportsgear.com",
-                "vg-hr013@spg-sportsgear.com",
-                "vg-hr015@spg-sportsgear.com",
-                "vg-hr009@spg-sportsgear.com",
-                "judy.yao@spg-sportsgear.com",
-                "yang.yu@spg-sportsgear.com",
-            ];
-
-            if (!empty($additionalCc)) {
-                $ccEmails = array_merge($ccEmails, (array) $additionalCc);
-                $ccEmails = array_unique($ccEmails); // Loại bỏ email trùng
-            }
-
-            if (!empty($params["mail_data"])) {
-                $mailData = json_decode($params["mail_data"], true);
-                if (is_array($mailData)) {
-                    if (isset($mailData["to"])) {
-                        $mailData["to"] = [$interceptEmailAddress];
-                    }
-
-                    $mailData["cc"] = $ccEmails;
-
-                    if (isset($mailData["bcc"])) {
-                        unset($mailData["bcc"]);
-                    }
-
-                    $params["mail_data"] = json_encode($mailData);
-
-                    \Log::info("[EMAIL INTERCEPTION] Email configuration", [
-                        "to" => $mailData["to"],
-                        "cc" => $mailData["cc"],
-                        "subject" => $params["msg_subject"] ?? "N/A",
-                    ]);
-                }
-            }
-
+         try {
             $client = new \GuzzleHttp\Client();
+
             $formData = http_build_query($params);
 
             $response = $client->post(
@@ -1318,182 +1586,64 @@ class vgMprCtrlTemp extends Controller
         } catch (\Exception $e) {
             throw $e;
         }
-// /--------------------------------------------------------
-        // try {
-        //     $interceptEmailAddress = "vu.huynh@spg-sportsgear.com";
-        //     if (!empty($params["mail_data"])) {
-        //         $mailData = json_decode($params["mail_data"], true);
-        //         if (is_array($mailData)) {
-        //             if (isset($mailData["to"])) {
-        //                 $mailData["to"] = [$interceptEmailAddress];
-        //             }
-        //             if (isset($mailData["cc"])) {
-        //                 unset($mailData["cc"]);
-        //             }
-        //             if (isset($mailData["bcc"])) {
-        //                 unset($mailData["bcc"]);
-        //             }
-        //             $params["mail_data"] = json_encode($mailData);
-        //             \Log::info(
-        //                 "[EMAIL INTERCEPTION] All emails redirected to: " .
-        //                     $interceptEmailAddress,
-        //                 [
-        //                     "original_data" => $mailData,
-        //                     "subject" => $params["msg_subject"] ?? "N/A",
-        //                 ]
-        //             );
-        //         }
-        //     }
-        //     $client = new \GuzzleHttp\Client();
-        //     $formData = http_build_query($params);
-
-        //     $response = $client->post(
-        //         "http://gmo021.cansportsvg.com/api/msg-center/sendOutMsg",
-        //         [
-        //             "headers" => [
-        //                 "Content-Type" => "application/x-www-form-urlencoded",
-        //             ],
-        //             "body" => $formData,
-        //         ]
-        //     );
-
-        //     return json_decode($response->getBody()->getContents(), true);
-        // } catch (\Exception $e) {
-        //     throw $e;
-        // }
     }
     public function denyRequest(Request $req)
     {
+        
         try {
-            $validator = Validator::make($req->all(), [
-                "id" => "required",
-                "reason" => "required|string|max:500",
-                "user_empno" => "required|string",
-                "dataReq" => "required",
-            ]);
+        $validator = Validator::make($req->all(), [
+            "id" => "required",
+            "reason" => "required|string|max:500",
+            "user_empno" => "required|string",
+            "dataReq" => "required",
+        ]);
 
-            if ($validator->fails()) {
-                return response()->json(
-                    ["success" => false, "errors" => $validator->errors()],
-                    400
-                );
-            }
+        if ($validator->fails()) {
+            return response()->json(
+                ["success" => false, "errors" => $validator->errors()],
+                400
+            );
+        }
 
-            $dataReq = $req["dataReq"];
-            $dataFlow = $dataReq["dataFlow"];
-            $status = $dataReq["status"];
-            $approval = json_decode($dataReq["approval"], true);
-            $id = $dataReq["id"];
-            $user_empno = $req->user_empno;
+        $dataReq = $req["dataReq"];
+        $dataFlow = $dataReq["dataFlow"];
+        $status = $dataReq["status"];
+        $approval = json_decode($dataReq["approval"], true);
+        $id = $dataReq["id"];
+        $user_empno = $req->user_empno;
 
-            $mpr = MprTemp::find($id);
-            if (!$mpr) {
-                return response()->json(
-                    ["success" => false, "message" => "Record not found"],
-                    404
-                );
-            }
+        $mpr = Mpr::find($id);
+        if (!$mpr) {
+            return response()->json(
+                ["success" => false, "message" => "Record not found"],
+                404
+            );
+        }
 
-            // Check loại yêu cầu
-            $isEndYearRequest =
-                !empty($mpr->status_endyear) &&
-                $mpr->status_endyear !== "completed" &&
-                $mpr->status_endyear !== "declined";
+        // Check loại yêu cầu
+        $isEndYearRequest =
+            !empty($mpr->status_endyear) &&
+            $mpr->status_endyear !== "completed" &&
+            $mpr->status_endyear !== "declined";
 
-            $isAmendmentRequest =
-                !empty($dataReq["status_amendent"]) && !$isEndYearRequest;
-            $amendmentStatus = $dataReq["status_amendent"] ?? null;
+        // FIX: Fallback to database if status_amendent not in request
+        $isAmendmentRequest =
+            !empty($dataReq["status_amendent"]) && !$isEndYearRequest;
+        
+        // Nếu request không có status_amendent nhưng database có, coi đó là amendment
+        if (!$isAmendmentRequest && !empty($mpr->status_amendent) && 
+            $mpr->status_amendent !== "completed" && 
+            $mpr->status_amendent !== "declined") {
+            $isAmendmentRequest = true;
+        }
 
-            // Auto decline
-            $autoDecline =
-                isset($dataReq["auto_decline"]) &&
-                $dataReq["auto_decline"] === true;
-            if ($autoDecline) {
-                if ($isEndYearRequest) {
-                    $mpr->status_endyear = "declined";
-                } elseif ($isAmendmentRequest) {
-                    $mpr->status_amendent = "declined";
-                } else {
-                    $mpr->status = "declined";
-                }
+        $amendmentStatus = $dataReq["status_amendent"] ?? $mpr->status_amendent ?? null;
 
-                // Update approval
-                if ($approval && is_array($approval)) {
-                    foreach ($approval as &$level) {
-                        if (
-                            empty($level["status"]) ||
-                            $level["status"] === "waiting"
-                        ) {
-                            $level["status"] = "rejected";
-                            $level["reason_denied"] = $req->reason;
-                            $level["processed_at"] = now()->toDateTimeString();
-                            $level["approver"] = [
-                                "empno" => "SYSTEM",
-                                "name" => "Auto System",
-                                "dept" => "SYSTEM",
-                                "email" => "system@company.com",
-                            ];
-                            break;
-                        }
-                    }
-                }
-                $mpr->approval = json_encode($approval);
-                $mpr->save();
-                return response()->json([
-                    "success" => true,
-                    "message" => "Request auto declined",
-                ]);
-            }
-
-            // Manual Deny
-            $statusFlow = [
-                "waiting_dept" => ["level" => 1],
-                "waiting_div" => ["level" => 2],
-                "waiting_hr_rec_sf" => ["level" => 3],
-                "waiting_hr" => ["level" => 4],
-                "waiting_ad" => ["level" => 5],
-                "waiting_gm" => ["level" => 6],
-            ];
-
-            // Xác định current status
-            if ($isEndYearRequest) {
-                $currentStatus = $mpr->status_endyear;
-            } else {
-                $currentStatus = $isAmendmentRequest
-                    ? $amendmentStatus
-                    : $status;
-            }
-
-            if (!isset($statusFlow[$currentStatus])) {
-                return response()->json(
-                    ["success" => false, "message" => "Invalid status"],
-                    400
-                );
-            }
-
-            $currentLevelIndex = $statusFlow[$currentStatus]["level"] - 1;
-
-            if (isset($approval[$currentLevelIndex])) {
-                $approval[$currentLevelIndex]["status"] = "rejected";
-                $approval[$currentLevelIndex]["reason_denied"] = $req->reason;
-                $approval[$currentLevelIndex][
-                    "processed_at"
-                ] = now()->toDateTimeString();
-
-                if (!empty($dataFlow[$currentLevelIndex]["managers"])) {
-                    $currentApprover = $this->findApprover(
-                        $dataFlow[$currentLevelIndex]["managers"],
-                        $user_empno
-                    );
-                    if ($currentApprover) {
-                        $approval[$currentLevelIndex][
-                            "approver"
-                        ] = $currentApprover;
-                    }
-                }
-            }
-
-            // Cập nhật vào DB
+        // Auto decline
+        $autoDecline =
+            isset($dataReq["auto_decline"]) &&
+            $dataReq["auto_decline"] === true;
+        if ($autoDecline) {
             if ($isEndYearRequest) {
                 $mpr->status_endyear = "declined";
             } elseif ($isAmendmentRequest) {
@@ -1502,35 +1652,116 @@ class vgMprCtrlTemp extends Controller
                 $mpr->status = "declined";
             }
 
+            // Update approval
+            if ($approval && is_array($approval)) {
+                foreach ($approval as &$level) {
+                    if (
+                        empty($level["status"]) ||
+                        $level["status"] === "waiting"
+                    ) {
+                        $level["status"] = "rejected";
+                        $level["reason_denied"] = $req->reason;
+                        $level["processed_at"] = now()->toDateTimeString();
+                        $level["approver"] = [
+                            "empno" => "SYSTEM",
+                            "name" => "Auto System",
+                            "dept" => "SYSTEM",
+                            "email" => "system@company.com",
+                        ];
+                        break;
+                    }
+                }
+            }
             $mpr->approval = json_encode($approval);
             $mpr->save();
-
-            $this->sendDenialEmailNotification(
-                $mpr,
-                $req->reason,
-                $isAmendmentRequest
-            );
-
             return response()->json([
                 "success" => true,
-                "message" => "Request denied successfully",
-                "data" => [
-                    "id" => $mpr->id,
-                    "status" => $mpr->status,
-                    "status_amendent" => $mpr->status_amendent,
-                    "status_endyear" => $mpr->status_endyear,
-                    "approval" => $approval,
-                ],
+                "message" => "Request auto declined",
             ]);
-        } catch (\Exception $e) {
+        }
+
+        // Manual Deny
+        $statusFlow = [
+            "waiting_dept" => ["level" => 1],
+            "waiting_div" => ["level" => 2],
+            "waiting_hr_rec_sf" => ["level" => 3],
+            "waiting_hr" => ["level" => 4],
+            "waiting_ad" => ["level" => 5],
+            "waiting_gm" => ["level" => 6],
+        ];
+
+        // Xác định current status
+        if ($isEndYearRequest) {
+            $currentStatus = $mpr->status_endyear;
+        } else {
+            $currentStatus = $isAmendmentRequest
+                ? $amendmentStatus
+                : $status;
+        }
+
+        if (!isset($statusFlow[$currentStatus])) {
             return response()->json(
-                [
-                    "success" => false,
-                    "message" => "Error denying request: " . $e->getMessage(),
-                ],
-                500
+                ["success" => false, "message" => "Invalid status"],
+                400
             );
         }
+
+        $currentLevelIndex = $statusFlow[$currentStatus]["level"] - 1;
+
+        if (isset($approval[$currentLevelIndex])) {
+            $approval[$currentLevelIndex]["status"] = "rejected";
+            $approval[$currentLevelIndex]["reason_denied"] = $req->reason;
+            $approval[$currentLevelIndex]["processed_at"] = now()->toDateTimeString();
+
+            if (!empty($dataFlow[$currentLevelIndex]["managers"])) {
+                $currentApprover = $this->findApprover(
+                    $dataFlow[$currentLevelIndex]["managers"],
+                    $user_empno
+                );
+                if ($currentApprover) {
+                    $approval[$currentLevelIndex]["approver"] = $currentApprover;
+                }
+            }
+        }
+
+        // Cập nhật vào DB
+        if ($isEndYearRequest) {
+            $mpr->status_endyear = "declined";
+        } elseif ($isAmendmentRequest) {
+            $mpr->status_amendent = "declined";
+        } else {
+            $mpr->status = "declined";
+        }
+
+        $mpr->approval = json_encode($approval);
+        $mpr->save();
+
+        $this->sendDenialEmailNotification(
+            $mpr,
+            $req->reason,
+            $isAmendmentRequest
+        );
+
+        return response()->json([
+            "success" => true,
+            "message" => "Request denied successfully",
+            "data" => [
+                "id" => $mpr->id,
+                "status" => $mpr->status,
+                "status_amendent" => $mpr->status_amendent,
+                "status_endyear" => $mpr->status_endyear,
+                "approval" => $approval,
+            ],
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(
+            [
+                "success" => false,
+                "message" => "Error denying request: " . $e->getMessage(),
+            ],
+            500
+        );
+    }
     }
     public function returnRequest(Request $req)
     {
@@ -1559,7 +1790,7 @@ class vgMprCtrlTemp extends Controller
             $returnStatus = $req->returnToLevel;
             $user_empno = $req->user_empno;
 
-            $mpr = MprTemp::find($id);
+            $mpr = Mpr::find($id);
             if (!$mpr) {
                 return response()->json(
                     ["success" => false, "message" => "Record not found"],
@@ -1628,18 +1859,14 @@ class vgMprCtrlTemp extends Controller
             if (isset($approval[$currentLevelIndex])) {
                 $approval[$currentLevelIndex]["status"] = "returned";
                 $approval[$currentLevelIndex]["return_reason"] = $req->reason;
-                $approval[$currentLevelIndex][
-                    "processed_at"
-                ] = now()->toDateTimeString();
+                $approval[$currentLevelIndex]["processed_at"] = now()->toDateTimeString();
                 if (!empty($dataFlow[$currentLevelIndex]["managers"])) {
                     $currentApprover = $this->findApprover(
                         $dataFlow[$currentLevelIndex]["managers"],
                         $user_empno
                     );
                     if ($currentApprover) {
-                        $approval[$currentLevelIndex][
-                            "approver"
-                        ] = $currentApprover;
+                        $approval[$currentLevelIndex]["approver"] = $currentApprover;
                     }
                 }
             }
@@ -2008,7 +2235,7 @@ class vgMprCtrlTemp extends Controller
     public function getMprById($id = "")
     {
         try {
-            $mpr = MprTemp::find($id);
+            $mpr = Mpr::find($id);
 
             if (!$mpr) {
                 return response()->json(
@@ -2029,7 +2256,7 @@ class vgMprCtrlTemp extends Controller
                 [
                     "success" => false,
                     "message" =>
-                        "Error retrieving MPR record: " . $e->getMessage(),
+                    "Error retrieving MPR record: " . $e->getMessage(),
                 ],
                 500
             );
@@ -2085,7 +2312,7 @@ class vgMprCtrlTemp extends Controller
 
             $pattern = "HR-MPRA0-{$year}{$month}-%";
 
-            $latestRequest = MprTemp::where("req_id_change", "LIKE", $pattern)
+            $latestRequest = Mpr::where("req_id_change", "LIKE", $pattern)
                 ->orderBy("req_id_change", "desc")
                 ->first();
 
@@ -2116,7 +2343,7 @@ class vgMprCtrlTemp extends Controller
                 [
                     "success" => false,
                     "message" =>
-                        "Error getting latest request ID: " . $e->getMessage(),
+                    "Error getting latest request ID: " . $e->getMessage(),
                 ],
                 500
             );
@@ -2125,7 +2352,7 @@ class vgMprCtrlTemp extends Controller
     public function updateCancelDate(Request $req)
     {
         try {
-            $demand = MprTemp::find($req->id);
+            $demand = Mpr::find($req->id);
             if (!$demand) {
                 return response()->json(
                     [
@@ -2148,7 +2375,7 @@ class vgMprCtrlTemp extends Controller
                 [
                     "success" => false,
                     "message" =>
-                        "Error updating cancel date: " . $e->getMessage(),
+                    "Error updating cancel date: " . $e->getMessage(),
                 ],
                 500
             );
@@ -2157,7 +2384,7 @@ class vgMprCtrlTemp extends Controller
     public function getDataByMprFromRecruitReport($id)
     {
         try {
-            $manPower = MprTemp::find($id);
+            $manPower = Mpr::find($id);
 
             if (!$manPower) {
                 return response()->json(
@@ -2206,8 +2433,8 @@ class vgMprCtrlTemp extends Controller
             }
 
             // Get source and target MPR records
-            $sourceMpr = MprTemp::find($request->fromId);
-            $targetMpr = MprTemp::find($request->toId);
+            $sourceMpr = Mpr::find($request->fromId);
+            $targetMpr = Mpr::find($request->toId);
 
             if (!$sourceMpr || !$targetMpr) {
                 return response()->json(
@@ -2305,7 +2532,7 @@ class vgMprCtrlTemp extends Controller
                 [
                     "success" => false,
                     "message" =>
-                        "Error transferring candidates: " . $e->getMessage(),
+                    "Error transferring candidates: " . $e->getMessage(),
                 ],
                 500
             );
@@ -2334,7 +2561,7 @@ class vgMprCtrlTemp extends Controller
             ];
 
             // Get requests with valid statuses
-            $requests = MprTemp::whereIn("status", $validStatuses)
+            $requests = Mpr::whereIn("status", $validStatuses)
                 ->orWhereIn("status_amendent", $validStatuses)
                 ->orderBy("id", "desc")
                 ->get();
@@ -2392,7 +2619,7 @@ class vgMprCtrlTemp extends Controller
                 $requestParams = new Request();
                 $requestParams->merge([
                     "empno" => $submitter["empno"],
-                    "app_code" => "MPR_",
+                    "app_code" => "mpr",
                     "location" => $userData["location"] ?? "VN",
                     "custom_data" => json_encode([
                         "custom_dept" => $submitter["dept"] ?? null,
@@ -2506,7 +2733,7 @@ class vgMprCtrlTemp extends Controller
             $empno = $req->input("empno");
 
             // Lấy tất cả các request đã hoàn thành hoặc bị từ chối
-            $allRequests = MprTemp::whereIn("status", ["completed", "declined"])
+            $allRequests = Mpr::whereIn("status", ["completed", "declined"])
                 ->orderBy("updated_at", "DESC")
                 ->get([
                     "id",
@@ -2655,7 +2882,7 @@ class vgMprCtrlTemp extends Controller
                     "total_approved" => count($processedRequests),
                     "total_declined" => count($declinedRequests),
                     "total_processed" =>
-                        count($processedRequests) + count($declinedRequests),
+                    count($processedRequests) + count($declinedRequests),
                 ],
             ]);
         } catch (\Exception $e) {
@@ -2668,7 +2895,7 @@ class vgMprCtrlTemp extends Controller
                 [
                     "success" => false,
                     "message" =>
-                        "Error retrieving processed requests: " .
+                    "Error retrieving processed requests: " .
                         $e->getMessage(),
                 ],
                 500
@@ -2680,11 +2907,11 @@ class vgMprCtrlTemp extends Controller
     {
         try {
             // Get all MPRs with candidates but no resignList yet
-            $mprs = MprTemp::whereNotNull("candidates")
-                ->where("candidates", "!=", "")
-                ->where(function ($query) {
-                    $query->whereNull("resignList")->orWhere("resignList", "");
-                })
+            $mprs = Mpr::whereNotNull("candidates")
+                // ->where("candidates", "!=", "")
+                // ->where(function ($query) {
+                //     $query->whereNull("resignList")->orWhere("resignList", "");
+                // })
                 // ->get();
                 ->paginate(500);
 
@@ -2772,7 +2999,7 @@ class vgMprCtrlTemp extends Controller
                 ->chunk(100)
                 ->each(function ($chunk) {
                     foreach ($chunk as $data) {
-                        MprTemp::where("id", $data["id"])->update([
+                        Mpr::where("id", $data["id"])->update([
                             "resign" => $data["resign"],
                             "resignList" => $data["resignList"],
                             "updated_at" => $data["updated_at"],
@@ -2784,7 +3011,7 @@ class vgMprCtrlTemp extends Controller
                 [
                     "status" => "success",
                     "message" =>
-                        "Processed " . count($results) . " MPR records",
+                    "Processed " . count($results) . " MPR records",
                     "data" => $results,
                 ],
                 200
@@ -2901,7 +3128,7 @@ class vgMprCtrlTemp extends Controller
     public function sendAutoCloseEmail(Request $request)
     {
         try {
-            $mpr = MprTemp::find($request->id);
+            $mpr = Mpr::find($request->id);
             if (!$mpr) {
                 return response()->json(
                     [
@@ -2923,7 +3150,7 @@ class vgMprCtrlTemp extends Controller
                 [
                     "success" => false,
                     "message" =>
-                        "Error sending auto close notification: " .
+                    "Error sending auto close notification: " .
                         $e->getMessage(),
                 ],
                 500
@@ -3085,7 +3312,7 @@ class vgMprCtrlTemp extends Controller
     public function checkAutoReturnDecline()
     {
         try {
-            $mprList = MprTemp::where(function ($query) {
+            $mprList = Mpr::where(function ($query) {
                 $query
                     ->where("status", "waiting_dept")
                     ->orWhere("status_amendent", "waiting_dept");
@@ -3125,7 +3352,7 @@ class vgMprCtrlTemp extends Controller
             $groupedCandidates = $candidates->groupBy("emp_demandid");
 
             foreach ($groupedCandidates as $demandId => $candidateGroup) {
-                $mpr = MprTemp::find($demandId);
+                $mpr = Mpr::find($demandId);
                 if (!$mpr) {
                     continue;
                 }
@@ -3169,7 +3396,7 @@ class vgMprCtrlTemp extends Controller
                 [
                     "success" => false,
                     "message" =>
-                        "Error updating MPR candidates: " . $e->getMessage(),
+                    "Error updating MPR candidates: " . $e->getMessage(),
                 ],
                 500
             );
@@ -3195,7 +3422,7 @@ class vgMprCtrlTemp extends Controller
                 }
 
                 // Find MPR by matching req_id with Demand.id_code
-                $mpr = MprTemp::where("req_id", $demand->id_code)->first();
+                $mpr = Mpr::where("req_id", $demand->id_code)->first();
                 if (!$mpr) {
                     continue;
                 }
@@ -3232,23 +3459,33 @@ class vgMprCtrlTemp extends Controller
                         ])
                     );
                 }
-
+                if (
+                    !empty($mpr->status_amendent) &&
+                    $mpr->status_amendent === "completed" &&
+                    !empty($mpr->change_req)
+                ) {
+                    try {
+                        $changes = json_decode($mpr->change_req, true);
+                        if (is_array($changes) && count($changes) > 0) {
+                            $lastChange = end($changes);
+                            if (
+                                !empty($lastChange["change_qty"]) ||
+                                $lastChange["change_qty"] === "0"
+                            ) {
+                                $totalQty = intval($lastChange["change_qty"]);
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        \Log::warning(
+                            "Error parsing change_req in updateMprCandidates: " .
+                            $e->getMessage()
+                        );
+                    }
+                }
                 $mpr->stocknumber = $totalQty - $mpr->recruited;
                 $mpr->fulfilled = $mpr->stocknumber <= 0 ? "yes" : "no";
                 $mpr->fullfilldate = $demand->dem_fullfilldate;
 
-                // // Set fullfilldate from Demand.dem_fullfilldate if present
-                // if (!empty($demand->dem_fullfilldate)) {
-                // } else {
-                //     // If demand has no fullfill date, preserve existing behavior:
-                //     if ($mpr->stocknumber > 0) {
-                //         $mpr->fullfilldate = null;
-                //         $mpr->fulfilled = 'no';
-                //     } else if ($mpr->stocknumber <= 0 && empty($mpr->fullfilldate)) {
-                //         $mpr->fullfilldate = date('Y-m-d');
-                //         $mpr->fulfilled = 'yes';
-                //     }
-                // }
 
                 $mpr->save();
                 $updatedCount++;
@@ -3264,7 +3501,7 @@ class vgMprCtrlTemp extends Controller
                 [
                     "success" => false,
                     "message" =>
-                        "Error updating MPR candidates: " . $e->getMessage(),
+                    "Error updating MPR candidates: " . $e->getMessage(),
                 ],
                 500
             );
@@ -3273,7 +3510,7 @@ class vgMprCtrlTemp extends Controller
     public function migrateCompletedMprToDemand(Request $request)
     {
         try {
-            $mprs = MprTemp::where("status", "completed")->get();
+            $mprs = Mpr::where("status", "completed")->get();
             $created = [];
 
             foreach ($mprs as $mpr) {
@@ -3462,12 +3699,58 @@ class vgMprCtrlTemp extends Controller
                 [
                     "success" => false,
                     "message" =>
-                        "Error migrating MPR to Demand: " . $e->getMessage(),
+                    "Error migrating MPR to Demand: " . $e->getMessage(),
                 ],
                 500
             );
         }
     }
+
+    public function manualMigrateToDemand(Request $request)
+    {
+        try {
+            // Tự động lấy các MPR đã hoàn thành và có req_id từ 18 ký tự trở lên
+            $mprs = Mpr::where('status', 'completed')
+                ->whereNotNull('req_id')
+                ->whereRaw('LENGTH(req_id) >= 18')
+                ->get();
+
+            $results = [];
+            $errors = [];
+
+            foreach ($mprs as $mpr) {
+                try {
+                    $demand = Demand::where('id_code', $mpr->req_id)->first();
+                    if ($demand) {
+                        $demand->key_in = $mpr->key_in_date;
+                        $demand->save();
+                        
+                        $results[] = [
+                            'mpr_id' => $mpr->id,
+                            'req_id' => $mpr->req_id,
+                            'status' => 'updated'
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    $errors[] = "Error updating MPR ID {$mpr->id} (req_id: {$mpr->req_id}): " . $e->getMessage();
+                }
+            }
+
+            return response()->json([
+                'success' => empty($errors),
+                'migrated_count' => count($results),
+                'results' => $results,
+                'errors' => $errors
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Error in manualMigrateToDemand: " . $e->getMessage(), ["trace" => $e->getTraceAsString()]);
+            return response()->json([
+                'success' => false,
+                'message' => "Error migrating MPR to Demand: " . $e->getMessage()
+            ], 500);
+        }
+    }
+
     private function migrateCompletedMprToDemandSingle($mpr)
     {
         try {
@@ -3546,7 +3829,7 @@ class vgMprCtrlTemp extends Controller
                         $cancelData = [
                             "date" => $denyTemp["fullfilldate"],
                             "reason" =>
-                                $denyTemp["reason"] ?? "Auto-closed by system",
+                            $denyTemp["reason"] ?? "Auto-closed by system",
                         ];
 
                         $existingDemand->dem_cancel_date = json_encode(
@@ -3703,6 +3986,7 @@ class vgMprCtrlTemp extends Controller
             // Create new Demand
             $demand = new Demand();
             $demand->id_code = $mpr->req_id;
+             $demand->key_in = $mpr->key_in_date;
             $demand->dem_dept = $dem_dept;
             $demand->dem_sub_department = $dem_sub_department;
             $demand->dem_unit = $dem_unit;
@@ -3881,7 +4165,7 @@ class vgMprCtrlTemp extends Controller
         $date = $targetDate ? \Carbon\Carbon::parse($targetDate) : now();
         $yymm = $date->format("ym");
         $prefix = "HR-MPR00-{$yymm}-";
-        $maxNumber = MprTemp::where("req_id", "LIKE", $prefix . "%")
+        $maxNumber = Mpr::where("req_id", "LIKE", $prefix . "%")
             ->selectRaw("MAX(CAST(RIGHT(req_id, 4) AS UNSIGNED)) as max_num")
             ->value("max_num");
         $nextNumber = $maxNumber ? $maxNumber + 1 : 1;
@@ -3889,7 +4173,7 @@ class vgMprCtrlTemp extends Controller
             $sequence = str_pad($nextNumber, 4, "0", STR_PAD_LEFT);
             $newReqId = $prefix . $sequence;
 
-            $exists = MprTemp::where("req_id", $newReqId)->exists();
+            $exists = Mpr::where("req_id", $newReqId)->exists();
 
             if ($exists) {
                 $nextNumber++;
@@ -3901,7 +4185,7 @@ class vgMprCtrlTemp extends Controller
     public function sendYearEndNotice()
     {
         try {
-            $relevantMprs = MprTemp::where(function ($query) {
+            $relevantMprs = Mpr::where(function ($query) {
                 $query
                     ->where("status", "completed")
                     ->orWhere("status_amendent", "completed");
@@ -3939,13 +4223,13 @@ class vgMprCtrlTemp extends Controller
                 ]);
             }
 
-            $currentYear = date("Y"); // Hoặc 2025 tùy logic
+            $currentYear = date("Y");
             $yearSetting = MprEndYear::where("year", $currentYear)->first();
             if (!$yearSetting) {
                 $yearSetting = MprEndYear::orderBy("year", "desc")->first();
             }
 
-            $emailDateText = ""; // Giá trị mặc định (fallback)
+            $emailDateText = "";
 
             if ($yearSetting && !empty($yearSetting->email_date)) {
                 try {
@@ -4008,7 +4292,7 @@ class vgMprCtrlTemp extends Controller
     {
         try {
             // 1. Lấy dữ liệu từ DB (thêm trường 'submitter' để lấy unit)
-            $mprs = MprTemp::select([
+            $mprs = Mpr::select([
                 "req_id",
                 "recruited",
                 "resign",
@@ -4207,7 +4491,7 @@ class vgMprCtrlTemp extends Controller
                 "email_date" => "required|date",
                 "reply_deadline" => "required|date|after_or_equal:email_date",
                 "system_update_date" =>
-                    "required|date|after_or_equal:reply_deadline",
+                "required|date|after_or_equal:reply_deadline",
             ]);
             if ($validator->fails()) {
                 return response()->json(
@@ -4284,7 +4568,7 @@ class vgMprCtrlTemp extends Controller
     private function createSystemSignature($note)
     {
         $timestamp = now()->format("Y-m-d H:i:s");
-       return $note;
+        return $note;
     }
     public function runYearEndAutoClose()
     {
@@ -4292,7 +4576,7 @@ class vgMprCtrlTemp extends Controller
         $dbUpdateFailedCount = 0;
         $groupedForEmail = [];
 
-        $mprsToClose = MprTemp::where("stocknumber", ">", 0)
+        $mprsToClose = Mpr::where("stocknumber", ">", 0)
             ->where(function ($q) {
                 $q->whereNull("status_endyear")->orWhere(
                     "status_endyear",
@@ -4331,7 +4615,6 @@ class vgMprCtrlTemp extends Controller
 
         foreach ($mprsToClose as $mpr) {
             try {
-                // 1. Lấy email người duyệt cấp 1 cũ để gửi báo cáo
                 $email = null;
                 if (!empty($mpr->approval)) {
                     $approvalData = json_decode($mpr->approval, true);
@@ -4351,7 +4634,6 @@ class vgMprCtrlTemp extends Controller
                     }
                 }
 
-                // Chuẩn bị dữ liệu report
                 $submitter = json_decode($mpr->submitter, true) ?: [];
                 $totalQtyReq = 0;
                 if (!empty($mpr->qty_req)) {
@@ -4378,19 +4660,17 @@ class vgMprCtrlTemp extends Controller
                     "stocknumber" => $mpr->stocknumber,
                 ];
 
-             
                 $currentApproval = $mpr->approval;
                 if (!empty($currentApproval)) {
                     $logsArray = [];
                     if (!empty($mpr->logs)) {
                         $existingLogs = json_decode($mpr->logs, true);
                         if (is_array($existingLogs)) {
-                            // Chuẩn hóa thành mảng danh sách nếu cần
                             $logsArray =
                                 array_keys($existingLogs) !==
                                 range(0, count($existingLogs) - 1)
-                                    ? [$existingLogs]
-                                    : $existingLogs;
+                                ? [$existingLogs]
+                                : $existingLogs;
                         }
                     }
                     $logsArray[] = json_decode($currentApproval, true);
@@ -4417,9 +4697,7 @@ class vgMprCtrlTemp extends Controller
                 ];
                 $mpr->approval = json_encode($newApprovalCycle);
 
-                $systemSignature = $this->createSystemSignature(
-                    $reasonNote
-                );
+                $systemSignature = $this->createSystemSignature($reasonNote);
 
                 // Lấy danh sách record hiện tại (của Cycle 1, 2...)
                 $existingRecords = [];
@@ -4429,8 +4707,8 @@ class vgMprCtrlTemp extends Controller
                         $existingRecords =
                             array_keys($decoded) !==
                             range(0, count($decoded) - 1)
-                                ? [$decoded]
-                                : $decoded;
+                            ? [$decoded]
+                            : $decoded;
                     }
                 }
 
@@ -4438,7 +4716,7 @@ class vgMprCtrlTemp extends Controller
                     "dept" => "",
                     "div" => "",
                     "hr_rec_sf" => "",
-                    "hr" => $systemSignature, // Chữ ký nằm ở phần tử mới nhất
+                    "hr" => $systemSignature,
                     "ad" => "",
                     "gm" => "",
                 ];
@@ -4473,7 +4751,7 @@ class vgMprCtrlTemp extends Controller
                 $mpr->save();
                 $dbUpdateSuccessCount++;
                 // Đồng bộ sang bảng Demand
-                // $this->migrateCompletedMprToDemandSingle($mpr);
+                $this->migrateCompletedMprToDemandSingle($mpr);
 
                 if (!empty($email)) {
                     $groupedForEmail[$email][] = $requestDataRow;

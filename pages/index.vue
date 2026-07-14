@@ -240,7 +240,7 @@
                     {{ getStatusWithApprover(item.status, item) }}
                 </v-chip>
             </template>
-            <span>{{ getNextApproverInfoForStatus(item) }}</span>
+            <span style="white-space: pre-line; text-align: left;">{{ getNextApproverInfoForStatus(item) }}</span>
         </v-tooltip>
         
         <v-tooltip bottom :disabled="!getNextApproverInfoForAmendment(item)" v-if="item.status_amendent">
@@ -261,7 +261,7 @@
                 {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
             </v-chip>
         </template>
-        <span>{{ getNextApproverInfoForAmendment(item) }}</span>
+        <span style="white-space: pre-line; text-align: left;">{{ getNextApproverInfoForAmendment(item) }}</span>
     </v-tooltip>
     
     <v-tooltip bottom :disabled="!getNextApproverInfoForEndYear(item)">
@@ -282,7 +282,7 @@
             {{ getEndYearStatusWithApprover('waiting_dept', item) }}
         </v-chip>
     </template>
-    <span>{{ getNextApproverInfoForEndYear(item) }}</span>
+    <span style="white-space: pre-line; text-align: left;">{{ getNextApproverInfoForEndYear(item) }}</span>
 </v-tooltip>
 </template>
 
@@ -306,7 +306,7 @@
             {{ getStatusWithApprover(item.status, item) }}
         </v-chip>
     </template>
-    <span>
+    <span style="white-space: pre-line; text-align: left;">
         {{ getReturnInfo(item).returned ? getReturnInfo(item).reason : getNextApproverInfoForStatus(item) }}
     </span>
 </v-tooltip>
@@ -329,7 +329,7 @@
         {{ getAmendmentStatusWithApprover(item.status_amendent, item) }}
     </v-chip>
 </template>
-<span>{{ getNextApproverInfoForAmendment(item) }}</span>
+<span style="white-space: pre-line; text-align: left;">{{ getNextApproverInfoForAmendment(item) }}</span>
 </v-tooltip>
 
 <v-tooltip bottom :disabled="!getNextApproverInfoForEndYear(item)" v-if="item.status_endyear && !item.req_id_oldyear">
@@ -350,7 +350,7 @@
         {{ getEndYearStatusWithApprover(item.status_endyear, item) }}
     </v-chip>
 </template>
-<span>
+<span style="white-space: pre-line; text-align: left;">
     {{ getNextApproverInfoForEndYear(item) }}
 </span>
 </v-tooltip>
@@ -1643,17 +1643,17 @@
             },
             filterItems() {
                 return {
-                    unit_name: [...new Set(this.formattedData.map(item => item.unit_name))].filter(Boolean),
-                    req_id: [...new Set(this.formattedData.map(item => item.req_id))].filter(Boolean),
-                    submitter: [...new Set(this.formattedData.map(item => 
+                    unit_name: [...new Set(this.filteredData.map(item => item.unit_name))].filter(Boolean),
+                    req_id: [...new Set(this.filteredData.map(item => item.req_id))].filter(Boolean),
+                    submitter: [...new Set(this.filteredData.map(item => 
                     item.submiterInfo?.empno ? `${item.submiterInfo.empno} - ${item.submiterInfo.name}` : ''
                     ))].filter(Boolean),
-                    date_req: [...new Set(this.formattedData.map(item => this.formatDate(item.date_req)))].filter(Boolean),
-                    unit: [...new Set(this.formattedData.map(item => item.unit))].filter(Boolean),
-                    // division: [...new Set(this.formattedData.map(item => item.division))].filter(Boolean),
-                    pos: [...new Set(this.formattedData.map(item => this.getPositionName(item.pos)))].filter(Boolean),
+                    date_req: [...new Set(this.filteredData.map(item => this.formatDate(item.date_req)))].filter(Boolean),
+                    unit: [...new Set(this.filteredData.map(item => item.unit))].filter(Boolean),
+                    // division: [...new Set(this.filteredData.map(item => item.division))].filter(Boolean),
+                    pos: [...new Set(this.filteredData.map(item => this.getPositionName(item.pos)))].filter(Boolean),
                     
-                    reason: [...new Set(this.formattedData.map(item => {
+                    reason: [...new Set(this.filteredData.map(item => {
                         // Nếu là reason_exp = 3 (Other) thì lấy giá trị localized
                         if (Number(item.reason_exp) === 3 && item.isOther_reason) {
                             return this.getLocalizedOtherReason(item.isOther_reason);
@@ -1664,22 +1664,22 @@
                         }
                         return '';
                     }))].filter(Boolean),
-                    status: [...new Set(this.formattedData.flatMap(item => [
+                    status: [...new Set(this.filteredData.flatMap(item => [
                     this.getStatusText(item.status),
                     this.getStatusText(item.status_amendent),
                     this.getEndYearStatusText(item.status_endyear) // <--- THÊM DÒNG NÀY
                     ]))].filter(Boolean),
-                    sub_pos: [...new Set(this.formattedData.map(item => {
+                    sub_pos: [...new Set(this.filteredData.map(item => {
                         if (item.sub_pos) {
                             return this.getSubPositionName(item.sub_pos, true);
                         }
                         return '';
                     }))].filter(Boolean),
-                    recruited: [...new Set(this.formattedData.map(item => item.recruited))].filter(Boolean),
-                    resign: [...new Set(this.formattedData.map(item => item.resign))].filter(Boolean),
-                    qty_req: [...new Set(this.formattedData.map(item => item.qtyInfo.total))].filter(Boolean),
+                    recruited: [...new Set(this.filteredData.map(item => item.recruited))].filter(Boolean),
+                    resign: [...new Set(this.filteredData.map(item => item.resign))].filter(Boolean),
+                    qty_req: [...new Set(this.filteredData.map(item => item.qtyInfo.total))].filter(Boolean),
                     recruited_status: [
-                    ...new Set(this.formattedData
+                    ...new Set(this.filteredData
                     .map(item => {
                         const status = this.getRecruitmentStatus(item);
                         return status.show ? status.text : null;
@@ -1687,7 +1687,7 @@
                     .filter(Boolean)
                     )
                     ],
-                    key_in_date: [...new Set(this.formattedData.map(item => this.formatDate(item.key_in_date || item.date_req)))].filter(Boolean),
+                    key_in_date: [...new Set(this.filteredData.map(item => this.formatDate(item.key_in_date || item.date_req)))].filter(Boolean),
                 }
             },
         },
@@ -1801,8 +1801,7 @@
                     
                     if (!currentFlow || !currentFlow.managers || currentFlow.managers.length === 0) return null;
                     
-                    const mainApprover = currentFlow.managers[0];
-                    return mainApprover.name || mainApprover.empno;
+                    return currentFlow.managers.map(m => m.name || m.empno).join(', ');
                 } catch (error) {
                     return null;
                 }
@@ -1832,17 +1831,15 @@
                         return this.$t('Approver info not available');
                     }
                     
-                    const mainApprover = currentFlow.managers[0];
-                    const deputies = mainApprover.deputies || [];
-                    
-                    let approverText = `${this.$t('Manager')}: ${mainApprover.empno} - ${mainApprover.name}`;
-                    if (deputies.length > 0) {
+                    let approverText = `${this.$t('Manager')}:\n` + currentFlow.managers.map(m => {
+                        let text = `- ${m.empno} - ${m.name}`;
+                        const deputies = m.deputies || [];
                         const activeDeputies = deputies.filter(d => d.status);
                         if (activeDeputies.length > 0) {
-                            approverText += `\n${this.$t('Deputies')}: ` +
-                            activeDeputies.map(d => `${d.empno} - ${d.name}`).join('\n');
+                            text += `\n  + ${this.$t('Deputies')}: ` + activeDeputies.map(d => `${d.empno} - ${d.name}`).join(', ');
                         }
-                    }
+                        return text;
+                    }).join('\n');
                     return approverText;
                     
                 } catch (error) {
@@ -3571,17 +3568,15 @@
                         return null;
                     }
                     
-                    const mainApprover = currentFlow.managers[0];
-                    const deputies = mainApprover.deputies || [];
-                    
-                    let approverText = `${this.$t('Manager')}: ${mainApprover.empno} - ${mainApprover.name}`;
-                    if (deputies.length > 0) {
+                    let approverText = `${this.$t('Manager')}:\n` + currentFlow.managers.map(m => {
+                        let text = `- ${m.empno} - ${m.name}`;
+                        const deputies = m.deputies || [];
                         const activeDeputies = deputies.filter(d => d.status);
                         if (activeDeputies.length > 0) {
-                            approverText += `\n${this.$t('Deputies')}: ` +
-                            activeDeputies.map(d => `${d.empno} - ${d.name}`).join('\n');
+                            text += `\n  + ${this.$t('Deputies')}: ` + activeDeputies.map(d => `${d.empno} - ${d.name}`).join(', ');
                         }
-                    }
+                        return text;
+                    }).join('\n');
                     return approverText;
                     
                 } catch (error) {
@@ -3638,8 +3633,7 @@
                         return null;
                     }
                     
-                    const mainApprover = currentFlow.managers[0];
-                    return mainApprover.name || mainApprover.empno;
+                    return currentFlow.managers.map(m => m.name || m.empno).join(', ');
                     
                 } catch (error) {
                     console.error('Error getting approver name:', error);
@@ -3674,8 +3668,7 @@
                         return null;
                     }
                     
-                    const mainApprover = currentFlow.managers[0];
-                    return mainApprover.name || mainApprover.empno;
+                    return currentFlow.managers.map(m => m.name || m.empno).join(', ');
                     
                 } catch (error) {
                     console.error('Error getting amendment approver name:', error);
@@ -3717,17 +3710,15 @@
                         return null;
                     }
                     
-                    const mainApprover = currentFlow.managers[0];
-                    const deputies = mainApprover.deputies || [];
-                    
-                    let approverText = `${this.$t('Manager')}: ${mainApprover.empno} - ${mainApprover.name}`;
-                    if (deputies.length > 0) {
+                    let approverText = `${this.$t('Manager')}:\n` + currentFlow.managers.map(m => {
+                        let text = `- ${m.empno} - ${m.name}`;
+                        const deputies = m.deputies || [];
                         const activeDeputies = deputies.filter(d => d.status);
                         if (activeDeputies.length > 0) {
-                            approverText += `\n${this.$t('Deputies')}: ` +
-                            activeDeputies.map(d => `${d.empno} - ${d.name}`).join('\n');
+                            text += `\n  + ${this.$t('Deputies')}: ` + activeDeputies.map(d => `${d.empno} - ${d.name}`).join(', ');
                         }
-                    }
+                        return text;
+                    }).join('\n');
                     return approverText;
                     
                 } catch (error) {
@@ -3769,17 +3760,15 @@
                         return null;
                     }
                     
-                    const mainApprover = currentFlow.managers[0];
-                    const deputies = mainApprover.deputies || [];
-                    
-                    let approverText = `${this.$t('Manager')}: ${mainApprover.empno} - ${mainApprover.name}`;
-                    if (deputies.length > 0) {
+                    let approverText = `${this.$t('Manager')}:\n` + currentFlow.managers.map(m => {
+                        let text = `- ${m.empno} - ${m.name}`;
+                        const deputies = m.deputies || [];
                         const activeDeputies = deputies.filter(d => d.status);
                         if (activeDeputies.length > 0) {
-                            approverText += `\n${this.$t('Deputies')}: ` +
-                            activeDeputies.map(d => `${d.empno} - ${d.name}`).join('\n');
+                            text += `\n  + ${this.$t('Deputies')}: ` + activeDeputies.map(d => `${d.empno} - ${d.name}`).join(', ');
                         }
-                    }
+                        return text;
+                    }).join('\n');
                     return approverText;
                     
                 } catch (error) {
@@ -3828,13 +3817,12 @@
                 
                 this.flowRequestInProgress[itemId] = true;
                 
-                // ... (Giữ nguyên phần params) ...
                 const params = {
                     id: itemId,
-                    empno: item.submiterInfo?.empno || item.submiterInfo?.empno, // Lưu ý: Code gốc của bạn chỗ này hơi thừa, kiểm tra lại
+                    empno: item.submiterInfo?.empno,
                     name: item.submiterInfo?.name,
-                    dept: item.submiterInfo?.dept_sumt,
-                    high_dept: item.submiterInfo?.high_dept,
+                    dept: item.submiterInfo?.unit || item.submiterInfo?.dept_sumt || item.dept,
+                    high_dept: item.submiterInfo?.div || item.submiterInfo?.division || item.submiterInfo?.high_dept,
                 };
                 
                 try {

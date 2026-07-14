@@ -75,8 +75,8 @@
 </template>
 
 <script>
-import AuthComp from "../../../@global-component/auth-comp";
-// import AuthComp from 'D:/source/@global-component/auth-comp.vue';
+// import AuthComp from "../../../@global-component/auth-comp";
+import AuthComp from 'D:/source/@global-component/auth-comp.vue';
 export default {
     components: {
         AuthComp,
@@ -147,7 +147,14 @@ export default {
         },
         setUser(user) {
             const authArr = ['admin', 'review'];
-            const appRoles = JSON.parse(user.app_roles);
+            let appRoles = [];
+            try {
+                if (user && user.app_roles && user.app_roles !== "undefined") {
+                    appRoles = JSON.parse(user.app_roles);
+                }
+            } catch (e) {
+                console.error("Error parsing app_roles", e);
+            }
             const roleItem = appRoles.find(app => app.app === "mpr");
             const role = roleItem ? roleItem.role : null;
             this.$session.set("mpr", {
