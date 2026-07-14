@@ -89,6 +89,17 @@ export default {
         }
     },
     watch: {
+        inItems: {
+            handler(newItems) {
+                if (this.selected && this.selected.length > 0) {
+                    const validSelections = this.selected.filter(item => newItems.includes(item));
+                    if (validSelections.length !== this.selected.length) {
+                        this.selected = validSelections;
+                    }
+                }
+            },
+            deep: true
+        },
         show(val) {
             if (val) {
                 this.$nextTick(() => {
@@ -96,21 +107,7 @@ export default {
                 });
             }
         },
-        searchQuery(newVal) {
-            if (!newVal) {
-                this.selected = [];
-                return;
-            }
-            
-            const query = newVal.toLowerCase().trim();
-            if (query) {
-                const matchedItems = this.inItems.filter(item =>
-                String(item).toLowerCase().includes(query)
-                );
-                this.selected = matchedItems;
-                this.$emit('changed', this.selected);
-            }
-        },
+        // We removed the auto-select on searchQuery change to make it a standard filter
         selected(newVal) {
             this.$emit('changed', newVal)
         },
@@ -128,11 +125,18 @@ export default {
                 const matchedItems = this.inItems.filter(item =>
                 String(item).toLowerCase().includes(query)
                 );
-                this.selected = matchedItems;
-                this.show = false;
                 
-                // Emit changed event
-                this.$emit('changed', this.selected);
+                // Add matched items to existing selection without removing others
+                const newSelections = [...this.selected];
+                matchedItems.forEach(item => {
+                    if (!newSelections.includes(item)) {
+                        newSelections.push(item);
+                    }
+                });
+                
+                this.selected = newSelections;
+                this.show = false;
+                this.searchQuery = null;
             }
         }
     },
