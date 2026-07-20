@@ -1,51 +1,40 @@
 @echo off
-:: Thiết lập encoding UTF-8 để hỗ trợ hiển thị tiếng Việt
-chcp 65001 > nul
 
 echo ==================================================
-echo              HỆ THỐNG CẬP NHẬT GIT
+echo              HE THONG DAY CODE LEN GIT
 echo ==================================================
 echo.
 
-:: 1. Kéo code mới nhất về trước để tránh xung đột
-echo [*] Đang kéo code mới nhất từ GitHub (git pull)...
-git pull origin main
-if %ERRORLEVEL% neq 0 (
-    echo [!] Lỗi khi kéo code về. Vui lòng kiểm tra lại xung đột (conflict) hoặc kết nối.
-    goto end
-)
-echo.
-
-:: 2. Thêm tất cả thay đổi vào hàng đợi
-echo [*] Đang chuẩn bị các file thay đổi (git add)...
+:: 1. Them tat ca thay doi vao hang doi
+echo [*] Dang chuan bi cac file thay doi (git add)...
 git add .
 echo.
 
-:: 3. Nhập nội dung commit
-set /p commit_msg="[*] Nhập nội dung commit (Nhấn Enter để dùng mặc định: 'Update code'): "
+:: 2. Nhap noi dung commit
+set /p commit_msg="[*] Nhap noi dung commit (Nhan Enter de dung mac dinh: 'Update code'): "
 if "%commit_msg%"=="" set commit_msg=Update code
 echo.
 
-:: 4. Commit code
-echo [*] Đang commit với nội dung: "%commit_msg%"...
+:: 3. Commit code
+echo [*] Dang commit voi noi dung: "%commit_msg%"...
 git commit -m "%commit_msg%"
 if %ERRORLEVEL% neq 0 (
-    echo [!] Không có thay đổi nào được commit hoặc xảy ra lỗi.
+    echo [!] Khong co thay doi nao duoc commit hoac xay ra loi.
     goto end
 )
 echo.
 
-:: 5. Đẩy code lên remote branch main
-echo [*] Đang đẩy code lên GitHub (git push)...
+:: 4. Day code len remote branch main
+echo [*] Dang day code len GitHub (git push)...
 git push origin main
 if %ERRORLEVEL% neq 0 (
-    echo [!] Đẩy code thất bại.
+    echo [!] Day code that bai. Vui long kiem tra lai ket noi hoac quyen truy cap.
     goto end
 )
 
 echo.
 echo ==================================================
-echo               CẬP NHẬT THÀNH CÔNG!
+echo               DAY CODE THANH CONG!
 echo ==================================================
 
 :end

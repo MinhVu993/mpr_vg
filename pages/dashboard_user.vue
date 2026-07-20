@@ -3287,15 +3287,21 @@
                         return null;
                     }
                     
-                    let approverText = `${this.$t('Manager')}:\n` + currentFlow.managers.map(m => {
-                        let text = `- ${m.empno} - ${m.name}`;
+                    let managerList = [];
+                    let deputyList = [];
+                    currentFlow.managers.forEach(m => {
+                        managerList.push(`- ${m.empno} - ${m.name}`);
                         const deputies = m.deputies || [];
                         const activeDeputies = deputies.filter(d => d.status);
-                        if (activeDeputies.length > 0) {
-                            text += `\n  + ${this.$t('Deputies')}: ` + activeDeputies.map(d => `${d.empno} - ${d.name}`).join(', ');
-                        }
-                        return text;
-                    }).join('\n');
+                        activeDeputies.forEach(d => {
+                            deputyList.push(`  - ${d.empno} - ${d.name}`);
+                        });
+                    });
+                    
+                    let approverText = `${this.$t('Manager')}:\n` + managerList.join('\n');
+                    if (deputyList.length > 0) {
+                        approverText += `\n+ ${this.$t('Deputies')}:\n` + deputyList.join('\n');
+                    }
                     return approverText;
                     
                 } catch (error) {
@@ -3427,15 +3433,21 @@
                         return null;
                     }
                     
-                    let approverText = `${this.$t('Manager')}:\n` + currentFlow.managers.map(m => {
-                        let text = `- ${m.empno} - ${m.name}`;
+                    let managerList = [];
+                    let deputyList = [];
+                    currentFlow.managers.forEach(m => {
+                        managerList.push(`- ${m.empno} - ${m.name}`);
                         const deputies = m.deputies || [];
                         const activeDeputies = deputies.filter(d => d.status);
-                        if (activeDeputies.length > 0) {
-                            text += `\n  + ${this.$t('Deputies')}: ` + activeDeputies.map(d => `${d.empno} - ${d.name}`).join(', ');
-                        }
-                        return text;
-                    }).join('\n');
+                        activeDeputies.forEach(d => {
+                            deputyList.push(`  - ${d.empno} - ${d.name}`);
+                        });
+                    });
+                    
+                    let approverText = `${this.$t('Manager')}:\n` + managerList.join('\n');
+                    if (deputyList.length > 0) {
+                        approverText += `\n+ ${this.$t('Deputies')}:\n` + deputyList.join('\n');
+                    }
                     return approverText;
                     
                 } catch (error) {
@@ -3477,15 +3489,21 @@
                         return null;
                     }
                     
-                    let approverText = `${this.$t('Manager')}:\n` + currentFlow.managers.map(m => {
-                        let text = `- ${m.empno} - ${m.name}`;
+                    let managerList = [];
+                    let deputyList = [];
+                    currentFlow.managers.forEach(m => {
+                        managerList.push(`- ${m.empno} - ${m.name}`);
                         const deputies = m.deputies || [];
                         const activeDeputies = deputies.filter(d => d.status);
-                        if (activeDeputies.length > 0) {
-                            text += `\n  + ${this.$t('Deputies')}: ` + activeDeputies.map(d => `${d.empno} - ${d.name}`).join(', ');
-                        }
-                        return text;
-                    }).join('\n');
+                        activeDeputies.forEach(d => {
+                            deputyList.push(`  - ${d.empno} - ${d.name}`);
+                        });
+                    });
+                    
+                    let approverText = `${this.$t('Manager')}:\n` + managerList.join('\n');
+                    if (deputyList.length > 0) {
+                        approverText += `\n+ ${this.$t('Deputies')}:\n` + deputyList.join('\n');
+                    }
                     return approverText;
                     
                 } catch (error) {

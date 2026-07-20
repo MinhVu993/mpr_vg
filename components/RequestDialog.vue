@@ -389,10 +389,6 @@
 
                 <!-- Skills & Other Information Card -->
                 <div class="form-card mt-4">
-                    <!-- <div class="form-card-header d-flex align-center mb-4">
-                        <v-icon color="#01a6be" class="mr-2" size="24">mdi-cog-outline</v-icon>
-                        <span class="text-subtitle-1 font-weight-bold text-slate-800">{{ $t("Skills & Other Information") }}</span>
-                    </div> -->
                     <div v-show="form.pos !== 1">
                         <div class="d-flex align-center mb-2">
                             <v-icon left color="#01a6be" small>mdi-translate</v-icon>
@@ -4921,7 +4917,7 @@ v-model="viewOriginal"
             "Req.date": "Ngày yêu cầu công nhân - nhân viên đến",
             "Expansion of Staffing": "Mở rộng biên chế",
             "Replacement": "Bổ sung thôi việc",
-            "Old empno": "MST",
+            "Old empno": "Mã số công nhân-nhân viên nghỉ việc",
             "Other reason": "Lý do khác",
             "Education Level": "Trình độ học vấn",
             "Work Experience": "Kinh nghiệm làm việc",
