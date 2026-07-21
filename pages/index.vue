@@ -2543,14 +2543,19 @@
             isInApprovalFlow() {
                 if (!this.dataFlow || !this.activeUser?.empno) return false;
                 
+                const checkEmp = (empnoStr) => {
+                    if (!empnoStr) return false;
+                    const e = empnoStr.toLowerCase();
+                    return (this.activeUser.empno && e === this.activeUser.empno.toLowerCase()) || 
+                           (this.activeUser.group_empno && e === this.activeUser.group_empno.toLowerCase());
+                };
+
                 return this.dataFlow.some(level => {
-                    const isManager = level.managers?.some(manager => 
-                    manager.empno === this.activeUser.empno
-                    );
+                    const isManager = level.managers?.some(manager => checkEmp(manager.empno));
                     if (isManager) return true;
                     return level.managers?.some(manager => 
                     manager.deputies?.some(deputy => 
-                    deputy.empno === this.activeUser.empno && deputy.status
+                    checkEmp(deputy.empno) && deputy.status
                     )
                     );
                 });
@@ -2677,6 +2682,7 @@
                     empno: this.activeUser.empno,
                     high_dept:this.activeUser.hight_dept,
                     role: this.activeUser.role,
+                    group_empno: this.activeUser.group_empno,
                 }
                 try {
                     this.loading = true;
@@ -3209,12 +3215,19 @@
                     const currentLevel = flowData.find(level => level.lvl_code === currentLevelCode);
                     if (!currentLevel?.managers) return false;
                     
+                    const checkEmp = (empnoStr) => {
+                        if (!empnoStr) return false;
+                        const e = empnoStr.toLowerCase();
+                        return (this.activeUser.empno && e === this.activeUser.empno.toLowerCase()) || 
+                               (this.activeUser.group_empno && e === this.activeUser.group_empno.toLowerCase());
+                    };
+                    
                     return currentLevel.managers.some(manager => {
-                        if (manager.empno === this.activeUser.empno) return true;
+                        if (checkEmp(manager.empno)) return true;
                         
                         if (manager.deputies && Array.isArray(manager.deputies)) {
                             return manager.deputies.some(deputy =>
-                            deputy.empno === this.activeUser.empno && deputy.status === true
+                            checkEmp(deputy.empno) && deputy.status === true
                             );
                         }
                         return false;
@@ -3256,11 +3269,18 @@
                     );
                     if (!targetLevel || !Array.isArray(targetLevel.managers)) return false;
                     
+                    const checkEmp = (empnoStr) => {
+                        if (!empnoStr) return false;
+                        const e = empnoStr.toLowerCase();
+                        return (this.activeUser.empno && e === this.activeUser.empno.toLowerCase()) || 
+                               (this.activeUser.group_empno && e === this.activeUser.group_empno.toLowerCase());
+                    };
+                    
                     return targetLevel.managers.some(manager => {
-                        if (manager.empno === this.activeUser.empno) return true;
+                        if (checkEmp(manager.empno)) return true;
                         if (Array.isArray(manager.deputies)) {
                             return manager.deputies.some(deputy => 
-                            deputy.empno === this.activeUser.empno && 
+                            checkEmp(deputy.empno) && 
                             deputy.status === true
                             );
                         }

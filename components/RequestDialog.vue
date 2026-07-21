@@ -4411,11 +4411,18 @@ v-model="viewOriginal"
                 const currentFlow = this.dataFlow[currentLevel];
                 if (!currentFlow?.managers) return false;
                 
+                const checkEmp = (empnoStr) => {
+                    if (!empnoStr) return false;
+                    const e = empnoStr.toLowerCase();
+                    return (this.activeUser.empno && e === this.activeUser.empno.toLowerCase()) || 
+                           (this.activeUser.group_empno && e === this.activeUser.group_empno.toLowerCase());
+                };
+                
                 return currentFlow.managers.some(manager => {
-                    if (manager.empno === this.activeUser.empno) return true;
+                    if (checkEmp(manager.empno)) return true;
                     
                     return manager.deputies?.some(deputy =>
-                    deputy.empno === this.activeUser.empno &&
+                    checkEmp(deputy.empno) &&
                     deputy.status === true
                     );
                 });
@@ -4727,6 +4734,7 @@ v-model="viewOriginal"
                     division: sessionUser.hight_dept,
                     location: sessionUser.location,
                     email: sessionUser.email,
+                    group_empno: sessionUser.group_empno,
                 };
                 
                 // === GỌI LẠI CÁC HÀNG CẢN EMPNO ===

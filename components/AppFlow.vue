@@ -220,7 +220,7 @@ export default {
         high_dept: this.customDivision,
       };
       await this.$axios
-        .post("/api/vg-mpr-temp/getDataFlowForItem", params)
+        .post("/api/vg-mpr/getDataFlowForItem", params)
         .then((res) => {
           this.appFlow = res.data.flow_data;
           this.$emit("sendAppFlow", this.appFlow);
@@ -238,7 +238,7 @@ export default {
         high_dept: custom_division,
       };
       await this.$axios
-        .post("/api/vg-mpr-temp/getDataFlowForItem", params)
+        .post("/api/vg-mpr/getDataFlowForItem", params)
         .then((res) => {
           this.appFlow = res.data.flow_data;
           this.$emit("sendAppFlow", this.appFlow);

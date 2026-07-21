@@ -122,6 +122,7 @@ class vgMprCtrl extends Controller
         $empno = $req->input("empno");
         $high_dept = $req->input("high_dept");
         $role = $req->input("role");
+        $group_empno = $req->input("group_empno");
 
         $dataMprQuery = Mpr::where("loc", $loc)->orderBy("id", "desc");
         $dataMpr = $dataMprQuery->get();
@@ -154,42 +155,33 @@ class vgMprCtrl extends Controller
                 true
             );
 
-            if ($empno && $flowData) {
-                $userAccessibleDepts = [];
-                $userDivisions = [];
-
+            // Hàm helper trích xuất dept/division mà một empno có quyền truy cập từ flowData
+            $extractAccessFromFlow = function ($flowData, $searchEmpno) {
+                $accessibleDepts = [];
+                $divisions = [];
                 foreach ($flowData as $level) {
                     if (!empty($level["managers"])) {
                         foreach ($level["managers"] as $manager) {
-                            if ($manager["empno"] === $empno) {
+                            if (strcasecmp($manager["empno"], $searchEmpno) === 0) {
                                 if (!empty($manager["dept_code"])) {
-                                    $userAccessibleDepts = array_merge(
-                                        $userAccessibleDepts,
-                                        $manager["dept_code"]
-                                    );
+                                    $accessibleDepts = array_merge($accessibleDepts, $manager["dept_code"]);
                                 }
                                 if (!empty($manager["division_code"])) {
-                                    $userDivisions[] =
-                                        $manager["division_code"];
+                                    $divisions[] = $manager["division_code"];
                                 }
                             }
-
                             if (!empty($manager["deputies"])) {
                                 foreach ($manager["deputies"] as $deputy) {
                                     if (
-                                        $deputy["empno"] === $empno &&
+                                        strcasecmp($deputy["empno"], $searchEmpno) === 0 &&
                                         !empty($deputy["status"]) &&
                                         $deputy["status"] === true
                                     ) {
                                         if (!empty($manager["dept_code"])) {
-                                            $userAccessibleDepts = array_merge(
-                                                $userAccessibleDepts,
-                                                $manager["dept_code"]
-                                            );
+                                            $accessibleDepts = array_merge($accessibleDepts, $manager["dept_code"]);
                                         }
                                         if (!empty($manager["division_code"])) {
-                                            $userDivisions[] =
-                                                $manager["division_code"];
+                                            $divisions[] = $manager["division_code"];
                                         }
                                     }
                                 }
@@ -197,13 +189,51 @@ class vgMprCtrl extends Controller
                         }
                     }
                 }
+                return [
+                    'depts'     => array_unique($accessibleDepts),
+                    'divisions' => array_unique($divisions),
+                ];
+            };
 
-                $userAccessibleDepts = array_unique($userAccessibleDepts);
-                $userDivisions = array_unique($userDivisions);
+            if ($empno && $flowData) {
+                // Thử tìm với empno trước
+                $access = $extractAccessFromFlow($flowData, $empno);
+                $userAccessibleDepts = $access['depts'];
+                $userDivisions       = $access['divisions'];
+
+                // Nếu không tìm thấy empno trong flow → fallback sang group_empno
+                $activeEmpno = $empno;
+                if (empty($userAccessibleDepts) && empty($userDivisions) && !empty($group_empno)) {
+                    \Log::info("getAllDataMpr: empno [{$empno}] không tìm thấy trong flow, fallback sang group_empno [{$group_empno}]");
+
+                    // Resolve lại flow với group_empno
+                    $groupParams = new Request([
+                        "empno"       => $group_empno,
+                        "app_code"    => "mpr",
+                        "location"    => "VG",
+                        "custom_data" => json_encode([
+                            "custom_dept"     => $dept,
+                            "custom_division" => $high_dept,
+                        ]),
+                    ]);
+                    $groupFlowResponse = $this->getDataFlowForItem($groupParams)->getData();
+                    $groupFlowData = json_decode(
+                        json_encode($groupFlowResponse->flow_data ?? []),
+                        true
+                    );
+
+                    if (!empty($groupFlowData)) {
+                        $flowData    = $groupFlowData;
+                        $activeEmpno = $group_empno;
+                        $access      = $extractAccessFromFlow($flowData, $group_empno);
+                        $userAccessibleDepts = $access['depts'];
+                        $userDivisions       = $access['divisions'];
+                    }
+                }
 
                 $dataMpr = $dataMpr
                     ->filter(function ($item) use (
-                        $empno,
+                        $activeEmpno,
                         $flowData,
                         $high_dept,
                         $dept,
@@ -242,30 +272,24 @@ class vgMprCtrl extends Controller
                         }
 
                         $statusToLevel = [
-                            "waiting_dept" => 0,
-                            "waiting_div" => 1,
+                            "waiting_dept"     => 0,
+                            "waiting_div"      => 1,
                             "waiting_hr_rec_sf" => 2,
-                            "waiting_hr" => 3,
-                            "waiting_ad" => 4,
-                            "waiting_gm" => 5,
+                            "waiting_hr"       => 3,
+                            "waiting_ad"       => 4,
+                            "waiting_gm"       => 5,
                         ];
 
                         foreach ($statusesToCheck as $status) {
                             if (isset($statusToLevel[$status])) {
                                 $currentLevel = $statusToLevel[$status];
-                                $currentFlow = $flowData[$currentLevel] ?? null;
+                                $currentFlow  = $flowData[$currentLevel] ?? null;
 
-                                if (
-                                    $currentFlow &&
-                                    !empty($currentFlow["managers"])
-                                ) {
-                                    foreach (
-                                        $currentFlow["managers"]
-                                        as $manager
-                                    ) {
+                                if ($currentFlow && !empty($currentFlow["managers"])) {
+                                    foreach ($currentFlow["managers"] as $manager) {
                                         if (
                                             $currentLevel >= 2 &&
-                                            $manager["empno"] === $empno
+                                            strcasecmp($manager["empno"], $activeEmpno) === 0
                                         ) {
                                             return true;
                                         }
@@ -273,30 +297,20 @@ class vgMprCtrl extends Controller
                                         // For lower levels, check department access
                                         if ($currentLevel < 2) {
                                             if (
-                                                $manager["empno"] === $empno &&
-                                                !empty($manager["dept_code"])
+                                                strcasecmp($manager["empno"], $activeEmpno) === 0 &&
+                                                !empty($manager["dept_code"]) &&
+                                                in_array($itemDept, $manager["dept_code"])
                                             ) {
-                                                if (
-                                                    in_array(
-                                                        $itemDept,
-                                                        $manager["dept_code"]
-                                                    )
-                                                ) {
-                                                    return true;
-                                                }
+                                                return true;
                                             }
                                         }
 
                                         // Check deputies
                                         if (!empty($manager["deputies"])) {
-                                            foreach (
-                                                $manager["deputies"]
-                                                as $deputy
-                                            ) {
+                                            foreach ($manager["deputies"] as $deputy) {
                                                 if (
                                                     $currentLevel >= 2 &&
-                                                    $deputy["empno"] ===
-                                                    $empno &&
+                                                    strcasecmp($deputy["empno"], $activeEmpno) === 0 &&
                                                     !empty($deputy["status"]) &&
                                                     $deputy["status"] === true
                                                 ) {
@@ -305,16 +319,11 @@ class vgMprCtrl extends Controller
 
                                                 if (
                                                     $currentLevel < 2 &&
-                                                    $deputy["empno"] ===
-                                                    $empno &&
+                                                    strcasecmp($deputy["empno"], $activeEmpno) === 0 &&
                                                     !empty($deputy["status"]) &&
-                                                    $deputy["status"] ===
-                                                    true &&
+                                                    $deputy["status"] === true &&
                                                     !empty($manager["dept_code"]) &&
-                                                    in_array(
-                                                        $itemDept,
-                                                        $manager["dept_code"]
-                                                    )
+                                                    in_array($itemDept, $manager["dept_code"])
                                                 ) {
                                                     return true;
                                                 }
@@ -935,304 +944,304 @@ class vgMprCtrl extends Controller
             );
         }
     }
+    private static function resolveNewFlow($empno, $location, $appCode, $customDept, $customDivision, $unit = null)
+    {
+        try {
+            $client = new \GuzzleHttp\Client([
+                'timeout' => 10.0,
+                'connect_timeout' => 5.0
+            ]);
+
+            $deptScopeCodes = [];
+            $divScopeCodes = [];
+
+            if (!empty($unit)) {
+                $deptScopeCodes = array_values(array_filter(array_map('trim', explode(',', $unit))));
+            } elseif (!empty($customDept)) {
+                if (strpos($customDept, ',') === false) {
+                    $deptScopeCodes = [trim($customDept)];
+                } else {
+                    $deptScopeCodes = array_values(array_filter(array_map('trim', explode(',', $customDept))));
+                }
+            }
+
+            foreach ($deptScopeCodes as $code) {
+                $divScopeCodes[] = $code;
+            }
+            $divScopeCodes = array_values(array_unique(array_filter($divScopeCodes)));
+
+            $payload = [
+                'empno' => $empno,
+                'location' => strtolower($location ?? 'vg'),
+                'app_code' => strtolower($appCode ?? 'mpr'),
+                'custom_dept' => $customDept,
+                'custom_division' => $customDivision,
+                'custom_depts' => [
+                    'custom_dept_manager' => $customDept
+                ],
+                'custom_divisions' => [
+                    'custom_division_manager' => $customDivision
+                ]
+            ];
+
+            if (!empty($deptScopeCodes)) {
+                $payload['filter_custom_scope_codes'] = [
+                    'custom_division_manager' => $divScopeCodes,
+                    'custom_dept_manager' => $deptScopeCodes
+                ];
+            }
+
+            // Log payload for troubleshooting
+            \Log::info("Calling resolve API with payload: " . json_encode($payload));
+
+            $response = $client->post('http://gmo021.cansportsvg.com:10003/api/ifm-tracking/resolve', [
+                'json' => $payload,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                ]
+            ]);
+
+            $body = json_decode($response->getBody()->getContents(), true);
+            $result = $body['result'] ?? $body;
+
+            if (!empty($deptScopeCodes)) {
+                $needFallback = false;
+                if (empty($result) || !isset($result['flow_data'])) {
+                    $needFallback = true;
+                } else {
+                    foreach ($result['flow_data'] as $flowStep) {
+                        $lvlCode = $flowStep['lvl_code'] ?? '';
+                        if (strpos($lvlCode, 'custom_') !== false) {
+                            // Check if managers list is empty
+                            if (empty($flowStep['managers'])) {
+                                $needFallback = true;
+                                break;
+                            }
+                            
+                            // Check if there are no active deputies in this step
+                            $hasActiveDeputy = false;
+                            foreach ($flowStep['managers'] as $manager) {
+                                if (!empty($manager['deputies'])) {
+                                    foreach ($manager['deputies'] as $deputy) {
+                                        $statusVal = $deputy['status'] ?? null;
+                                        if ($statusVal === true || $statusVal === 1 || $statusVal === '1' || $statusVal === 'true') {
+                                            $hasActiveDeputy = true;
+                                            break 2;
+                                        }
+                                    }
+                                }
+                            }
+                            if (!$hasActiveDeputy) {
+                                $needFallback = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if ($needFallback) {
+                    \Log::info("Fallback triggered: a custom manager level has empty managers or no active deputies with filter_custom_scope_codes. Retrying without filter_custom_scope_codes.");
+                    unset($payload['filter_custom_scope_codes']);
+                    $response = $client->post('http://gmo021.cansportsvg.com:10003/api/ifm-tracking/resolve', [
+                        'json' => $payload,
+                        'headers' => [
+                            'Content-Type' => 'application/json',
+                            'Accept' => 'application/json',
+                        ]
+                    ]);
+                    $body = json_decode($response->getBody()->getContents(), true);
+                    $result = $body['result'] ?? $body;
+                }
+            }
+
+            if (empty($result) || !isset($result['flow_data'])) {
+                \Log::error("Resolve API returned empty or invalid flow data: " . json_encode($body));
+                return null;
+            }
+            $body = $result;
+
+            // Map dept_names to dept_code and include active deputies in managers array
+            if (is_array($body['flow_data'])) {
+                foreach ($body['flow_data'] as &$flowStep) {
+                    if (isset($flowStep['managers']) && is_array($flowStep['managers'])) {
+                        $newManagers = [];
+                        foreach ($flowStep['managers'] as &$manager) {
+                            if (isset($manager['dept_names']) && !isset($manager['dept_code'])) {
+                                $manager['dept_code'] = $manager['dept_names'];
+                            }
+                            $newManagers[] = $manager;
+
+                            // If there are active deputies, append them as managers
+                            if (isset($manager['deputies']) && is_array($manager['deputies'])) {
+                                foreach ($manager['deputies'] as $deputy) {
+                                    $statusVal = $deputy['status'] ?? null;
+                                    if ($statusVal === true || $statusVal === 1 || $statusVal === '1' || $statusVal === 'true') {
+                                        $newManagers[] = [
+                                            'empno' => $deputy['empno'],
+                                            'name' => $deputy['name'],
+                                            'full_name' => $deputy['full_name'] ?? $deputy['name'],
+                                            'email' => $deputy['email'] ?? '',
+                                            'dept_code' => $manager['dept_code'] ?? [],
+                                            'division_code' => $manager['division_code'] ?? '',
+                                            'levels' => $manager['levels'] ?? [],
+                                            'deputies' => [], // Deputies do not have deputies
+                                            'status' => 1,
+                                            'is_deputy' => true
+                                        ];
+                                    }
+                                }
+                            }
+                        }
+                        $flowStep['managers'] = $newManagers;
+                    }
+                }
+            }
+
+            return $body;
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            $resp = $e->getResponse();
+            $errorBody = $resp ? $resp->getBody()->getContents() : '';
+            \Log::error("Guzzle RequestException: " . $e->getMessage() . " | Body: " . $errorBody);
+            throw new \Exception("Resolve API HTTP error: " . $e->getMessage() . " (Body: " . $errorBody . ")");
+        } catch (\Exception $e) {
+            \Log::error("General Exception in resolveNewFlow: " . $e->getMessage());
+            throw $e;
+        }
+    }
     public function getDataFlowForItem(Request $req)
     {
-        $params = new Request([
-            "empno" => $req->empno,
-            "app_code" => "mpr",
-            "location" => "vg",
-            "custom_data" => json_encode([
-                "custom_dept" => $req->dept,
-                "custom_division" => $req->high_dept,
-            ]),
-        ]);
-        // dd($params);
-        $vfaController = new vfaCtrl();
+
+        // VFA
+        // $params = new Request([
+        //     "empno" => $req->empno,
+        //     "app_code" => "mpr",
+        //     "location" => "vg",
+        //     "custom_data" => json_encode([
+        //         "custom_dept" => $req->dept,
+        //         "custom_division" => $req->high_dept,
+        //     ]),
+        // ]);
+        // $vfaController = new vfaCtrl();
+        // try {
+        //     $flowResponse = $vfaController->getFlowUpdated($params);
+        //     if (!$flowResponse) {
+        //         return response()->json(
+        //             ["error" => "No data received from vfaController"],
+        //             500
+        //         );
+        //     }
+        //     return response()->json($flowResponse);
+        // } catch (\Exception $e) {
+        //     return response()->json(["error" => $e->getMessage()], 500);
+        // }
+        // IFM
+
+
         try {
-            $flowResponse = $vfaController->getFlowUpdated($params);
+            $empno = $req->empno;
+            $appCode = $req->app_code ?? "mpr";
+            $location = $req->location ?? "vg";
+            
+            // Try all possible department/division field name variants
+            $customDept = $req->dept ?? $req->dept_sumt ?? $req->custom_dept;
+            $customDivision = $req->high_dept ?? $req->custom_division ?? $req->division;
+
+            if (empty($customDept) || empty($customDivision)) {
+                if ($req->has('custom_data')) {
+                    $customData = json_decode($req->custom_data, true);
+                    if (is_array($customData)) {
+                        $customDept = $customDept ?: ($customData['custom_dept'] ?? $customData['dept'] ?? $customData['dept_sumt'] ?? null);
+                        $customDivision = $customDivision ?: ($customData['custom_division'] ?? $customData['high_dept'] ?? $customData['division'] ?? null);
+                    }
+                }
+            }
+          
+            $unit = $req->unit ?? null;
+            if (empty($unit) && $req->has('id')) {
+                $mpr = Mpr::find($req->id);
+                if ($mpr) {
+                    $submitter = json_decode($mpr->submitter, true);
+                    $unit = $submitter['unit'] ?? null;
+                }
+            }
+
+            $flowResponse = self::resolveNewFlow($empno, $location, $appCode, $customDept, $customDivision, $unit);
             if (!$flowResponse) {
                 return response()->json(
-                    ["error" => "No data received from vfaController"],
+                    ["error" => "No data received from resolve API"],
                     500
                 );
             }
-            // dd($flowResponse);
             return response()->json($flowResponse);
         } catch (\Exception $e) {
-            return response()->json(["error" => $e->getMessage()], 500);
+            return response()->json([
+                "error" => $e->getMessage(),
+                "inputs" => [
+                    "empno" => $req->empno ?? null,
+                    "location" => $req->location ?? null,
+                    "custom_dept" => $customDept ?? null,
+                    "custom_division" => $customDivision ?? null
+                ]
+            ], 500);
+        }
+
+    }
+    public function getBatchDataFlow(Request $req)
+    {
+        try {
+            $requests = $req->input('requests', []);
+            $results = [];
+            $uniqueRequests = [];
+
+            foreach ($requests as $itemReq) {
+                $empno = $itemReq['empno'] ?? null;
+                $appCode = $itemReq['app_code'] ?? "mpr";
+                $location = $itemReq['location'] ?? "vg";
+                $unit = $itemReq['unit'] ?? null;
+                
+                $customDept = $itemReq['dept'] ?? $itemReq['dept_sumt'] ?? $itemReq['custom_dept'] ?? null;
+                $customDivision = $itemReq['high_dept'] ?? $itemReq['custom_division'] ?? $itemReq['division'] ?? null;
+
+                $cacheKey = "{$empno}_{$customDept}_{$customDivision}_{$unit}";
+                
+                if (!isset($uniqueRequests[$cacheKey])) {
+                    $uniqueRequests[$cacheKey] = [
+                        'empno' => $empno,
+                        'location' => $location,
+                        'app_code' => $appCode,
+                        'custom_dept' => $customDept,
+                        'custom_division' => $customDivision,
+                        'unit' => $unit
+                    ];
+                }
+            }
+
+            foreach ($uniqueRequests as $cacheKey => $r) {
+                try {
+                    $flowResponse = self::resolveNewFlow($r['empno'], $r['location'], $r['app_code'], $r['custom_dept'], $r['custom_division'], $r['unit']);
+                    $results[$cacheKey] = $flowResponse['flow_data'] ?? null;
+                } catch (\Exception $e) {
+                    \Log::error("Error resolving flow for {$cacheKey}: " . $e->getMessage());
+                    $results[$cacheKey] = null;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'results' => $results
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                "success" => false,
+                "error" => $e->getMessage()
+            ], 500);
         }
     }
     //
     public function acceptRequest(Request $req)
     {
-        // try {
-        //     $validator = Validator::make($req->all(), [
-        //         "user_empno" => "required|string",
-        //         "dataReq" => "required",
-        //     ]);
-
-        //     if ($validator->fails()) {
-        //         return response()->json(
-        //             ["success" => false, "errors" => $validator->errors()],
-        //             400
-        //         );
-        //     }
-
-        //     $dataReq = $req["dataReq"];
-        //     $dataFlow = $dataReq["dataFlow"];
-        //     $status = $dataReq["status"];
-        //     $approval = json_decode($dataReq["approval"], true);
-        //     $id = $dataReq["id"];
-        //     $user_empno = $req->user_empno;
-
-        //     $mpr = Mpr::find($id);
-        //     if (!$mpr) {
-        //         throw new \Exception("MPR record not found");
-        //     }
-
-        //     // --- XÁC ĐỊNH LOẠI YÊU CẦU ---
-
-        //     // 1. Kiểm tra End Year Request (có status_endyear đang chạy)
-        //     $isEndYearRequest =
-        //         !empty($mpr->status_endyear) &&
-        //         $mpr->status_endyear !== "completed" &&
-        //         $mpr->status_endyear !== "declined";
-
-        //     // 2. Kiểm tra Amendment (nếu không phải End Year)
-        //     $isAmendmentRequest =
-        //         !empty($dataReq["status_amendent"]) && !$isEndYearRequest;
-        //     $amendmentStatus = $dataReq["status_amendent"] ?? null;
-
-        //     // Cập nhật thông tin bổ sung
-        //     if (isset($dataReq["approval_record"])) {
-        //         $approvalRecord = json_decode(
-        //             $dataReq["approval_record"],
-        //             true
-        //         );
-        //         if (!is_array($approvalRecord) || !isset($approvalRecord[0])) {
-        //             $approvalRecord = [$approvalRecord];
-        //         }
-        //         $mpr->approval_record = json_encode($approvalRecord);
-        //         $mpr->save();
-        //     }
-
-        //     if (
-        //         ($status === "waiting_hr" || $status === "waiting_hr_rec_sf") &&
-        //         isset($dataReq["sub_pos"])
-        //     ) {
-        //         $mpr->sub_pos = $dataReq["sub_pos"];
-        //         $mpr->save();
-        //     }
-
-        //     // --- CẤU HÌNH LUỒNG DUYỆT (FLOW) ---
-
-        //     if ($isEndYearRequest) {
-        //         // Flow End Year: Dept -> Div -> Completed (2 cấp)
-        //         $statusFlow = [
-        //             "waiting_dept" => ["next" => "waiting_div", "level" => 1],
-        //             "waiting_div" => ["next" => "completed", "level" => 2],
-        //         ];
-        //         $currentStatus = $mpr->status_endyear;
-        //     } elseif ($isAmendmentRequest) {
-        //         $statusFlow = [
-        //             "waiting_dept" => ["next" => "waiting_div", "level" => 1],
-        //             "waiting_div" => [
-        //                 "next" => "waiting_hr_rec_sf",
-        //                 "level" => 2,
-        //             ],
-        //             "waiting_hr_rec_sf" => [
-        //                 "next" => "waiting_hr",
-        //                 "level" => 3,
-        //             ],
-        //             "waiting_hr" => ["next" => "completed", "level" => 4],
-        //         ];
-        //         $currentStatus = $amendmentStatus;
-        //     } else {
-        //         $statusFlow = [
-        //             "waiting_dept" => ["next" => "waiting_div", "level" => 1],
-        //             "waiting_div" => [
-        //                 "next" => "waiting_hr_rec_sf",
-        //                 "level" => 2,
-        //             ],
-        //             "waiting_hr_rec_sf" => [
-        //                 "next" => "waiting_hr",
-        //                 "level" => 3,
-        //             ],
-        //             "waiting_hr" => ["next" => "waiting_ad", "level" => 4],
-        //             "waiting_ad" => ["next" => "waiting_gm", "level" => 5],
-        //             "waiting_gm" => ["next" => "completed", "level" => 6],
-        //         ];
-        //         if ($mpr->supp_type == 1) {
-        //             $statusFlow = [
-        //                 "waiting_dept" => [
-        //                     "next" => "waiting_div",
-        //                     "level" => 1,
-        //                 ],
-        //                 "waiting_div" => [
-        //                     "next" => "waiting_hr_rec_sf",
-        //                     "level" => 2,
-        //                 ],
-        //                 "waiting_hr_rec_sf" => [
-        //                     "next" => "waiting_hr",
-        //                     "level" => 3,
-        //                 ],
-        //                 "waiting_hr" => ["next" => "completed", "level" => 4],
-        //             ];
-        //         }
-        //         $currentStatus = $status;
-        //     }
-
-        //     // --- CẬP NHẬT TRẠNG THÁI NGƯỜI DUYỆT HIỆN TẠI ---
-        //     if (!isset($statusFlow[$currentStatus])) {
-        //         return response()->json(
-        //             ["success" => false, "message" => "Invalid status"],
-        //             400
-        //         );
-        //     }
-
-        //     $currentLevelIndex = $statusFlow[$currentStatus]["level"] - 1;
-        //     if (isset($approval[$currentLevelIndex])) {
-        //         $approval[$currentLevelIndex]["status"] = "approved";
-        //         $approval[$currentLevelIndex]["processed_at"] = now()->toDateTimeString();
-
-        //         if (!empty($dataFlow[$currentLevelIndex]["managers"])) {
-        //             $currentApprover = $this->findApprover(
-        //                 $dataFlow[$currentLevelIndex]["managers"],
-        //                 $user_empno
-        //             );
-        //             if ($currentApprover) {
-        //                 $approval[$currentLevelIndex]["approver"] = $currentApprover;
-        //             }
-        //         }
-        //     }
-
-        //     $nextStatus = $statusFlow[$currentStatus]["next"];
-
-        //     // Reset trạng thái level tiếp theo (nếu chưa hoàn thành)
-        //     if ($nextStatus !== "completed") {
-        //         $nextLevelIndex = $statusFlow[$currentStatus]["level"];
-        //         if (isset($approval[$nextLevelIndex])) {
-        //             $approval[$nextLevelIndex]["status"] = "waiting";
-        //         }
-        //     }
-
-        //     // --- LƯU TRẠNG THÁI MỚI ---
-        //     if ($isEndYearRequest) {
-        //         $mpr->status_endyear = $nextStatus;
-        //     } elseif ($isAmendmentRequest) {
-        //         $mpr->status_amendent = $nextStatus;
-        //     } else {
-        //         $mpr->status = $nextStatus;
-        //     }
-
-        //     $mpr->approval = json_encode($approval);
-        //     $mpr->save();
-
-        //     // --- XỬ LÝ KHI HOÀN THÀNH (COMPLETED) ---
-        //     if ($nextStatus === "completed") {
-        //         // Lấy giá trị activeRct an toàn
-        //         $activeRctVal = $mpr->activeRct;
-        //         $activeRctInt = is_numeric($activeRctVal)
-        //             ? intval($activeRctVal)
-        //             : null;
-
-        //         // TRƯỜNG HỢP 1: Nhân đôi đơn nếu Tiếp tục tuyển dụng (activeRct == 1)
-        //         if ($activeRctInt === 1) {
-        //             $newMpr = $this->duplicateForNewYear($mpr);
-        //             if ($newMpr) {
-        //                 try {
-        //                     \Log::info("New Year Cloned MPR created", [
-        //                         "original" => $mpr->req_id,
-        //                         "new" => $newMpr->req_id,
-        //                     ]);
-        //                     try {
-        //                         $this->migrateCompletedMprToDemandSingle(
-        //                             $newMpr
-        //                         );
-        //                     } catch (\Exception $e) {
-        //                         \Log::error(
-        //                             "Error migrating duplicated MPR to Demand: " .
-        //                                 $e->getMessage()
-        //                         );
-        //                     }
-        //                     // --- BỔ SUNG: CẬP NHẬT ĐƠN CŨ VỀ 0 ĐỂ ĐÓNG ---
-        //                     $denyTempData = [
-        //                         "fullfilldate" => now()->format("Y-m-d"),
-        //                         "fulfilled" => "yes",
-        //                         "recruited" => intval($mpr->recruited ?? 0),
-        //                         "stocknumber" => 0, // Đưa tồn về 0
-        //                         "reason" =>
-        //                         "Closed - Transferred to New Year Request: " .
-        //                             $newMpr->req_id,
-        //                     ];
-
-        //                     $mpr->deny_temp = json_encode($denyTempData);
-        //                     $mpr->stocknumber = 0; // Quan trọng: Set stock về 0
-        //                     $mpr->fulfilled = "yes";
-        //                     $mpr->fullfilldate = now()->format("Y-m-d");
-        //                     $mpr->save();
-        //                     // ---------------------------------------------
-        //                 } catch (\Exception $e) {
-        //                     \Log::error(
-        //                         "Error cloning MPR: " . $e->getMessage()
-        //                     );
-        //                 }
-        //             }
-        //         }
-
-        //         // TRƯỜNG HỢP 2: Đóng đơn nếu Hủy tuyển dụng (activeRct == 0) - KHẮC PHỤC LỖI KHÔNG LƯU DENY_TEMP
-        //         elseif (isset($activeRctInt) && $activeRctInt === 0) {
-        //             $denyTempData = [
-        //                 "fullfilldate" => now()->format("Y-m-d"),
-        //                 "fulfilled" => "yes",
-        //                 "recruited" => intval($mpr->recruited ?? 0),
-        //                 "stocknumber" => 0, // Đưa tồn về 0
-        //                 "reason" => "Cancelled by End Year Decision",
-        //             ];
-
-        //             $mpr->deny_temp = json_encode($denyTempData);
-        //             $mpr->stocknumber = 0;
-        //             $mpr->fulfilled = "yes";
-        //             $mpr->fullfilldate = now()->format("Y-m-d");
-        //             $mpr->save();
-        //         }
-
-        //         try {
-        //             $this->migrateCompletedMprToDemandSingle($mpr);
-        //         } catch (\Exception $e) {
-        //         }
-        //     }
-
-        //     // Gửi email
-        //     $this->sendAcceptEmailNotification(
-        //         $mpr,
-        //         $nextStatus,
-        //         $dataFlow,
-        //         $statusFlow,
-        //         $currentStatus,
-        //         $isAmendmentRequest
-        //     );
-
-        //     return response()->json([
-        //         "success" => true,
-        //         "message" => "Request accepted successfully",
-        //         "data" => [
-        //             "id" => $id,
-        //             "status" => $mpr->status,
-        //             "status_amendent" => $mpr->status_amendent,
-        //             "status_endyear" => $mpr->status_endyear,
-        //             "approval" => $approval,
-        //         ],
-        //     ]);
-        // } catch (\Exception $e) {
-        //     return response()->json(
-        //         [
-        //             "success" => false,
-        //             "message" => "Error accepting request: " . $e->getMessage(),
-        //         ],
-        //         500
-        //     );
-        // }
+        
          try {
         $validator = Validator::make($req->all(), [
             "user_empno" => "required|string",
@@ -1258,20 +1267,14 @@ class vgMprCtrl extends Controller
             throw new \Exception("MPR record not found");
         }
 
-        // --- XÁC ĐỊNH LOẠI YÊU CẦU ---
-
-        // 1. Kiểm tra End Year Request (có status_endyear đang chạy)
         $isEndYearRequest =
             !empty($mpr->status_endyear) &&
             $mpr->status_endyear !== "completed" &&
             $mpr->status_endyear !== "declined";
 
-        // 2. Kiểm tra Amendment (nếu không phải End Year)
-        // FIX: Fallback to database if status_amendent not in request
         $isAmendmentRequest =
             !empty($dataReq["status_amendent"]) && !$isEndYearRequest;
         
-        // Nếu request không có status_amendent nhưng database có, coi đó là amendment
         if (!$isAmendmentRequest && !empty($mpr->status_amendent) && 
             $mpr->status_amendent !== "completed" && 
             $mpr->status_amendent !== "declined") {
@@ -2713,6 +2716,287 @@ class vgMprCtrl extends Controller
         }
     }
 
+    public static function getFilteredRequestsIfm($userData, $includeDeputy = true)
+    {
+        try {
+            $validStatuses = [
+                "waiting_dept",
+                "waiting_div",
+                "waiting_hr_rec_sf",
+                "waiting_hr",
+                "waiting_ad",
+                "waiting_gm",
+            ];
+
+            // Get requests with valid statuses
+            $requests = Mpr::whereIn("status", $validStatuses)
+                ->orWhereIn("status_amendent", $validStatuses)
+                ->orderBy("id", "desc")
+                ->get();
+
+            if ($requests->isEmpty()) {
+                return [
+                    "success" => true,
+                    "message" => "No pending requests found",
+                    "data" => collect([]),
+                ];
+            }
+
+            // Map status levels
+            $statusLevels = [
+                "waiting_dept" => 0,
+                "waiting_div" => 1,
+                "waiting_hr_rec_sf" => 2,
+                "waiting_hr" => 3,
+                "waiting_ad" => 4,
+                "waiting_gm" => 5,
+            ];
+
+            // 2. Gom các flowKeys duy nhất để tối ưu số lần gọi API
+            $flowKeys = [];
+            foreach ($requests as $item) {
+                $submitter = json_decode($item->submitter, true);
+                if (empty($submitter)) {
+                    continue;
+                }
+                $empno = $submitter['empno'] ?? null;
+                if (empty($empno)) {
+                    continue;
+                }
+                $customDept = $submitter['dept'] ?? null;
+                $customDivision = $submitter['high_dept'] ?? null;
+                $unit = $submitter['unit'] ?? null;
+                $loc = strtolower($userData['location'] ?? $userData->location ?? 'vg');
+
+                $cacheKey = "{$empno}_{$customDept}_{$customDivision}_{$unit}_{$loc}";
+                if (!isset($flowKeys[$cacheKey])) {
+                    $flowKeys[$cacheKey] = [
+                        'empno' => $empno,
+                        'location' => $loc,
+                        'dept' => $customDept,
+                        'high_dept' => $customDivision,
+                        'unit' => $unit
+                    ];
+                }
+            }
+
+            // 3. Gọi resolveNewFlow song song để lấy dữ liệu luồng phê duyệt
+            $promises = [];
+            $client = new \GuzzleHttp\Client(['timeout' => 10]);
+            foreach ($flowKeys as $cacheKey => $r) {
+                $divScopeCodes = [];
+                $deptScopeCodes = [];
+                if (!empty($r['unit'])) {
+                    $deptScopeCodes = array_values(array_filter(array_map('trim', explode(',', $r['unit']))));
+                } elseif (!empty($r['dept'])) {
+                    if (strpos($r['dept'], ',') === false) {
+                        $deptScopeCodes = [trim($r['dept'])];
+                    } else {
+                        $deptScopeCodes = array_values(array_filter(array_map('trim', explode(',', $r['dept']))));
+                    }
+                }
+
+                foreach ($deptScopeCodes as $code) {
+                    $divScopeCodes[] = $code;
+                }
+                $divScopeCodes = array_values(array_unique(array_filter($divScopeCodes)));
+
+                $payload = [
+                    'empno' => $r['empno'],
+                    'location' => strtolower($r['location'] ?? 'vg'),
+                    'app_code' => 'mpr',
+                    'custom_dept' => $r['dept'],
+                    'custom_division' => $r['high_dept'],
+                    'custom_depts' => [
+                        'custom_dept_manager' => $r['dept']
+                    ],
+                    'custom_divisions' => [
+                        'custom_division_manager' => $r['high_dept']
+                    ]
+                ];
+                if (!empty($deptScopeCodes)) {
+                    $payload['filter_custom_scope_codes'] = [
+                        'custom_division_manager' => $divScopeCodes,
+                        'custom_dept_manager' => $deptScopeCodes
+                    ];
+                }
+
+                $promises[$cacheKey] = $client->createRequest('POST', 'http://gmo021.cansportsvg.com:10003/api/ifm-tracking/resolve', [
+                    'json' => $payload,
+                    'headers' => [
+                        'Accept' => 'application/json',
+                        'Content-Type' => 'application/json'
+                    ]
+                ]);
+            }
+
+            $results = \GuzzleHttp\Pool::batch($client, $promises);
+
+            $allFlowData = [];
+            foreach ($promises as $cacheKey => $request) {
+                $resObj = $results->getResult($request);
+                if ($resObj && !($resObj instanceof \Exception)) {
+                    try {
+                        $resp = $resObj;
+                        $body = json_decode($resp->getBody()->getContents(), true);
+                        $flow = data_get($body, 'result.flow_data') ?? data_get($body, 'flow_data');
+                        $allFlowData[$cacheKey] = is_array($flow) ? $flow : [];
+                    } catch (\Throwable $e) {
+                        $allFlowData[$cacheKey] = [];
+                    }
+                } else {
+                    $allFlowData[$cacheKey] = [];
+                }
+            }
+// Gán dữ liệu flowData vào mỗi request
+            foreach ($requests as $item) {
+                $submitter = json_decode($item->submitter, true);
+                if ($submitter) {
+                    $empno = $submitter['empno'] ?? null;
+                    $customDept = $submitter['dept'] ?? null;
+                    $customDivision = $submitter['high_dept'] ?? null;
+                    $unit = $submitter['unit'] ?? null;
+                    $loc = strtolower($userData['location'] ?? $userData->location ?? 'vg');
+                    $cacheKey = "{$empno}_{$customDept}_{$customDivision}_{$unit}_{$loc}";
+                    $item->flowData = $allFlowData[$cacheKey] ?? [];
+                } else {
+                    $item->flowData = [];
+                }
+            }
+
+            // Map reason_exp với SubPos data
+            $requests = $requests->map(function ($request) {
+                if ($request->reason_exp) {
+                    $subPosData = RecReason::find($request->reason_exp);
+                    if ($subPosData) {
+                        try {
+                            $subName = json_decode($subPosData->name, true);
+                            if (json_last_error() === JSON_ERROR_NONE) {
+                                $request->reason_exp = $subName;
+                            } else {
+                                $request->reason_exp = $subPosData->name;
+                            }
+                        } catch (\Exception $e) {
+                            Log::error("Error mapping reason_exp: " . $e->getMessage());
+                            $request->reason_exp = $subPosData->name;
+                        }
+                    }
+                }
+                return $request;
+            });
+
+            // 4. Lọc các yêu cầu thực sự thuộc quyền duyệt của user hiện tại
+            $userEmpno = $userData['empno'] ?? $userData->empno ?? null;
+            $userGroupEmpno = $userData['group_empno'] ?? $userData->group_empno ?? null;
+            $userSynoUsername = $userData['syno_username'] ?? $userData->syno_username ?? null;
+            
+            $userIdentifiers = [];
+            if ($userEmpno) $userIdentifiers[] = strtolower($userEmpno);
+            if ($userGroupEmpno) $userIdentifiers[] = strtolower($userGroupEmpno);
+            if ($userSynoUsername) $userIdentifiers[] = strtolower($userSynoUsername);
+            $userIdentifiers = array_unique($userIdentifiers);
+
+            $filteredRequests = $requests->filter(function ($request) use (
+                $userData,
+                $statusLevels,
+                $validStatuses,
+                $includeDeputy,
+                $allFlowData,
+                $userIdentifiers
+            ) {
+                $submitter = json_decode($request->submitter, true);
+                if (empty($submitter)) {
+                    return false;
+                }
+                $empno = $submitter['empno'] ?? null;
+                if (empty($empno)) {
+                    return false;
+                }
+                $customDept = $submitter['dept'] ?? null;
+                $customDivision = $submitter['high_dept'] ?? null;
+                $unit = $submitter['unit'] ?? null;
+                $loc = strtolower($userData['location'] ?? $userData->location ?? 'vg');
+
+                $cacheKey = "{$empno}_{$customDept}_{$customDivision}_{$unit}_{$loc}";
+                $flowData = $allFlowData[$cacheKey] ?? [];
+
+                if (empty($flowData)) {
+                    return false;
+                }
+
+                // Check current status
+                $statusesToCheck = [];
+                if (
+                    !empty($request->status_amendent) &&
+                    in_array($request->status_amendent, $validStatuses)
+                ) {
+                    $statusesToCheck[] = $request->status_amendent;
+                }
+                if (
+                    !empty($request->status) &&
+                    in_array($request->status, $validStatuses)
+                ) {
+                    $statusesToCheck[] = $request->status;
+                }
+
+                if (empty($statusesToCheck)) {
+                    return false;
+                }
+
+                foreach ($statusesToCheck as $status) {
+                    if (!isset($statusLevels[$status])) {
+                        continue;
+                    }
+
+                    $currentLevel = $statusLevels[$status];
+                    if (
+                        !isset($flowData[$currentLevel]) ||
+                        empty($flowData[$currentLevel]["managers"])
+                    ) {
+                        continue;
+                    }
+                    $currentFlow = $flowData[$currentLevel];
+
+                    foreach ($currentFlow["managers"] as $manager) {
+                        // Direct manager check
+                        if (isset($manager["empno"]) && in_array(strtolower($manager["empno"]), $userIdentifiers)) {
+                            return true;
+                        }
+
+                        // Deputy check if enabled
+                        if ($includeDeputy && !empty($manager["deputies"])) {
+                            foreach ($manager["deputies"] as $deputy) {
+                                if (
+                                    isset($deputy["empno"]) && 
+                                    in_array(strtolower($deputy["empno"]), $userIdentifiers) &&
+                                    !empty($deputy["status"]) &&
+                                    ($deputy["status"] === true || $deputy["status"] === 1 || $deputy["status"] === 'true')
+                                ) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return false;
+            })->values();
+
+            return [
+                "success" => true,
+                "message" => "Requests filtered successfully",
+                "data" => $filteredRequests,
+            ];
+        } catch (\Exception $e) {
+
+            return [
+                "success" => false,
+                "message" => "Error filtering requests: " . $e->getMessage(),
+                "data" => collect([]),
+            ];
+        }
+    }
+
     public function getProcessedRequestsByEmpno(Request $req)
     {
         try {
@@ -3340,88 +3624,23 @@ class vgMprCtrl extends Controller
             );
         }
     }
-    public function updateMprCandidates_ori()
-    {
-        try {
-            // Get all registered candidates
-            $candidates = EmpnoInfo::where("reg", "yes")
-                ->whereNotNull("emp_demandid")
-                ->get();
-
-            // Group candidates by emp_demandid
-            $groupedCandidates = $candidates->groupBy("emp_demandid");
-
-            foreach ($groupedCandidates as $demandId => $candidateGroup) {
-                $mpr = Mpr::find($demandId);
-                if (!$mpr) {
-                    continue;
-                }
-
-                $formattedCandidates = $candidateGroup
-                    ->map(function ($candidate) use ($mpr) {
-                        return [
-                            "empno" => $candidate->newEmpno,
-                            "date" => $candidate->act_en_date,
-                            "name" => $candidate->candidate_name,
-                            "key_in" => $candidate->key_in_date,
-                            "position" => $mpr->pos,
-                        ];
-                    })
-                    ->values()
-                    ->toArray();
-
-                $mpr->candidates = json_encode($formattedCandidates);
-                $mpr->recruited = count($formattedCandidates);
-
-                $qtyReq = json_decode($mpr->qty_req, true);
-                $totalQty = array_sum(
-                    array_filter(array_diff_key($qtyReq, ["level" => 0]))
-                );
-                $mpr->stocknumber = $totalQty - $mpr->recruited;
-                $mpr->fulfilled = $mpr->stocknumber <= 0 ? "yes" : "no";
-                // if ($mpr->stocknumber <= 0 && empty($mpr->fullfilldate)) {
-                //     $mpr->fullfilldate = date('Y-m-d');
-                // }
-
-                $mpr->save();
-            }
-
-            return response()->json([
-                "success" => true,
-                "message" => "MPR candidates updated successfully",
-                "updated_count" => $groupedCandidates->count(),
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(
-                [
-                    "success" => false,
-                    "message" =>
-                    "Error updating MPR candidates: " . $e->getMessage(),
-                ],
-                500
-            );
-        }
-    }
+    
     public function updateMprCandidates()
     {
         try {
-            // Get all registered candidates with an emp_demandid
             $candidates = EmpnoInfo::where("reg", "yes")
                 ->whereNotNull("emp_demandid")
                 ->get();
 
-            // Group candidates by emp_demandid
             $groupedCandidates = $candidates->groupBy("emp_demandid");
             $updatedCount = 0;
 
             foreach ($groupedCandidates as $demandId => $candidateGroup) {
-                // Find the Demand by its id (emp_demandid)
-                $demand = Demand::find($demandId);
+                   $demand = Demand::where("id_code", $demandId)->first();
                 if (!$demand || empty($demand->id_code)) {
                     continue;
                 }
 
-                // Find MPR by matching req_id with Demand.id_code
                 $mpr = Mpr::where("req_id", $demand->id_code)->first();
                 if (!$mpr) {
                     continue;
@@ -3459,6 +3678,7 @@ class vgMprCtrl extends Controller
                         ])
                     );
                 }
+
                 if (
                     !empty($mpr->status_amendent) &&
                     $mpr->status_amendent === "completed" &&
@@ -3482,11 +3702,10 @@ class vgMprCtrl extends Controller
                         );
                     }
                 }
+
                 $mpr->stocknumber = $totalQty - $mpr->recruited;
                 $mpr->fulfilled = $mpr->stocknumber <= 0 ? "yes" : "no";
                 $mpr->fullfilldate = $demand->dem_fullfilldate;
-
-
                 $mpr->save();
                 $updatedCount++;
             }
@@ -3501,7 +3720,7 @@ class vgMprCtrl extends Controller
                 [
                     "success" => false,
                     "message" =>
-                    "Error updating MPR candidates: " . $e->getMessage(),
+                        "Error updating MPR candidates: " . $e->getMessage(),
                 ],
                 500
             );
@@ -3705,52 +3924,6 @@ class vgMprCtrl extends Controller
             );
         }
     }
-
-    public function manualMigrateToDemand(Request $request)
-    {
-        try {
-            // Tự động lấy các MPR đã hoàn thành và có req_id từ 18 ký tự trở lên
-            $mprs = Mpr::where('status', 'completed')
-                ->whereNotNull('req_id')
-                ->whereRaw('LENGTH(req_id) >= 18')
-                ->get();
-
-            $results = [];
-            $errors = [];
-
-            foreach ($mprs as $mpr) {
-                try {
-                    $demand = Demand::where('id_code', $mpr->req_id)->first();
-                    if ($demand) {
-                        $demand->key_in = $mpr->key_in_date;
-                        $demand->save();
-                        
-                        $results[] = [
-                            'mpr_id' => $mpr->id,
-                            'req_id' => $mpr->req_id,
-                            'status' => 'updated'
-                        ];
-                    }
-                } catch (\Exception $e) {
-                    $errors[] = "Error updating MPR ID {$mpr->id} (req_id: {$mpr->req_id}): " . $e->getMessage();
-                }
-            }
-
-            return response()->json([
-                'success' => empty($errors),
-                'migrated_count' => count($results),
-                'results' => $results,
-                'errors' => $errors
-            ]);
-        } catch (\Exception $e) {
-            \Log::error("Error in manualMigrateToDemand: " . $e->getMessage(), ["trace" => $e->getTraceAsString()]);
-            return response()->json([
-                'success' => false,
-                'message' => "Error migrating MPR to Demand: " . $e->getMessage()
-            ], 500);
-        }
-    }
-
     private function migrateCompletedMprToDemandSingle($mpr)
     {
         try {
@@ -4791,5 +4964,49 @@ class vgMprCtrl extends Controller
                 "email_failed" => $emailFailedCount,
             ],
         ]);
+    }
+    public function manualMigrateToDemand(Request $request)
+    {
+        try {
+            // Tự động lấy các MPR đã hoàn thành và có req_id từ 18 ký tự trở lên
+            $mprs = Mpr::where('status', 'completed')
+                ->whereNotNull('req_id')
+                ->whereRaw('LENGTH(req_id) >= 18')
+                ->get();
+
+            $results = [];
+            $errors = [];
+
+            foreach ($mprs as $mpr) {
+                try {
+                    $demand = Demand::where('id_code', $mpr->req_id)->first();
+                    if ($demand) {
+                        $demand->key_in = $mpr->key_in_date;
+                        $demand->save();
+                        
+                        $results[] = [
+                            'mpr_id' => $mpr->id,
+                            'req_id' => $mpr->req_id,
+                            'status' => 'updated'
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    $errors[] = "Error updating MPR ID {$mpr->id} (req_id: {$mpr->req_id}): " . $e->getMessage();
+                }
+            }
+
+            return response()->json([
+                'success' => empty($errors),
+                'migrated_count' => count($results),
+                'results' => $results,
+                'errors' => $errors
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Error in manualMigrateToDemand: " . $e->getMessage(), ["trace" => $e->getTraceAsString()]);
+            return response()->json([
+                'success' => false,
+                'message' => "Error migrating MPR to Demand: " . $e->getMessage()
+            ], 500);
+        }
     }
 }

@@ -168,6 +168,8 @@ export default {
                 location: user.location,
                 email: user.email,
                 role: role,
+                group_empno: user.group_empno,
+
             });
             
             if(roleItem && authArr.includes(roleItem.role)) {
