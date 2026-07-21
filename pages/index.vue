@@ -2407,7 +2407,7 @@
                     const response = await this.$axios.post(this.api + 'denyRequest', {
                         id: item.id,
                         reason: 'Auto declined due to hold period expired',
-                        user_empno: this.activeUser.empno,
+                        user_empno: this.activeUser.group_empno || this.activeUser.empno,
                         dataReq: {
                             dataFlow: this.dataFlow || '',
                             id: item.id, 
@@ -3117,7 +3117,7 @@
                 if (!this.selectedItemForAccept) return;
                 
                 let params = {
-                    user_empno: this.activeUser.empno,
+                    user_empno: this.activeUser.group_empno || this.activeUser.empno,
                     dataReq: {
                         dataFlow: this.dataFlow,
                         id: this.selectedItemForAccept.id,
@@ -3155,7 +3155,7 @@
                     const response = await this.$axios.post(this.api + 'denyRequest', {
                         id: this.selectedItemForAction.id,
                         reason: this.denyReason,
-                        user_empno: this.activeUser.empno,
+                        user_empno: this.activeUser.group_empno || this.activeUser.empno,
                         dataReq: {
                             dataFlow: this.dataFlow,
                             id: this.selectedItemForAction.id,
@@ -3529,7 +3529,7 @@
                         id: this.selectedItemForAction.id,
                         reason: this.returnReason,
                         returnToLevel: 'waiting_dept', // Luôn trả đơn cho unit level
-                        user_empno: this.activeUser.empno,
+                        user_empno: this.activeUser.group_empno || this.activeUser.empno,
                         dataReq: {
                             dataFlow: this.dataFlow,
                             id: this.selectedItemForAction.id,

@@ -1517,7 +1517,7 @@ class vgMprCtrl extends Controller
     private function findApprover($managers, $user_empno)
     {
         foreach ($managers as $manager) {
-            if ($manager["empno"] === $user_empno) {
+            if (strcasecmp($manager["empno"], $user_empno) === 0) {
                 return [
                     "empno" => $manager["empno"],
                     "name" => $manager["name"],
@@ -1529,7 +1529,7 @@ class vgMprCtrl extends Controller
             if (!empty($manager["deputies"])) {
                 foreach ($manager["deputies"] as $deputy) {
                     if (
-                        $deputy["empno"] === $user_empno &&
+                        strcasecmp($deputy["empno"], $user_empno) === 0 &&
                         !empty($deputy["status"])
                     ) {
                         return [

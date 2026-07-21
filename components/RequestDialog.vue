@@ -3196,7 +3196,7 @@ v-model="viewOriginal"
                 }
                 
                 const params = {
-                    user_empno: this.activeUser.empno,
+                    user_empno: this.activeUser.group_empno || this.activeUser.empno,
                     dataReq: {
                         dataFlow: flowData,
                         id: this.selectedItemForAccept.id,
@@ -3275,7 +3275,7 @@ v-model="viewOriginal"
                 const response = await this.$axios.post(this.api + "denyRequest", {
                     id: this.editData.id,
                     reason: JSON.stringify(this.denyReason),
-                    user_empno: this.activeUser.empno,
+                    user_empno: this.activeUser.group_empno || this.activeUser.empno,
                     dataReq: {
                         dataFlow: this.dataFlow,
                         id: this.editData.id,
@@ -3355,7 +3355,7 @@ v-model="viewOriginal"
                     id: this.editData.id,
                     reason: JSON.stringify(this.returnReason),
                     returnToLevel: targetReturnLevel, // <--- Sử dụng biến đã tính toán
-                    user_empno: this.activeUser.empno,
+                    user_empno: this.activeUser.group_empno || this.activeUser.empno,
                     dataReq: {
                         dataFlow: this.dataFlow,
                         id: this.editData.id,
