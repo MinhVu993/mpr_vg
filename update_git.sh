@@ -26,12 +26,18 @@ if [ $? -ne 0 ]; then
 fi
 echo ""
 
-# 4. Đẩy code lên remote branch main
-echo "[*] Đang đẩy code lên GitHub (git push)..."
-git push origin main
+# 4. Đẩy code lên các remote
+echo "[*] Đang đẩy code lên GitHub của MinhVu993..."
+git push https://github.com/MinhVu993/mpr.git main
 if [ $? -ne 0 ]; then
-    echo "[!] Đẩy code thất bại."
-    exit 1
+    echo "[!] Đẩy code lên MinhVu993 thất bại."
+fi
+
+echo ""
+echo "[*] Đang đẩy code lên GitHub của SPG-VN..."
+git push https://github.com/SPG-VN/mpr_vg.git main
+if [ $? -ne 0 ]; then
+    echo "[!] Đẩy code lên SPG-VN thất bại."
 fi
 
 echo ""
