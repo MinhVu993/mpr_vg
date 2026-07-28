@@ -159,14 +159,12 @@ export default {
             const roleItem = appRoles.find(app => app.app === "mpr");
             const role = roleItem ? roleItem.role : null;
 
-            // 1. Ưu tiên lấy tham số truyền vào API: ad > group_empno > empno
+            // 1. Ưu tiên lấy tham số truyền vào API: group_empno > ad (API không hỗ trợ empno)
             let queryParams = { location: 'vg' };
             if (user.group_empno) {
                 queryParams.group_empno = user.group_empno;
             } else if (user.syno_username) {
                 queryParams.ad = user.syno_username;
-            } else if (user.empno) {
-                queryParams.empno = user.empno;
             }
 
             // 2. Khởi tạo Object Session cơ bản trước
@@ -186,28 +184,30 @@ export default {
                 location: "vg"
             };
 
-            // 3. Gọi API IFM Tracking
-            try {
-                const res = await this.$axios.get("http://gmo021.cansportsvg.com:10003/api/ifm-tracking/managers/query", {
-                    params: queryParams
-                });
+            // 3. Gọi API IFM Tracking (Chỉ gọi khi có group_empno hoặc ad)
+            if (queryParams.group_empno || queryParams.ad) {
+                try {
+                    const res = await this.$axios.get("http://gmo021.cansportsvg.com:10003/api/ifm-tracking/managers/query", {
+                        params: queryParams
+                    });
 
-                // 4. Nếu API trả về OK -> Lấy dữ liệu đè lên Session
-                if (res.data && res.data.ok && res.data.manager) {
-                    const manager = res.data.manager;
-                    mprSession.dept = manager.user_dept_names || mprSession.dept;
-                    mprSession.hight_dept = manager.user_division_names || mprSession.hight_dept;
-                    mprSession.unit_name = manager.full_name || mprSession.unit_name;
-                    mprSession.name = manager.full_name || mprSession.name;
-                    
-                    // Update empno and group_empno from IFM API as requested
-                    mprSession.empno = manager.empno || mprSession.empno;
-                    mprSession.group_empno = manager.group_empno || mprSession.group_empno;
-                    mprSession.syno_user = manager.syno_username || mprSession.syno_user;
-                    mprSession.email = manager.email || mprSession.email;
+                    // 4. Nếu API trả về OK -> Lấy dữ liệu đè lên Session
+                    if (res.data && res.data.ok && res.data.manager) {
+                        const manager = res.data.manager;
+                        mprSession.dept = manager.user_dept_names || mprSession.dept;
+                        mprSession.hight_dept = manager.user_division_names || mprSession.hight_dept;
+                        mprSession.unit_name = manager.full_name || mprSession.unit_name;
+                        mprSession.name = manager.full_name || mprSession.name;
+                        
+                        // Update empno and group_empno from IFM API as requested
+                        mprSession.empno = manager.empno || mprSession.empno;
+                        mprSession.group_empno = manager.group_empno || mprSession.group_empno;
+                        mprSession.syno_user = manager.syno_username || mprSession.syno_user;
+                        mprSession.email = manager.email || mprSession.email;
+                    }
+                } catch (err) {
+                    console.error("Error fetching IFM Manager API:", err);
                 }
-            } catch (err) {
-                console.error("Error fetching IFM Manager API:", err);
             }
 
             this.$session.set("mpr", mprSession);
