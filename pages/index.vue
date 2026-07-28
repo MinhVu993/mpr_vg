@@ -4405,10 +4405,16 @@
         },
         async mounted() {
             try {
+                const authArr = ['admin', 'review'];
+                
                 if (this.$session.has('mpr')) {
                     this.activeUser = this.$session.get("mpr");
+                    if (this.activeUser && !authArr.includes(this.activeUser.role)) {
+                        const base = this.$router.options.base || '/';
+                        window.location.href = base.endsWith('/') ? base + 'dashboard_user' : base + '/dashboard_user';
+                        return;
+                    }
                 } else {
-                    this.$router.push('/');
                     return;
                 }
                 
@@ -4417,10 +4423,23 @@
                 await this.fetchData();
                 await this.preloadFlowData();
                 this.setDefaultTab();
+                
+                this.$root.$on("user-session-updated", () => {
+                    this.activeUser = this.$session.get("mpr");
+                    if (this.activeUser && !authArr.includes(this.activeUser.role)) {
+                        const base = this.$router.options.base || '/';
+                        window.location.href = base.endsWith('/') ? base + 'dashboard_user' : base + '/dashboard_user';
+                        return;
+                    }
+                    this.getAllData();                          
+                });
             }
             catch (error) {
                 console.error('Error in mounted hook:', error);
             }
+        },
+        beforeDestroy() {
+            this.$root.$off("user-session-updated");
         },
         watch: {
             hasTodoData: {

@@ -2271,7 +2271,7 @@
                     dept: this.activeUser.dept,
                     empno: this.activeUser.empno,
                     high_dept:this.activeUser.hight_dept,
-                    role: this.activeUser.role,
+                    role: 'user',
                     group_empno: this.activeUser.group_empno,
                 }
                 try {
@@ -3989,10 +3989,18 @@
             // }
             
             // Thiết lập tab mặc định sau khi dữ liệu đã được tải
+            this.$root.$on("user-session-updated", () => {
+                this.activeUser = this.$session.get("mpr"); // Lấy lại role="admin" mới nhất
+                this.getAllData();                          // Gọi lại API getAllDataMpr với role chuẩn
+            });
+
             this.$nextTick(() => {
                 this.statusFilter = this.hasTodoData ? 1 : 0; 
             });
             
+        },
+        beforeDestroy() {
+            this.$root.$off("user-session-updated");
         },
         watch: {
             
@@ -4158,7 +4166,9 @@
             "Loading approver info...":"Loading approver info...",
             "Current":"Current",
             "loadingData":"Loading data...please wait",
-            "NY_Prefix":"Req for New Year "
+            "NY_Prefix":"Req for New Year ",
+            "No.": "No.",
+            "Rows per page": "Rows per page"
         },
         "vi": {
             "ID": "Mã đơn",
@@ -4277,7 +4287,9 @@
             "Loading approver info...":"Đang tải thông tin người phê duyệt...",
             "Current":"Hiện tại",
             "loadingData":"Đang tải dữ liệu...vui lòng chờ",
-            "NY_Prefix":"Yêu cầu cho Năm Mới "
+            "NY_Prefix":"Yêu cầu cho Năm Mới ",
+            "No.": "STT",
+            "Rows per page": "Số dòng mỗi trang"
         },
         "cn": {
             "ID": "表單編號",
@@ -4397,7 +4409,9 @@
             "Loading approver info...":"正在加載審批人信息...",
             "Current":"當前",
             "loadingData":"正在加載數據...請稍候",
-            "NY_Prefix":"新年度需求申請"
+            "NY_Prefix":"新年度需求申請",
+            "No.": "序號",
+            "Rows per page": "每頁列數"
         }
     }  
 </i18n>       

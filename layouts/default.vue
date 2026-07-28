@@ -91,7 +91,7 @@ export default {
             miniVariant: false,
             right: true,
             rightDrawer: false,
-            title: this.$t("appname"),
+            title: this.$t("appName"),
             activeUser: {},
             selectedCompany: null,
             userCompanies: [],
@@ -145,7 +145,7 @@ export default {
             this.selectedCompany = company;
             this.$root.$emit('company-changed', company);
         },
-        setUser(user) {
+        async setUser(user) {
             const authArr = ['admin', 'review'];
             let appRoles = [];
             try {
@@ -155,34 +155,75 @@ export default {
             } catch (e) {
                 console.error("Error parsing app_roles", e);
             }
+            
             const roleItem = appRoles.find(app => app.app === "mpr");
             const role = roleItem ? roleItem.role : null;
-            this.$session.set("mpr", {
+
+            // 1. Ưu tiên lấy tham số truyền vào API: ad > group_empno > empno
+            let queryParams = { location: 'vg' };
+            if (user.group_empno) {
+                queryParams.group_empno = user.group_empno;
+            } else if (user.syno_username) {
+                queryParams.ad = user.syno_username;
+            } else if (user.empno) {
+                queryParams.empno = user.empno;
+            }
+
+            // 2. Khởi tạo Object Session cơ bản trước
+            let mprSession = {
                 id: user.id,
                 empno: user.empno,
-                name: user.name,
-                username: user.username,
-                dept: user.dept,
-                unit_name : user.name,
-                hight_dept: user.high_dept,
-                location: user.location,
                 email: user.email,
                 role: role,
                 group_empno: user.group_empno,
+                syno_user: user.syno_username,
+                username: user.username,
+                // Set default nếu API lỗi thì vẫn có data hiển thị
+                dept: user.dept,
+                hight_dept: user.high_dept,
+                unit_name: user.name,
+                name: user.name,
+                location: "vg"
+            };
 
-            });
-            
-            if(roleItem && authArr.includes(roleItem.role)) {
-                this.$router.push({
-                    path: "/",
-                })
-            } else {
-                this.$router.push({
-                    path: "/dashboard_user",
+            // 3. Gọi API IFM Tracking
+            try {
+                const res = await this.$axios.get("http://gmo021.cansportsvg.com:10003/api/ifm-tracking/managers/query", {
+                    params: queryParams
                 });
+
+                // 4. Nếu API trả về OK -> Lấy dữ liệu đè lên Session
+                if (res.data && res.data.ok && res.data.manager) {
+                    const manager = res.data.manager;
+                    mprSession.dept = manager.user_dept_names || mprSession.dept;
+                    mprSession.hight_dept = manager.user_division_names || mprSession.hight_dept;
+                    mprSession.unit_name = manager.full_name || mprSession.unit_name;
+                    mprSession.name = manager.full_name || mprSession.name;
+                    
+                    // Update empno and group_empno from IFM API as requested
+                    mprSession.empno = manager.empno || mprSession.empno;
+                    mprSession.group_empno = manager.group_empno || mprSession.group_empno;
+                    mprSession.syno_user = manager.syno_username || mprSession.syno_user;
+                    mprSession.email = manager.email || mprSession.email;
+                }
+            } catch (err) {
+                console.error("Error fetching IFM Manager API:", err);
+            }
+
+            this.$session.set("mpr", mprSession);
+
+            this.$root.$emit("user-session-updated");
+
+            const currentPath = this.$route.path;
+            const base = this.$router.options.base || '/';
+            if(roleItem && authArr.includes(roleItem.role)) {
+            } else {
+                if (currentPath !== '/dashboard_user') {
+                    window.location.href = base.endsWith('/') ? base + 'dashboard_user' : base + '/dashboard_user';
+                }
             }
             
-            this.loaded = true
+            this.loaded = true;
         },
         
         locale(tg) {

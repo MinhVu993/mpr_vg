@@ -1,11 +1,29 @@
 @echo off
-echo Dang day code len Github cua MinhVu993...
-git push https://github.com/MinhVu993/mpr.git
+chcp 65001 > nul
+echo ==========================================
+echo        GIT QUICK COMMIT ^& PUSH TOOL
+echo ==========================================
+echo.
+
+echo [1/3] Kiem tra trang thai Git...
+git status
 
 echo.
-echo Dang day code len Github cua SPG-VN...
-git push https://github.com/SPG-VN/mpr_vg.git
+set "msg="
+set /p msg=Nhap commit message (an Enter de dung mac dinh "update code"): 
+if "%msg%"=="" set "msg=update code"
 
 echo.
-echo Hoan thanh!
+echo [2/3] Dang add va commit...
+git add .
+git commit -m "%msg%"
+
+echo.
+echo [3/3] Dang push len repo...
+git push
+
+echo.
+echo ==========================================
+echo Direct push hoan thanh!
+echo ==========================================
 pause

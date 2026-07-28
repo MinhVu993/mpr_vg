@@ -944,7 +944,7 @@ class vgMprCtrl extends Controller
             );
         }
     }
-    private static function resolveNewFlow($empno, $location, $appCode, $customDept, $customDivision, $unit = null)
+    public static function resolveNewFlow($empno, $location = 'vg', $appCode = 'mpr', $customDept = null, $customDivision = null, $unit = null)
     {
         try {
             $client = new \GuzzleHttp\Client([
@@ -2579,9 +2579,6 @@ class vgMprCtrl extends Controller
                 "waiting_gm" => 5,
             ];
 
-            $controller = new self();
-            $vfaController = new vfaCtrl();
-
             // Map reason_exp with SubPos data
             $requests = $requests->map(function ($request) {
                 if ($request->reason_exp) {
@@ -2606,35 +2603,28 @@ class vgMprCtrl extends Controller
                 return $request;
             });
 
-            // Filter requests based on user access
-            $filteredRequests = $requests->filter(function ($request) use (
-                $userData,
-                $statusLevels,
-                $validStatuses,
-                $includeDeputy,
-                $controller,
-                $vfaController
-            ) {
+            $filteredRequests = $requests->filter(function ($request) use ($userData, $statusLevels, $validStatuses, $includeDeputy) {
                 $empno = $userData["empno"];
                 $submitter = json_decode($request->submitter, true);
 
-                // Get flow data specific to this request
-                $requestParams = new Request();
-                $requestParams->merge([
-                    "empno" => $submitter["empno"],
-                    "app_code" => "mpr",
-                    "location" => $userData["location"] ?? "VN",
-                    "custom_data" => json_encode([
-                        "custom_dept" => $submitter["dept"] ?? null,
-                        "custom_division" => $submitter["high_dept"] ?? null,
-                    ]),
-                ]);
+                if (!$submitter || empty($submitter["empno"])) {
+                    return false;
+                }
 
-                $flowResponse = $vfaController->getFlowUpdated($requestParams);
-                $flowData = json_decode(
-                    json_encode($flowResponse->flow_data ?? []),
-                    true
-                );
+                $subEmpno = $submitter["empno"];
+                $location = $userData["location"] ?? "vg";
+                $appCode = "mpr";
+                $customDept = $submitter["dept"] ?? $submitter["dept_sumt"] ?? $submitter["custom_dept"] ?? null;
+                $customDivision = $submitter["high_dept"] ?? $submitter["custom_division"] ?? $submitter["division"] ?? null;
+                $unit = $submitter["unit"] ?? null;
+
+                $flowResponse = self::resolveNewFlow($subEmpno, $location, $appCode, $customDept, $customDivision, $unit);
+                $flowData = $flowResponse["flow_data"] ?? [];
+                try {
+                } catch (\Exception $e) {
+                    \Log::error("Error in getFilteredRequests resolveNewFlow: " . $e->getMessage());
+                    return false;
+                }
 
                 if (empty($flowData)) {
                     return false;
@@ -2678,8 +2668,6 @@ class vgMprCtrl extends Controller
                         if ($manager["empno"] === $empno) {
                             return true;
                         }
-
-                        // Deputy check if enabled
                         if ($includeDeputy && !empty($manager["deputies"])) {
                             foreach ($manager["deputies"] as $deputy) {
                                 if (
@@ -2707,287 +2695,6 @@ class vgMprCtrl extends Controller
                 "error" => $e->getMessage(),
                 "trace" => $e->getTraceAsString(),
             ]);
-
-            return [
-                "success" => false,
-                "message" => "Error filtering requests: " . $e->getMessage(),
-                "data" => collect([]),
-            ];
-        }
-    }
-
-    public static function getFilteredRequestsIfm($userData, $includeDeputy = true)
-    {
-        try {
-            $validStatuses = [
-                "waiting_dept",
-                "waiting_div",
-                "waiting_hr_rec_sf",
-                "waiting_hr",
-                "waiting_ad",
-                "waiting_gm",
-            ];
-
-            // Get requests with valid statuses
-            $requests = Mpr::whereIn("status", $validStatuses)
-                ->orWhereIn("status_amendent", $validStatuses)
-                ->orderBy("id", "desc")
-                ->get();
-
-            if ($requests->isEmpty()) {
-                return [
-                    "success" => true,
-                    "message" => "No pending requests found",
-                    "data" => collect([]),
-                ];
-            }
-
-            // Map status levels
-            $statusLevels = [
-                "waiting_dept" => 0,
-                "waiting_div" => 1,
-                "waiting_hr_rec_sf" => 2,
-                "waiting_hr" => 3,
-                "waiting_ad" => 4,
-                "waiting_gm" => 5,
-            ];
-
-            // 2. Gom các flowKeys duy nhất để tối ưu số lần gọi API
-            $flowKeys = [];
-            foreach ($requests as $item) {
-                $submitter = json_decode($item->submitter, true);
-                if (empty($submitter)) {
-                    continue;
-                }
-                $empno = $submitter['empno'] ?? null;
-                if (empty($empno)) {
-                    continue;
-                }
-                $customDept = $submitter['dept'] ?? null;
-                $customDivision = $submitter['high_dept'] ?? null;
-                $unit = $submitter['unit'] ?? null;
-                $loc = strtolower($userData['location'] ?? $userData->location ?? 'vg');
-
-                $cacheKey = "{$empno}_{$customDept}_{$customDivision}_{$unit}_{$loc}";
-                if (!isset($flowKeys[$cacheKey])) {
-                    $flowKeys[$cacheKey] = [
-                        'empno' => $empno,
-                        'location' => $loc,
-                        'dept' => $customDept,
-                        'high_dept' => $customDivision,
-                        'unit' => $unit
-                    ];
-                }
-            }
-
-            // 3. Gọi resolveNewFlow song song để lấy dữ liệu luồng phê duyệt
-            $promises = [];
-            $client = new \GuzzleHttp\Client(['timeout' => 10]);
-            foreach ($flowKeys as $cacheKey => $r) {
-                $divScopeCodes = [];
-                $deptScopeCodes = [];
-                if (!empty($r['unit'])) {
-                    $deptScopeCodes = array_values(array_filter(array_map('trim', explode(',', $r['unit']))));
-                } elseif (!empty($r['dept'])) {
-                    if (strpos($r['dept'], ',') === false) {
-                        $deptScopeCodes = [trim($r['dept'])];
-                    } else {
-                        $deptScopeCodes = array_values(array_filter(array_map('trim', explode(',', $r['dept']))));
-                    }
-                }
-
-                foreach ($deptScopeCodes as $code) {
-                    $divScopeCodes[] = $code;
-                }
-                $divScopeCodes = array_values(array_unique(array_filter($divScopeCodes)));
-
-                $payload = [
-                    'empno' => $r['empno'],
-                    'location' => strtolower($r['location'] ?? 'vg'),
-                    'app_code' => 'mpr',
-                    'custom_dept' => $r['dept'],
-                    'custom_division' => $r['high_dept'],
-                    'custom_depts' => [
-                        'custom_dept_manager' => $r['dept']
-                    ],
-                    'custom_divisions' => [
-                        'custom_division_manager' => $r['high_dept']
-                    ]
-                ];
-                if (!empty($deptScopeCodes)) {
-                    $payload['filter_custom_scope_codes'] = [
-                        'custom_division_manager' => $divScopeCodes,
-                        'custom_dept_manager' => $deptScopeCodes
-                    ];
-                }
-
-                $promises[$cacheKey] = $client->createRequest('POST', 'http://gmo021.cansportsvg.com:10003/api/ifm-tracking/resolve', [
-                    'json' => $payload,
-                    'headers' => [
-                        'Accept' => 'application/json',
-                        'Content-Type' => 'application/json'
-                    ]
-                ]);
-            }
-
-            $results = \GuzzleHttp\Pool::batch($client, $promises);
-
-            $allFlowData = [];
-            foreach ($promises as $cacheKey => $request) {
-                $resObj = $results->getResult($request);
-                if ($resObj && !($resObj instanceof \Exception)) {
-                    try {
-                        $resp = $resObj;
-                        $body = json_decode($resp->getBody()->getContents(), true);
-                        $flow = data_get($body, 'result.flow_data') ?? data_get($body, 'flow_data');
-                        $allFlowData[$cacheKey] = is_array($flow) ? $flow : [];
-                    } catch (\Throwable $e) {
-                        $allFlowData[$cacheKey] = [];
-                    }
-                } else {
-                    $allFlowData[$cacheKey] = [];
-                }
-            }
-// Gán dữ liệu flowData vào mỗi request
-            foreach ($requests as $item) {
-                $submitter = json_decode($item->submitter, true);
-                if ($submitter) {
-                    $empno = $submitter['empno'] ?? null;
-                    $customDept = $submitter['dept'] ?? null;
-                    $customDivision = $submitter['high_dept'] ?? null;
-                    $unit = $submitter['unit'] ?? null;
-                    $loc = strtolower($userData['location'] ?? $userData->location ?? 'vg');
-                    $cacheKey = "{$empno}_{$customDept}_{$customDivision}_{$unit}_{$loc}";
-                    $item->flowData = $allFlowData[$cacheKey] ?? [];
-                } else {
-                    $item->flowData = [];
-                }
-            }
-
-            // Map reason_exp với SubPos data
-            $requests = $requests->map(function ($request) {
-                if ($request->reason_exp) {
-                    $subPosData = RecReason::find($request->reason_exp);
-                    if ($subPosData) {
-                        try {
-                            $subName = json_decode($subPosData->name, true);
-                            if (json_last_error() === JSON_ERROR_NONE) {
-                                $request->reason_exp = $subName;
-                            } else {
-                                $request->reason_exp = $subPosData->name;
-                            }
-                        } catch (\Exception $e) {
-                            Log::error("Error mapping reason_exp: " . $e->getMessage());
-                            $request->reason_exp = $subPosData->name;
-                        }
-                    }
-                }
-                return $request;
-            });
-
-            // 4. Lọc các yêu cầu thực sự thuộc quyền duyệt của user hiện tại
-            $userEmpno = $userData['empno'] ?? $userData->empno ?? null;
-            $userGroupEmpno = $userData['group_empno'] ?? $userData->group_empno ?? null;
-            $userSynoUsername = $userData['syno_username'] ?? $userData->syno_username ?? null;
-            
-            $userIdentifiers = [];
-            if ($userEmpno) $userIdentifiers[] = strtolower($userEmpno);
-            if ($userGroupEmpno) $userIdentifiers[] = strtolower($userGroupEmpno);
-            if ($userSynoUsername) $userIdentifiers[] = strtolower($userSynoUsername);
-            $userIdentifiers = array_unique($userIdentifiers);
-
-            $filteredRequests = $requests->filter(function ($request) use (
-                $userData,
-                $statusLevels,
-                $validStatuses,
-                $includeDeputy,
-                $allFlowData,
-                $userIdentifiers
-            ) {
-                $submitter = json_decode($request->submitter, true);
-                if (empty($submitter)) {
-                    return false;
-                }
-                $empno = $submitter['empno'] ?? null;
-                if (empty($empno)) {
-                    return false;
-                }
-                $customDept = $submitter['dept'] ?? null;
-                $customDivision = $submitter['high_dept'] ?? null;
-                $unit = $submitter['unit'] ?? null;
-                $loc = strtolower($userData['location'] ?? $userData->location ?? 'vg');
-
-                $cacheKey = "{$empno}_{$customDept}_{$customDivision}_{$unit}_{$loc}";
-                $flowData = $allFlowData[$cacheKey] ?? [];
-
-                if (empty($flowData)) {
-                    return false;
-                }
-
-                // Check current status
-                $statusesToCheck = [];
-                if (
-                    !empty($request->status_amendent) &&
-                    in_array($request->status_amendent, $validStatuses)
-                ) {
-                    $statusesToCheck[] = $request->status_amendent;
-                }
-                if (
-                    !empty($request->status) &&
-                    in_array($request->status, $validStatuses)
-                ) {
-                    $statusesToCheck[] = $request->status;
-                }
-
-                if (empty($statusesToCheck)) {
-                    return false;
-                }
-
-                foreach ($statusesToCheck as $status) {
-                    if (!isset($statusLevels[$status])) {
-                        continue;
-                    }
-
-                    $currentLevel = $statusLevels[$status];
-                    if (
-                        !isset($flowData[$currentLevel]) ||
-                        empty($flowData[$currentLevel]["managers"])
-                    ) {
-                        continue;
-                    }
-                    $currentFlow = $flowData[$currentLevel];
-
-                    foreach ($currentFlow["managers"] as $manager) {
-                        // Direct manager check
-                        if (isset($manager["empno"]) && in_array(strtolower($manager["empno"]), $userIdentifiers)) {
-                            return true;
-                        }
-
-                        // Deputy check if enabled
-                        if ($includeDeputy && !empty($manager["deputies"])) {
-                            foreach ($manager["deputies"] as $deputy) {
-                                if (
-                                    isset($deputy["empno"]) && 
-                                    in_array(strtolower($deputy["empno"]), $userIdentifiers) &&
-                                    !empty($deputy["status"]) &&
-                                    ($deputy["status"] === true || $deputy["status"] === 1 || $deputy["status"] === 'true')
-                                ) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                return false;
-            })->values();
-
-            return [
-                "success" => true,
-                "message" => "Requests filtered successfully",
-                "data" => $filteredRequests,
-            ];
-        } catch (\Exception $e) {
 
             return [
                 "success" => false,
