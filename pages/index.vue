@@ -32,7 +32,6 @@
                 <v-tabs background-color="#00838F" color="yellow" dark v-model="statusFilter"  center-active>
                     <v-tab>
                         {{ $t("All") }}
-                        <!-- <v-badge :content="statusCounts().all > 9 ? '9+' : statusCounts().all.toString()" color="" :value="statusCounts().all" ></v-badge> -->
                     </v-tab>
                     <v-tab v-show="hasTodoData">
                         {{ $t("To Do") }}
@@ -205,7 +204,6 @@
             </div>
         </template>
         <template v-slot:[`item.recruited`]="{ item }">
-            <!-- {{ item.recruited || 0 }} -->
             <div 
             style="cursor: pointer; color: blue;" 
             @click="showCandidatesDialog(item.candidates)">
@@ -480,7 +478,7 @@
 :edit-data="selectedItem" 
 :is-edit="isEdit" 
 :is-change="isChange"
-@requestUpdated="getAllData" /> <!-- Add @requestUpdated handler -->
+@requestUpdated="getAllData" /> 
 
 <!-- Accept Confirmation Dialog -->
 <v-dialog v-model="confirmAcceptDialog" max-width="500px">
@@ -4088,11 +4086,8 @@
                 const needsFlow = (item) => {
                     if (!item || !item.id) return false;
                     if (this.approvalFlowCache[item.id] || this.flowRequestInProgress[item.id]) return false;
-                    // Submitter needs to fix returned item
                     if (item.submiterInfo && item.submiterInfo.empno === this.activeUser?.empno && item.status === 'waiting_dept' && this.hasReturnedLevel(item)) return true;
-                    // To do (managers...)
                     if (this.canApproveItemForTodo(item)) return true;
-                    // Year-end / amendment / any waiting status where approver info is useful
                     if (this.isYearEndPending(item) || this.isYearEndTodo(item)) return true;
                     if (item.status_amendent && pendingStatuses.has(item.status_amendent)) return true;
                     if (item.status_endyear && pendingStatuses.has(item.status_endyear)) return true;
@@ -4100,7 +4095,6 @@
                     return false;
                 };
                 
-                // limit total items to preload to avoid spikes
                 const MAX_ITEMS = 100;
                 const toLoad = visibleItems.filter(needsFlow).slice(0, MAX_ITEMS);
                 if (toLoad.length === 0) return;
@@ -4119,7 +4113,6 @@
                         } catch (err) {
                             console.error(`Failed to preload flow data for item ${item.id}:`, err);
                         }
-                        // small delay to smooth traffic
                         await delay(pauseMs);
                     }
                 };
@@ -4239,34 +4232,19 @@
                                 row[header.title] = item.submiterInfo ?
                                 `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';
                                 break;
-                                
-                                // ---------------------------------------------------------
-                                // [PHẦN CHỈNH SỬA] XỬ LÝ TRẠNG THÁI (STATUS)
-                                // ---------------------------------------------------------
                                 case 'status':
-                                // A. Lấy trạng thái chính (ví dụ: Approved, Completed...)
                                 let statusText = this.getStatusText(item.status, item);
-                                
-                                // B. Ghép trạng thái Sửa đổi (Amendment) nếu có
                                 if (item.status_amendent) {
                                     statusText += ' / ' + this.getAmendmentStatusText(item.status_amendent, item);
                                 }
-                                
-                                // C. Xử lý trạng thái Năm Mới (Year-End)
                                 if (item.status_endyear) {
-                                    // Trường hợp 1: Đã có trạng thái thực trong DB (vd: waiting_div, completed...)
                                     statusText += ' / ' + this.getEndYearStatusText(item.status_endyear);
                                 } 
                                 else if (this.isYearEndPending(item) || this.isYearEndTodo(item)) {
-                                    // Trường hợp 2: Trạng thái ẢO (Chưa có trong DB nhưng đủ điều kiện tổng kết năm)
-                                    // Ép hiển thị là "Waiting Dept" (hoặc text tương ứng: 📅 Pending Dept...)
                                     statusText += ' / ' + this.getEndYearStatusText('waiting_dept');
                                 }
-                                
                                 row[header.title] = statusText;
                                 break;
-                                // ---------------------------------------------------------
-                                
                                 case 'recruited_status':
                                 const recruitmentStatus = this.getRecruitmentStatus(item);
                                 row[header.title] = recruitmentStatus.show ?

@@ -46,7 +46,6 @@
                     </v-tab>
                     <v-tab>
                         {{ $t("Rejected") }}
-                        <!-- <v-badge :content="statusCounts.decline.toString()" color="" :value="statusCounts.decline" ></v-badge> -->
                     </v-tab>
                     <v-spacer></v-spacer>
                     <!-- export excel -->
@@ -275,7 +274,7 @@
 </template>
 
 <template v-else>
-    <v-tooltip bottom :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)">
+    <v-tooltip bottom  :disabled="!getReturnInfo(item).returned && !getNextApproverInfoForStatus(item)" >
         <template v-slot:activator="{ on, attrs }">
             <v-chip
             v-if="item.status"
@@ -362,7 +361,6 @@
             <span class="text-truncate" style="max-width:150px; display:inline-block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                 {{ getLocalizedOtherReason(item.isOther_reason) }}
             </span>
-            <!-- <v-btn x-small text color="primary" @click="openOtherReasonDialog(item)"><v-icon x-small>mdi-eye</v-icon></v-btn> -->
         </div>
     </template>
     <template v-else>
@@ -988,7 +986,6 @@
                     
                     (this.selectedApprovalData || []).forEach(item => {
                         const idx = Number(item.cycleIndex);
-                        // skip current cycle / invalid indices
                         if (!idx || item.cycleIndex === 'current') return;
                         
                         const cycleIndex = idx - 1;
@@ -998,7 +995,6 @@
                             ...item,
                             level: Number(item.level) || 0,
                             cycleIndex: idx, // ensure numeric
-                            // preserve "raw" value (either parsed object or string or '')
                             reason_denied_raw: normalize(item.reason_denied),
                             return_reason_raw: normalize(item.return_reason),
                             approval_record_raw: normalize(item.approval_record),
@@ -1531,13 +1527,9 @@
                     if (!statusLevels.hasOwnProperty(item.status_endyear)) return null;
                     
                     let flowData = this.approvalFlowCache[item.id];
-                    
-                    // --- SỬA ĐỔI TẠI ĐÂY ---
-                    // XÓA dòng: this.loadFlowDataForItem(item);
                     if (!flowData) {
                         return this.flowLoading[item.id] ? this.$t('Loading approver info...') : null;
                     }
-                    // -----------------------
                     
                     const currentLevel = statusLevels[item.status_endyear];
                     const currentFlow = flowData[currentLevel];
@@ -1634,7 +1626,6 @@
                         
                         const cacheKey = `obj::${JSON.stringify(raw)}::${locale}`;
                         if (this._translateCache.has(cacheKey)) return this._translateCache.get(cacheKey);
-                        // seed cache with sourceText to show immediately and fetch translation in background
                         this._translateCache.set(cacheKey, sourceText);
                         translateAsync(sourceText, cacheKey);
                         return sourceText;
@@ -1870,7 +1861,6 @@
                     }
                 }
                 
-                // --- CASE 3: ĐANG TRONG QUY TRÌNH TỔNG KẾT NĂM (YEAR-END PENDING) ---
                 if (statusEndYear && statusEndYear.startsWith('waiting')) {
                     return {
                         text: this.$t('Recruiting'),
@@ -1890,12 +1880,7 @@
                     };
                 }
                 
-                // =========================================================================
-                // LOGIC CHÍNH XÁC ĐỊNH RECRUITING / CLOSED
-                // =========================================================================
-                
-                // --- CASE 5: ĐƠN CÓ SỬA ĐỔI SỐ LƯỢNG (AMENDMENT) ---
-                // Ưu tiên: Lấy số lượng từ Change Request (Tổng chỉ tiêu mới) so sánh với Recruited
+              
                 if (item.status_amendent === 'completed' && this.hasQuantityChange(item)) {
                     const changeQty = this.getChangeQuantity(item);
                     if (changeQty !== null && changeQty !== undefined && changeQty !== '') {
@@ -1918,10 +1903,7 @@
                         }
                     }
                 }
-                
-                // --- CASE 6: ĐƠN THƯỜNG HOẶC SỬA ĐỔI KHÔNG ĐỔI SỐ LƯỢNG ---
-                // Logic: Dùng stocknumber (Số lượng còn lại) để kiểm tra.
-                // Nếu status đã hoàn thành (hoặc amendment hoàn thành) và chưa bị từ chối
+            
                 if ((status === 'completed' && statusAmendent !== 'declined') || (statusAmendent === 'completed')) {
                     
                     // Kiểm tra các trạng thái Hold/Resume trước
@@ -1959,7 +1941,6 @@
                         }
                     } 
                     else if (resumed === 1 && item.resumed_date) {
-                        // Logic Resume (Tiếp tục tuyển)
                         return {
                             text: this.$t('Recruiting'),
                             detail: `(${this.formatDate(item.hold_date)} - ${this.$t('Resumed')}, ${this.formatDate(item.resumed_date)} - ${this.$t('hold')})`,
@@ -1969,8 +1950,6 @@
                         };
                     } 
                     else {
-                        // Logic chuẩn cho đơn thường:
-                        // Chỉ cần số lượng còn lại (stocknumber) > 0 là Đang tuyển
                         if (stocknumber > 0) {
                             return {
                                 text: this.$t('Recruiting'),
@@ -1999,7 +1978,6 @@
                     };
                 }
                 
-                // Mặc định ẩn nếu không rơi vào case nào
                 return {
                     text: '',
                     detail: '',
@@ -2021,7 +1999,6 @@
             },
             async updateStatusToDeclined(item) {
                 try {
-                    // Xác định trạng thái hiện tại cần update
                     const currentStatus = item.status_amendent;
                     
                     const response = await this.$axios.post(this.api + 'denyRequest', {
@@ -2040,14 +2017,12 @@
                     });
                     
                     if (response.data.success) {
-                        // Refresh data after update
                         await this.getAllData();
                     } else {
                         console.error('Failed to update status:', response.data.message);
                     }
                 } catch (error) {
                     console.error('Error updating status to declined:', error);
-                    // Hiển thị thông báo lỗi cho user
                     this.$notify({
                         title: this.$t('Error'),
                         text: this.$t('Failed to update status automatically'),
@@ -2304,8 +2279,6 @@
                         this.pos = res.data.dataTypeApply;
                         this.otherReason = res.data.dataOtherReason;
                         this.settingHistory = res.data.dataEndYear;
-                        // this.flowCache.clear();
-                        // await this.preloadFlowData();
                         this.filteredItems = [];
                     } else {
                         throw new Error('Failed to fetch data');
@@ -2514,11 +2487,6 @@
             //
             getDisplayQuantity(qtyReq, item) {
                 try {
-                    // Nếu có deny_temp, dùng giá trị deny_temp khi:
-                    // - EndYear đã hoàn thành, hoặc
-                    // - Amendment đã hoàn thành, hoặc
-                    // - bản ghi đã được "fulfilled" (fulfilled === 'yes'), hoặc
-                    // - là New Year xử lý (activeRct === 1)
                     if (item &&
                     item.deny_temp &&
                     typeof item.deny_temp === 'string' &&
@@ -2543,7 +2511,6 @@
                         }
                     }
                     
-                    // Nếu qtyReq là JSON string => tính tổng
                     if (typeof qtyReq === 'string') {
                         if (qtyReq.startsWith('{')) {
                             const qtyData = JSON.parse(qtyReq);
@@ -2583,7 +2550,6 @@
                 
                 try {
                     const approvalData = JSON.parse(item.approval);
-                    // Kiểm tra xem có level nào bị rejected không
                     return approvalData.some(level => level.status === 'rejected');
                 } catch (error) {
                     console.error('Error parsing approval data:', error);
@@ -2702,10 +2668,6 @@
                 }
             },
             async confirmDeny() {
-                // if (!this.denyReason.trim()) {
-                //     return;
-                // }
-                
                 try {
                     const response = await this.$axios.post(this.api + 'denyRequest', {
                         id: this.selectedItemForAction.id,
@@ -2735,7 +2697,6 @@
                 try {
                     this.selectedItem = item;
                     
-                    // Parse approval data cho current cycle
                     let currentApproval = [];
                     if (item.approval) {
                         try {
@@ -2745,7 +2706,6 @@
                         }
                     }
                     
-                    // Parse approval history từ logs
                     let historyApproval = [];
                     if (item.logs) {
                         try {
@@ -2892,9 +2852,6 @@
                             parsedLogs.forEach((cycle, cycleIndex) => {
                                 const cycleApprovalRecord = approvalRecords[cycleIndex] || {};
                                 
-                                // FIX: Logic to prevent "Common" display
-                                // If this is the last available record in the array, AND the Current Cycle is active,
-                                // we assume the Current Cycle (Top Panel) owns this record, so we hide it from History.
                                 const isLastRecordSet = cycleIndex === (approvalRecords.length - 1);
                                 const shouldHideRecord = isLastRecordSet && hasCurrentCycle;
                                 
@@ -2903,10 +2860,8 @@
                                 .map((log, index) => {
                                     const recordKey = log.type;
                                     
-                                    // Apply the hiding logic here
                                     let approvalRecord = shouldHideRecord ? '' : (cycleApprovalRecord[recordKey] || '');
                                     
-                                    // Existing safety check (keep as backup)
                                     if (approvalRecord && typeof approvalRecord === 'string' && approvalRecord.includes('SYSTEM (AUTO)')) {
                                         if (log.approver.empno !== 'SYSTEM' && log.approver.name !== 'SYSTEM (AUTO)') {
                                             approvalRecord = ''; // Xóa record hiển thị sai
@@ -3093,7 +3048,6 @@
             },
             
             getAmendmentStatusColor(status, item) { // Thêm tham số item
-                // Kiểm tra nếu bị trả về thì ưu tiên hiển thị màu Returned (amber)
                 if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
                     return "amber darken-1";
                 }
@@ -3122,24 +3076,16 @@
                 }
             },
             getStatusText(status, item = {}) {
-                // 1. Kiểm tra các trạng thái kết thúc (Rejected/Approved) trước
                 if (status === "declined") {
                     return this.$t("Rejected");
                 }
                 if (status === "completed") {
                     return this.$t("Approved");
                 }
-                
-                // 2. Sau đó mới kiểm tra xem có đang bị trả về hay không (dành cho các trạng thái pending)
                 if (item && this.getReturnInfo && this.getReturnInfo(item).returned) {
                     return this.$t("Returned");
                 }
-                
-                // 3. Các trạng thái còn lại
                 switch (status) {
-                    // case "completed":  <-- Đã chuyển lên trên
-                    //    return this.$t("Approved");
-                    
                     case "waiting_dept":
                     return this.$t("Pending Dept");
                     case "waiting_div":
@@ -3419,15 +3365,9 @@
                     
                     let flowData = this.approvalFlowCache[item.id];
                     
-                    // --- SỬA ĐỔI TẠI ĐÂY ---
-                    // XÓA dòng: this.loadFlowDataForItem(item);
-                    // Chỉ kiểm tra nếu chưa có data thì báo đang tải hoặc null, chờ sự kiện mouseenter tải
                     if (!flowData) {
-                        // Nếu đang có cờ loading thì hiện text, nếu không thì ẩn hoặc hiện text mặc định
                         return this.flowLoading[item.id] ? this.$t('Loading approver info...') : null;
                     }
-                    // -----------------------
-                    
                     const statusLevels = {
                         'waiting_dept': 0,
                         'waiting_div': 1,
@@ -3488,13 +3428,9 @@
                     
                     let flowData = this.approvalFlowCache[item.id];
                     
-                    // --- SỬA ĐỔI TẠI ĐÂY ---
-                    // XÓA dòng: this.loadFlowDataForItem(item);
                     if (!flowData) {
                         return this.flowLoading[item.id] ? this.$t('Loading approver info...') : null;
                     }
-                    // -----------------------
-                    
                     const currentLevel = statusLevels[item.status_amendent];
                     const currentFlow = flowData[currentLevel];
                     
@@ -3566,7 +3502,6 @@
                 
                 this.flowRequestInProgress[itemId] = true;
                 
-                // ... (Giữ nguyên phần params) ...
                 const params = {
                     id: itemId,
                     empno: item.submiterInfo?.empno,
@@ -3579,12 +3514,7 @@
                     const res = await this.$axios.post(this.api + "getDataFlowForItem", params);
                     if (res.data && res.data.flow_data) {
                         
-                        // --- SỬA ĐỔI TẠI ĐÂY ---
-                        // Thay thế: this.approvalFlowCache[itemId] = res.data.flow_data;
-                        // Bằng:
                         this.$set(this.approvalFlowCache, itemId, res.data.flow_data);
-                        // -----------------------
-                        
                         if (this.flowRequestQueue[itemId]) {
                             this.flowRequestQueue[itemId].forEach(request => {
                                 request.resolve(res.data.flow_data);
@@ -3606,10 +3536,7 @@
                     console.error("Error getting flow data:", error);
                     throw error;
                 } finally {
-                    // --- SỬA ĐỔI THÊM (QUAN TRỌNG) ---
-                    // Xóa cờ đang load cũng nên dùng $delete để đảm bảo sạch sẽ, dù không bắt buộc
                     this.$delete(this.flowRequestInProgress, itemId);
-                    // delete this.flowRequestInProgress[itemId]; // Cách cũ
                 }
             },
             
@@ -3678,11 +3605,8 @@
                 const needsFlow = (item) => {
                     if (!item || !item.id) return false;
                     if (this.approvalFlowCache[item.id] || this.flowRequestInProgress[item.id]) return false;
-                    // Submitter needs to fix returned item
                     if (item.submiterInfo && item.submiterInfo.empno === this.activeUser?.empno && item.status === 'waiting_dept' && this.hasReturnedLevel(item)) return true;
-                    // To do (managers...)
                     if (this.canApproveItemForTodo(item)) return true;
-                    // Year-end / amendment / any waiting status where approver info is useful
                     if (this.isYearEndPending(item) || this.isYearEndTodo(item)) return true;
                     if (item.status_amendent && pendingStatuses.has(item.status_amendent)) return true;
                     if (item.status_endyear && pendingStatuses.has(item.status_endyear)) return true;
@@ -3875,33 +3799,20 @@
                                 row[header.title] = item.submiterInfo ?
                                 `${item.submiterInfo.name} (${item.submiterInfo.empno})` : '';
                                 break;
-                                
-                                // ---------------------------------------------------------
-                                // [PHẦN CHỈNH SỬA] XỬ LÝ TRẠNG THÁI (STATUS)
-                                // ---------------------------------------------------------
                                 case 'status':
-                                // A. Lấy trạng thái chính (ví dụ: Approved, Completed...)
                                 let statusText = this.getStatusText(item.status, item);
-                                
-                                // B. Ghép trạng thái Sửa đổi (Amendment) nếu có
                                 if (item.status_amendent) {
                                     statusText += ' / ' + this.getAmendmentStatusText(item.status_amendent, item);
                                 }
-                                
-                                // C. Xử lý trạng thái Năm Mới (Year-End)
                                 if (item.status_endyear) {
-                                    // Trường hợp 1: Đã có trạng thái thực trong DB (vd: waiting_div, completed...)
                                     statusText += ' / ' + this.getEndYearStatusText(item.status_endyear);
                                 } 
                                 else if (this.isYearEndPending(item) || this.isYearEndTodo(item)) {
-                                    // Trường hợp 2: Trạng thái ẢO (Chưa có trong DB nhưng đủ điều kiện tổng kết năm)
-                                    // Ép hiển thị là "Waiting Dept" (hoặc text tương ứng: 📅 Pending Dept...)
                                     statusText += ' / ' + this.getEndYearStatusText('waiting_dept');
                                 }
                                 
                                 row[header.title] = statusText;
                                 break;
-                                // ---------------------------------------------------------
                                 
                                 case 'recruited_status':
                                 const recruitmentStatus = this.getRecruitmentStatus(item);
@@ -3983,12 +3894,7 @@
             await this.fetchData();
             await this.getAllData();
             await this.preloadFlowData();
-            // const savedLocale = localStorage.getItem('preferred-locale');
-            // if (savedLocale) {
-            //     this.$i18n.locale = savedLocale;
-            // }
-            
-            // Thiết lập tab mặc định sau khi dữ liệu đã được tải
+           
             this.$root.$on("user-session-updated", () => {
                 this.activeUser = this.$session.get("mpr"); // Lấy lại role="admin" mới nhất
                 this.getAllData();                          // Gọi lại API getAllDataMpr với role chuẩn
