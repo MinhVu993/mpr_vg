@@ -11,7 +11,7 @@
               complete
               :class="['app-flow-step', isStepApproved(flow) ? 'step-approved' : 'step-pending', isStepActive(flow) ? 'step-active' : '']"
             >
-              <v-tooltip bottom>
+              <v-tooltip bottom :disabled="!flow.not_deputy_name_list_str">
                 <template #activator="{ on, attrs }">
                   <div v-bind="attrs" v-on="on" class="d-flex flex-column align-start justify-center text-body-2" style="color: #4a4a4a; line-height: 1.3; font-weight: 400;">
                     <div class="mb-0.5" style="font-size: 11px; color: #8c8c8c; font-weight: 400;">
@@ -28,7 +28,6 @@
                 <div v-if="flow.not_deputy_name_list_str">
                   {{ flow.not_deputy_name_list_str }}
                 </div>
-                <div v-else>{{ $t("no_disabled_deputy") }}</div>
               </v-tooltip>
             </v-stepper-step>
             <v-divider

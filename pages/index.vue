@@ -4387,13 +4387,6 @@
                 
                 if (this.$session.has('mpr')) {
                     this.activeUser = this.$session.get("mpr");
-                    if (this.activeUser && !authArr.includes(this.activeUser.role)) {
-                        const base = this.$router.options.base || '/';
-                        window.location.href = base.endsWith('/') ? base + 'dashboard_user' : base + '/dashboard_user';
-                        return;
-                    }
-                } else {
-                    return;
                 }
                 
                 await this.getAllData();
