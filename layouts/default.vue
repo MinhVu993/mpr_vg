@@ -75,8 +75,8 @@
 </template>
 
 <script>
-// import AuthComp from "../../../@global-component/auth-comp";
-import AuthComp from 'D:/source/@global-component/auth-comp.vue';
+import AuthComp from "../../../@global-component/auth-comp";
+// import AuthComp from 'D:/source/@global-component/auth-comp.vue';
 export default {
     components: {
         AuthComp,
