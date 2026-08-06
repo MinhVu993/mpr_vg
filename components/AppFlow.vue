@@ -13,14 +13,14 @@
             >
               <v-tooltip bottom :disabled="!flow.not_deputy_name_list_str">
                 <template #activator="{ on, attrs }">
-                  <div v-bind="attrs" v-on="on" class="d-flex flex-column align-start justify-center text-body-2" style="color: #4a4a4a; line-height: 1.3; font-weight: 400;">
-                    <div class="mb-0.5" style="font-size: 11px; color: #8c8c8c; font-weight: 400;">
+                  <div v-bind="attrs" v-on="on" class="d-flex flex-column align-start justify-center text-body-2" style="color: #4a4a4a; line-height: 1.2; font-weight: 400; white-space: nowrap;">
+                    <div class="mb-0.5" style="font-size: 11px; color: #8c8c8c; font-weight: 500;">
                       {{ ['mpr', 'mpr_flow2'].includes(appCode) ? customName(flow) : (flow.lvl_name ? flow.lvl_name[$i18n.locale] || flow.lvl_name.en : '') }}
                     </div>
-                    <div style="font-size: 13px; color: #333333; font-weight: 500;">
+                    <div style="font-size: 12px; color: #333333; font-weight: 500;">
                       {{ flow.manager_name_list_str }}
                     </div>
-                    <div v-if="flow.deputy_name_list_str" style="font-size: 12px; color: #666666; font-weight: 400;">
+                    <div v-if="flow.deputy_name_list_str" style="font-size: 11px; color: #666666; font-weight: 400;">
                       {{ flow.deputy_name_list_str }}
                     </div>
                   </div>
@@ -98,6 +98,18 @@ export default {
     };
   },
   watch: {
+    appCode() {
+      this.getFlow();
+    },
+    empno() {
+      this.getFlow();
+    },
+    customDept() {
+      this.getFlow();
+    },
+    customDivision() {
+      this.getFlow();
+    },
     show(n) {
       if (!n) this.deputyListArr = [];
     },
@@ -162,8 +174,9 @@ export default {
 
         const managerNameList = Object.values(
           primaryManagers.reduce((res1, cur1) => {
-            if (!res1[cur1.empno]) {
-              res1[cur1.empno] = cur1.full_name;
+            const name = cur1.full_name || cur1.name;
+            if (!res1[cur1.empno] && name) {
+              res1[cur1.empno] = name;
             }
             return res1;
           }, {})
@@ -178,16 +191,18 @@ export default {
         const t = {};
         const deputyNameList = Object.values(
           deputyList.reduce((res1, cur1) => {
+            const name = cur1.full_name || cur1.name;
             if (
               !res1[cur1.empno] &&
+              name &&
               cur1.status !== null &&
               cur1.status !== "" &&
               cur1.status !== false &&
               cur1.status !== undefined
             ) {
-              res1[cur1.empno] = cur1.full_name;
-            } else if (cur1.empno) {
-              t[cur1.empno] = cur1.full_name;
+              res1[cur1.empno] = name;
+            } else if (cur1.empno && name) {
+              t[cur1.empno] = name;
             }
             return res1;
           }, {})

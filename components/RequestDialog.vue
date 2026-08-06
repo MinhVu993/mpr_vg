@@ -23,7 +23,7 @@
             :status-endyear="editData ? editData.status_endyear : null"
             @sendAppFlow="handleAppFlow"
             class="mb-2"></VfaAppFlow>
-             <v-app-bar v-if="showFlowSign" class="flow-sign-container mb-4" flat dense>
+            <v-app-bar v-if="showFlowSign" class="flow-sign-container mb-4" flat dense>
                 <v-icon color="info" class="mr-2">mdi-information-outline</v-icon>
                 <div class="flow-sign-text text-subtitle-2">
                     <div>{{ $t('Request_ori:') }}{{ getCurrentFlowSign }}</div>
@@ -32,561 +32,632 @@
                     </div>
                 </div>
             </v-app-bar>
-
+            
             <div class="px-6 py-4">
-            <v-card-text v-if="showNewYearSection" class="new-year-card mb-4">
-                <v-row class="new-year-section">
-                    <v-col cols="12">
-                        <div class="d-flex align-center mb-3">
-                            <v-icon color="amber darken-3" size="28" class="mr-2">mdi-calendar-star</v-icon>
-                            <div class="text-subtitle-1 font-weight-bold text-amber-900">
-                                {{ $t("New Year Recruitment") }}
+                <v-card-text v-if="showNewYearSection" class="new-year-card mb-4">
+                    <v-row class="new-year-section">
+                        <v-col cols="12">
+                            <div class="d-flex align-center mb-3">
+                                <v-icon color="amber darken-3" size="28" class="mr-2">mdi-calendar-star</v-icon>
+                                <div class="text-subtitle-1 font-weight-bold text-amber-900">
+                                    {{ $t("New Year Recruitment") }}
+                                </div>
+                            </div>
+                            
+                            <div class="ml-9">
+                                <v-radio-group v-model="form.newYearRecruitment" column hide-details :disabled="disableNewYearRecruitment" >
+                                    <v-radio :label="$t('Continue Recruitment')" :value=1 class="mb-2 custom-radio" color="error"></v-radio>
+                                    <v-radio :label="$t('Cancel Recruitment')" :value=0 class="custom-radio" color="error"></v-radio>
+                                </v-radio-group>
+                            </div>
+                        </v-col>
+                    </v-row>
+                </v-card-text>
+                <v-card-text class="pa-0 mb-4" v-if="showAmendmentSection">
+                    <div class="amendment-card">
+                        <div class="d-flex align-center mb-4">
+                            <v-icon color="orange darken-3" class="mr-2">mdi-pencil-box-multiple</v-icon>
+                            <div class="text-subtitle-1 font-weight-bold orange--text text--darken-4 mb-0">{{ $t('Amendment Request Details') }}</div>
+                        </div>
+                        
+                        <v-row>
+                            <v-col cols="12" md="3">
+                                <v-autocomplete v-if="isChange" class="shadow-sm" :key="autocompleteKey" v-model="reqId"
+                                :items="item_req_id" :label="$t('Req ID')" outlined dense :rules="[rules.required]" required
+                                hide-details @change="getDataByReqId" item-text="text" item-value="id"
+                                background-color="#fffbeb"></v-autocomplete>
+                                <v-text-field v-else :value="editData ? editData.req_id : ''" :label="$t('Req ID')"
+                                outlined dense disabled hide-details background-color="#f5f5f5"></v-text-field>
+                            </v-col>
+                            <v-col cols="12" md="5">
+                                <v-combobox :disabled="disAmendent" v-model="form.changeReason" :items="formattedChangeReasons"
+                                item-text="text" item-value="id" return-object :label="$t('Change Reason')" outlined dense
+                                hide-details clearable @change="onChangeReason"></v-combobox>
+                            </v-col>
+                            <v-col cols="12" md="4" v-if="showChangeQuantityField">
+                                <v-text-field :disabled="disAmendent" v-model="form.changeQty"
+                                :label="$t('Change quantity') + ` (${$t('Min')}: ${editData?.recruited || 0}, ${$t('Max')}: ${form.quantity || 0})`"
+                                type="number" :min="editData?.recruited || 0" :max="form.quantity || 0" outlined dense
+                                :rules="[minQuantityRule, maxQuantityRule]" :error-messages="changeQtyError" persistent-hint
+                                hide-details="auto" :hint="getChangeQuantityHint"></v-text-field>
+                            </v-col>
+                        </v-row>
+                        
+                        <div v-show="showAmendmentRequirementFields">
+                            <v-row class="mt-2">
+                                <v-col cols="12" sm="6" md="2">
+                                    <v-autocomplete :disabled="disAmendent" v-model="form.educationLevel_change"
+                                    :items="educationLevelItems"
+                                    :label="$t('Education Level')" item-text="name" item-value="id" outlined dense hide-details
+                                    clearable></v-autocomplete>
+                                </v-col>
+                                <v-col cols="12" sm="6" md="8">
+                                    <v-textarea :disabled="disAmendent" auto-grow v-model="form.specialization_change"
+                                    :placeholder="$t('Professional qualifications')"
+                                    :label="$t('Professional qualifications')" outlined dense rows="1" hide-details></v-textarea>
+                                </v-col>
+                                <v-col cols="12" sm="6" md="2">
+                                    <v-autocomplete :disabled="disAmendent" v-model="form.workExperience_change" :items="workExpItems"
+                                    :label="$t('Work Experience')" item-text="name"
+                                    item-value="id" outlined dense hide-details clearable></v-autocomplete>
+                                </v-col>
+                            </v-row>
+                            
+                            <v-row class="mt-2">
+                                <v-col cols="12" :md="getJobDescColWidth">
+                                    <v-textarea :disabled="disAmendent" auto-grow v-model="form.jobDesc_change" outlined
+                                    :label="$t('Basic Job Description')" rows="1"
+                                    hide-details></v-textarea>
+                                </v-col>
+                                <v-col cols="12" md="2" v-if="form.pos !== 1">
+                                    <v-file-input :disabled="disAmendent" v-model="form.attachments.jobDesc_change"
+                                    :label="$t('Job description file')" outlined dense
+                                    hide-details @change="previewFile('jobDesc_change', $event)"
+                                    :clearable="true" accept=".doc,.docx,.pdf"></v-file-input>
+                                    <div v-if="filePreview.jobDesc_change" class="file-preview-card mt-2">
+                                        <div class="d-flex align-center justify-space-between mb-1">
+                                            <v-chip small class="bg-primary-light">
+                                                <v-icon left small color="#01a6be">{{ getFileIcon(form.attachments.jobDesc_change?.type || getFileTypeFromName(form.attachments.jobDesc_change)) }}</v-icon>
+                                                <span class="file-name-text">{{ getFileName("jobDesc_change") }}</span>
+                                            </v-chip>
+                                            <span class="caption grey--text">{{ form.attachments.jobDesc_change_size || "" }}</span>
+                                        </div>
+                                        <div class="d-flex align-center justify-end">
+                                            <v-btn x-small text color="primary" @click="openFile('jobDesc_change')" class="mr-2"> <v-icon small left>mdi-eye</v-icon> {{ $t("View") }} </v-btn>
+                                            <v-btn :disabled="disAmendent" x-small text color="error" @click="clearFile('jobDesc_change')"> <v-icon small left>mdi-delete</v-icon> {{ $t("Delete") }} </v-btn>
+                                        </div>
+                                    </div>
+                                </v-col>
+                            </v-row>
+                            
+                            <div v-show="showLanguageAndComputerSkills" class="mt-6">
+                                <div class="mb-4">
+                                    <div class="d-flex align-center mb-2">
+                                        <v-icon left color="orange darken-2" small>mdi-translate</v-icon>
+                                        <div class="text-subtitle-2 font-weight-medium orange--text text--darken-4">
+                                            {{ $t("Foreign Language Proficiency") }}
+                                        </div>
+                                    </div>
+                                    <v-row class="ml-1">
+                                        <v-col cols="12" md="4">
+                                            <v-radio-group v-model="form.either_change" row dense hide-details>
+                                                <div class="subtitle-2 mr-2">{{ $t("Either:") }}</div>
+                                                <v-radio :disabled="disAmendent"
+                                                v-for="(level, index) in getLanguageLevels('either')"
+                                                :key="'either-' + index" :value="level.value"
+                                                :label="getLocalizedLabel(level)" hide-details class="mr-3"></v-radio>
+                                            </v-radio-group>
+                                        </v-col>
+                                        
+                                        <v-col cols="12" md="4">
+                                            <v-radio-group v-model="form.english_change" row hide-details dense>
+                                                <div class="subtitle-2 mr-2">{{ $t("English:") }}</div>
+                                                <v-radio :disabled="disAmendent"
+                                                v-for="(level, index) in getLanguageLevels('en')" :key="'english-' + index"
+                                                :value="level.value" :label="getLocalizedLabel(level)" hide-details
+                                                class="mr-3"></v-radio>
+                                            </v-radio-group>
+                                        </v-col>
+                                        <v-col cols="12" md="4">
+                                            <v-radio-group v-model="form.chinese_change" row hide-details dense>
+                                                <div class="subtitle-2 mr-2">{{ $t("Chinese:") }}</div>
+                                                <v-radio :disabled="disAmendent"
+                                                v-for="(level, index) in getLanguageLevels('cn')" :key="'chinese-' + index"
+                                                :value="level.value" :label="getLocalizedLabel(level)" hide-details
+                                                class="mr-3"></v-radio>
+                                            </v-radio-group>
+                                        </v-col>
+                                        <v-col cols="12" md="4" class="pt-0">
+                                            <v-checkbox :disabled="disAmendent" v-model="form.tranlator_change"
+                                            :label="$t('Translator')" hide-details class="mt-0"></v-checkbox>
+                                        </v-col>
+                                    </v-row>
+                                </div>
+                                <div class="mb-4">
+                                    <div class="d-flex align-center mb-2">
+                                        <v-icon left color="orange darken-2" small>mdi-desktop-classic</v-icon>
+                                        <div class="text-subtitle-2 font-weight-medium orange--text text--darken-4">
+                                            {{ $t("Computer Skills") }}
+                                        </div>
+                                    </div>
+                                    
+                                    <v-row class="ml-2">
+                                        <v-col cols="12" class="d-flex flex-wrap py-0">
+                                            <v-checkbox :disabled="disAmendent"
+                                            v-for="skill in ['Word', 'Excel', 'Access', 'PowerPoint', 'Internet', 'None', 'Other']"
+                                            :key="skill" v-model="form.computerSkills_change" :value="skill"
+                                            :label="$t(skill)" dense hide-details class="mr-4 mb-2"></v-checkbox>
+                                        </v-col>
+                                        <v-col cols="12" v-if="form.computerSkills_change.includes('Other')" class="pt-0">
+                                            <v-textarea :disabled="disAmendent"
+                                            v-model="form.otherComputerSkills_change" :label="$t('Other Skills')" dense outlined
+                                            class="mt-2" rows="1" hide-details auto-grow></v-textarea>
+                                        </v-col>
+                                    </v-row>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="ml-9">
-                            <v-radio-group v-model="form.newYearRecruitment" column hide-details :disabled="disableNewYearRecruitment" >
-                                <v-radio :label="$t('Continue Recruitment')" :value=1 class="mb-2 custom-radio" color="error"></v-radio>
-                                <v-radio :label="$t('Cancel Recruitment')" :value=0 class="custom-radio" color="error"></v-radio>
-                            </v-radio-group>
-                        </div>
-                    </v-col>
-                </v-row>
-            </v-card-text>
-            <v-card-text class="pa-0 mb-4" v-if="showAmendmentSection">
-                <div class="amendment-card">
-                    <div class="d-flex align-center mb-4">
-                        <v-icon color="orange darken-3" class="mr-2">mdi-pencil-box-multiple</v-icon>
-                        <div class="text-subtitle-1 font-weight-bold orange--text text--darken-4 mb-0">{{ $t('Amendment Request Details') }}</div>
-                    </div>
-                    
-                    <v-row>
-                        <v-col cols="12" md="3">
-                            <v-autocomplete v-if="isChange" class="shadow-sm" :key="autocompleteKey" v-model="reqId"
-                            :items="item_req_id" :label="$t('Req ID')" outlined dense :rules="[rules.required]" required
-                            hide-details @change="getDataByReqId" item-text="text" item-value="id"
-                            background-color="#fffbeb"></v-autocomplete>
-                            <v-text-field v-else :value="editData ? editData.req_id : ''" :label="$t('Req ID')"
-                            outlined dense disabled hide-details background-color="#f5f5f5"></v-text-field>
-                        </v-col>
-                        <v-col cols="12" md="5">
-                            <v-combobox :disabled="disAmendent" v-model="form.changeReason" :items="formattedChangeReasons"
-                            item-text="text" item-value="id" return-object :label="$t('Change Reason')" outlined dense
-                            hide-details clearable @change="onChangeReason"></v-combobox>
-                        </v-col>
-                        <v-col cols="12" md="4" v-if="showChangeQuantityField">
-                            <v-text-field :disabled="disAmendent" v-model="form.changeQty"
-                            :label="$t('Change quantity') + ` (${$t('Min')}: ${editData?.recruited || 0}, ${$t('Max')}: ${form.quantity || 0})`"
-                            type="number" :min="editData?.recruited || 0" :max="form.quantity || 0" outlined dense
-                            :rules="[minQuantityRule, maxQuantityRule]" :error-messages="changeQtyError" persistent-hint
-                            hide-details="auto" :hint="getChangeQuantityHint"></v-text-field>
-                        </v-col>
-                    </v-row>
-                    
-                    <div v-show="showAmendmentRequirementFields">
                         <v-row class="mt-2">
-                            <v-col cols="12" sm="6" md="2">
-                                <v-autocomplete :disabled="disAmendent" v-model="form.educationLevel_change"
-                                :items="educationLevelItems"
-                                :label="$t('Education Level')" item-text="name" item-value="id" outlined dense hide-details
+                            <v-col cols="12">
+                                <v-textarea :disabled="disAmendent" v-model="form.remark_change" outlined
+                                :label="$t('Change remark')" rows="1" hide-details auto-grow></v-textarea>
+                            </v-col>
+                        </v-row>
+                    </div>
+                </v-card-text>
+                <v-card-text class="px-1 py-1">
+                    <div class="form-card">
+                        <div class="form-card-header d-flex align-center mb-4">
+                            <v-icon color="#01a6be" class="mr-2" size="24">mdi-card-text-outline</v-icon>
+                            <span class="text-subtitle-1 font-weight-bold text-slate-800">{{ $t("Basic Request Information") }}</span>
+                        </div>
+                        <v-row>
+                            <v-col cols="12" md="2">
+                                <v-text-field disabled :value="displayReqId" :label="$t('Req ID')" outlined dense
+                                hide-details></v-text-field>
+                            </v-col>
+                            <v-col cols="1">
+                                <v-autocomplete :disabled="formDisabled" v-model="user.div" :items="itemsDiv"
+                                :label="$t('Division')" outlined :required="true" :rules="[rules.required]" dense
+                                hide-details></v-autocomplete>
+                            </v-col>
+                            <v-col cols="2">
+                                <v-autocomplete :disabled="formDisabled" v-model="user.dept" :items="itemsDept"
+                                :label="$t('Dept')" outlined dense :rules="[rules.required]" required hide-details
                                 clearable></v-autocomplete>
                             </v-col>
-                            <v-col cols="12" sm="6" md="8">
-                                <v-textarea :disabled="disAmendent" auto-grow v-model="form.specialization_change"
-                                :placeholder="$t('Professional qualifications')"
-                                :label="$t('Professional qualifications')" outlined dense rows="1" hide-details></v-textarea>
+                            <v-col cols="1" md="2">
+                                <v-autocomplete :disabled="formDisabled" v-model="user.unit" :items="filteredUnitItems"
+                                item-text="display" item-value="dept_code" :label="$t('Unit')" outlined dense
+                                :rules="[rules.required]" required hide-details clearable
+                                :no-data-text="!user.div || !user.dept ? $t('Please select Division and Department first') : $t('No data available')"></v-autocomplete>
                             </v-col>
-                            <v-col cols="12" sm="6" md="2">
-                                <v-autocomplete :disabled="disAmendent" v-model="form.workExperience_change" :items="workExpItems"
-                                :label="$t('Work Experience')" item-text="name"
-                                item-value="id" outlined dense hide-details clearable></v-autocomplete>
+                            
+                            <v-col cols="12" md="2">
+                                <v-autocomplete :disabled="formDisabled" v-model="form.suppType" :items="suppTypeItems"
+                                :label="$t('Supp.Type')" :rules="[rules.required]" required item-text="name" item-value="id"
+                                outlined dense hide-details clearable></v-autocomplete>
                             </v-col>
-                        </v-row>
-                        
-                        <v-row class="mt-2">
-                            <v-col cols="12" :md="getJobDescColWidth">
-                                <v-textarea :disabled="disAmendent" auto-grow v-model="form.jobDesc_change" outlined
-                                :label="$t('Basic Job Description')" rows="1"
-                                hide-details></v-textarea>
+                            <v-col cols="12" md="1">
+                                <v-autocomplete :disabled="formDisabled" v-model="form.pos" :items="posItems"
+                                :label="$t('Type Apply')" item-text="name" :rules="[rules.required]" required
+                                item-value="id" outlined dense hide-details clearable
+                                @change="handleTypeApplyChange"></v-autocomplete>
                             </v-col>
-                            <v-col cols="12" md="2" v-if="form.pos !== 1">
-                                <v-file-input :disabled="disAmendent" v-model="form.attachments.jobDesc_change"
-                                :label="$t('Job description file')" outlined dense
-                                hide-details @change="previewFile('jobDesc_change', $event)"
-                                :clearable="true" accept=".doc,.docx,.pdf"></v-file-input>
-                                <div v-if="filePreview.jobDesc_change" class="file-preview-card mt-2">
-                                    <div class="d-flex align-center justify-space-between mb-1">
-                                        <v-chip small class="bg-primary-light">
-                                            <v-icon left small color="#01a6be">{{ getFileIcon(form.attachments.jobDesc_change?.type || getFileTypeFromName(form.attachments.jobDesc_change)) }}</v-icon>
-                                            <span class="file-name-text">{{ getFileName("jobDesc_change") }}</span>
-                                        </v-chip>
-                                        <span class="caption grey--text">{{ form.attachments.jobDesc_change_size || "" }}</span>
-                                    </div>
-                                    <div class="d-flex align-center justify-end">
-                                        <v-btn x-small text color="primary" @click="openFile('jobDesc_change')" class="mr-2"> <v-icon small left>mdi-eye</v-icon> {{ $t("View") }} </v-btn>
-                                        <v-btn :disabled="disAmendent" x-small text color="error" @click="clearFile('jobDesc_change')"> <v-icon small left>mdi-delete</v-icon> {{ $t("Delete") }} </v-btn>
-                                    </div>
-                                </div>
+                            <v-col cols="12" md="1" v-if="isHrManager && ![1, 3].includes(Number(form.pos))">
+                                <v-autocomplete background-color="#fff9c4" color="#000000" v-model="form.sub_position"
+                                :items="sub_positionItems" item-text="name" :disabled="!!editData?.sub_pos" item-value="id"
+                                :label="$t('Sub Position')" outlined dense hide-details clearable></v-autocomplete>
+                            </v-col>
+                            <v-col cols="2" md="1" v-if="showLevelField">
+                                <v-text-field :disabled="formDisabled || !showLevelField" v-model="form.level"
+                                :label="$t('Level')" outlined dense hide-details></v-text-field>
+                            </v-col>
+                            <v-col cols="1" md="1">
+                                <v-text-field :disabled="formDisabled" v-model="form.quantity" :label="$t('Quantity request')"
+                                type="number" min="1" :rules="[rules.required]" outlined dense hide-details="auto" required
+                                @input="(val) => (form.quantity = val > 0 ? val : '')"></v-text-field>
                             </v-col>
                         </v-row>
                         
-                        <div v-show="showLanguageAndComputerSkills" class="mt-6">
-                            <div class="mb-4">
-                                <div class="d-flex align-center mb-2">
-                                    <v-icon left color="orange darken-2" small>mdi-translate</v-icon>
-                                    <div class="text-subtitle-2 font-weight-medium orange--text text--darken-4">
-                                        {{ $t("Foreign Language Proficiency") }}
-                                    </div>
-                                </div>
-                                <v-row class="ml-1">
-                                    <v-col cols="12" md="4">
-                                        <v-radio-group v-model="form.either_change" row dense hide-details>
-                                            <div class="subtitle-2 mr-2">{{ $t("Either:") }}</div>
-                                            <v-radio :disabled="disAmendent"
-                                            v-for="(level, index) in getLanguageLevels('either')"
-                                            :key="'either-' + index" :value="level.value"
-                                            :label="getLocalizedLabel(level)" hide-details class="mr-3"></v-radio>
-                                        </v-radio-group>
-                                    </v-col>
-                                    
-                                    <v-col cols="12" md="4">
-                                        <v-radio-group v-model="form.english_change" row hide-details dense>
-                                            <div class="subtitle-2 mr-2">{{ $t("English:") }}</div>
-                                            <v-radio :disabled="disAmendent"
-                                            v-for="(level, index) in getLanguageLevels('en')" :key="'english-' + index"
-                                            :value="level.value" :label="getLocalizedLabel(level)" hide-details
-                                            class="mr-3"></v-radio>
-                                        </v-radio-group>
-                                    </v-col>
-                                    <v-col cols="12" md="4">
-                                        <v-radio-group v-model="form.chinese_change" row hide-details dense>
-                                            <div class="subtitle-2 mr-2">{{ $t("Chinese:") }}</div>
-                                            <v-radio :disabled="disAmendent"
-                                            v-for="(level, index) in getLanguageLevels('cn')" :key="'chinese-' + index"
-                                            :value="level.value" :label="getLocalizedLabel(level)" hide-details
-                                            class="mr-3"></v-radio>
-                                        </v-radio-group>
-                                    </v-col>
-                                    <v-col cols="12" md="4" class="pt-0">
-                                        <v-checkbox :disabled="disAmendent" v-model="form.tranlator_change"
-                                        :label="$t('Translator')" hide-details class="mt-0"></v-checkbox>
-                                    </v-col>
-                                </v-row>
-                            </div>
-                            <div class="mb-4">
-                                <div class="d-flex align-center mb-2">
-                                    <v-icon left color="orange darken-2" small>mdi-desktop-classic</v-icon>
-                                    <div class="text-subtitle-2 font-weight-medium orange--text text--darken-4">
-                                        {{ $t("Computer Skills") }}
-                                    </div>
-                                </div>
-                                
-                                <v-row class="ml-2">
-                                    <v-col cols="12" class="d-flex flex-wrap py-0">
-                                        <v-checkbox :disabled="disAmendent"
-                                        v-for="skill in ['Word', 'Excel', 'Access', 'PowerPoint', 'Internet', 'None', 'Other']"
-                                        :key="skill" v-model="form.computerSkills_change" :value="skill"
-                                        :label="$t(skill)" dense hide-details class="mr-4 mb-2"></v-checkbox>
-                                    </v-col>
-                                    <v-col cols="12" v-if="form.computerSkills_change.includes('Other')" class="pt-0">
-                                        <v-textarea :disabled="disAmendent"
-                                        v-model="form.otherComputerSkills_change" :label="$t('Other Skills')" dense outlined
-                                        class="mt-2" rows="1" hide-details auto-grow></v-textarea>
-                                    </v-col>
-                                </v-row>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <v-row class="mt-2">
-                        <v-col cols="12">
-                            <v-textarea :disabled="disAmendent" v-model="form.remark_change" outlined
-                            :label="$t('Change remark')" rows="1" hide-details auto-grow></v-textarea>
+                        <v-row>
+                            <v-col cols="2" md="2">
+                                <v-menu v-model="dateRequestMenu" :close-on-content-click="false" transition="scale-transition"
+                                offset-y>
+                                <template v-slot:activator="{ on, attrs }">
+                                    <v-text-field :disabled="formDisabled" v-model="form.recruitment.requestDate"
+                                    :label="$t('Req.date')" readonly outlined dense v-bind="attrs" v-on="on"
+                                    hide-details prepend-inner-icon="mdi-calendar"></v-text-field>
+                                </template>
+                                <v-date-picker v-model="form.recruitment.requestDate" @input="dateRequestMenu = false"
+                                :min="getEffectiveDate()"></v-date-picker>
+                            </v-menu>
                         </v-col>
-                    </v-row>
-                </div>
-            </v-card-text>
-            <v-card-text class="px-1 py-1">
-                <div class="form-card">
-                    <div class="form-card-header d-flex align-center mb-4">
-                        <v-icon color="#01a6be" class="mr-2" size="24">mdi-card-text-outline</v-icon>
-                        <span class="text-subtitle-1 font-weight-bold text-slate-800">{{ $t("Basic Request Information") }}</span>
-                    </div>
-                    <v-row>
-                    <v-col cols="12" md="2">
-                        <v-text-field disabled :value="displayReqId" :label="$t('Req ID')" outlined dense
-                        hide-details></v-text-field>
-                    </v-col>
-                    <v-col cols="1">
-                        <v-autocomplete :disabled="formDisabled" v-model="user.div" :items="itemsDiv"
-                        :label="$t('Division')" outlined :required="true" :rules="[rules.required]" dense
-                        hide-details></v-autocomplete>
-                    </v-col>
-                    <v-col cols="2">
-                        <v-autocomplete :disabled="formDisabled" v-model="user.dept" :items="itemsDept"
-                        :label="$t('Dept')" outlined dense :rules="[rules.required]" required hide-details
-                        clearable></v-autocomplete>
-                    </v-col>
-                    <v-col cols="1" md="2">
-                        <v-autocomplete :disabled="formDisabled" v-model="user.unit" :items="filteredUnitItems"
-                        item-text="display" item-value="dept_code" :label="$t('Unit')" outlined dense
-                        :rules="[rules.required]" required hide-details clearable
-                        :no-data-text="!user.div || !user.dept ? $t('Please select Division and Department first') : $t('No data available')"></v-autocomplete>
-                    </v-col>
-                    
-                    <v-col cols="12" md="2">
-                        <v-autocomplete :disabled="formDisabled" v-model="form.suppType" :items="suppTypeItems"
-                        :label="$t('Supp.Type')" :rules="[rules.required]" required item-text="name" item-value="id"
-                        outlined dense hide-details clearable></v-autocomplete>
-                    </v-col>
-                    <v-col cols="12" md="1">
-                        <v-autocomplete :disabled="formDisabled" v-model="form.pos" :items="posItems"
-                        :label="$t('Type Apply')" item-text="name" :rules="[rules.required]" required
-                        item-value="id" outlined dense hide-details clearable
-                        @change="handleTypeApplyChange"></v-autocomplete>
-                    </v-col>
-                    <v-col cols="12" md="1" v-if="isHrManager && ![1, 3].includes(Number(form.pos))">
-                        <v-autocomplete background-color="#fff9c4" color="#000000" v-model="form.sub_position"
-                        :items="sub_positionItems" item-text="name" :disabled="!!editData?.sub_pos" item-value="id"
-                        :label="$t('Sub Position')" outlined dense hide-details clearable></v-autocomplete>
-                    </v-col>
-                    <v-col cols="2" md="1" v-if="showLevelField">
-                        <v-text-field :disabled="formDisabled || !showLevelField" v-model="form.level"
-                        :label="$t('Level')" outlined dense hide-details></v-text-field>
-                    </v-col>
-                    <v-col cols="1" md="1">
-                        <v-text-field :disabled="formDisabled" v-model="form.quantity" :label="$t('Quantity request')"
-                        type="number" min="1" :rules="[rules.required]" outlined dense hide-details="auto" required
-                        @input="(val) => (form.quantity = val > 0 ? val : '')"></v-text-field>
+                        <v-col cols="4" md="6">
+                            <v-card outlined :class="{ 'error--text': formErrors.recruitment }"
+                            class="pa-2 custom-card-hover">
+                            <v-row dense>
+                                <v-col cols="12" class="d-flex flex-wrap align-center">
+                                    <span class="font-weight-medium">{{ $t("Reason") }}</span>
+                                    <v-radio-group :disabled="formDisabled" v-model="form.recruitment.reason" row dense
+                                    hide-details :rules="[reasonSelectionRule]">
+                                    <v-radio v-for="reason in dataRecruitmentReason" :key="reason.id"
+                                    :value="reason.id" :label="getReasonLabel(reason)" dense class="mr-2"
+                                    @change="handleReasonChange(reason.id)">
+                                </v-radio>
+                            </v-radio-group>
+                            <v-autocomplete class="ml-1"
+                            :disabled="formDisabled || form.recruitment.reason !== 3"
+                            v-model="form.recruitment.otherReasonSelected" :items="otherReasonItems"
+                            item-text="text" item-value="id" :label="$t('Please select')" outlined dense
+                            :rules="form.recruitment.reason === 3 ? [rules.required] : []"
+                            :required="form.recruitment.reason === 3"
+                            hide-details="auto" clearable @change="handleOtherReasonSelect"></v-autocomplete>
+                        </v-col>
+                        <v-col cols="12" v-if="form.recruitment.reason === 2"> <!-- For2 Replacement -->
+                            <v-combobox
+                            v-model="oldEmpList"
+                            multiple
+                            chips
+                            small-chips
+                            deletable-chips
+                            :disabled="formDisabled"
+                            :label="$t('Resigned Employee IDs (Type and press Enter or Comma)...')"
+                            outlined
+                            dense
+                            hide-details="auto"
+                            :error-messages="oldEmpError"
+                            :rules="[() => (oldEmpList && oldEmpList.length > 0) || $t('Please enter at least one employee ID')]"
+                            @change="handleOldEmpListChange"
+                            @paste="handleOldEmpPaste"
+                            >
+                            <template v-slot:no-data>
+                                <v-list-item>
+                                    <v-list-item-content>
+                                        <v-list-item-title class="text-caption" v-html="$t('Type_EmpNo_Hint')">
+                                        </v-list-item-title>
+                                    </v-list-item-content>
+                                </v-list-item>
+                            </template>
+                        </v-combobox>
+                        
+                        <!-- Table of Resigned Employees Details -->
+                        <v-card v-if="resignedEmpListDetails && resignedEmpListDetails.length > 0" outlined class="mt-2 pa-2">
+                            <div class="d-flex align-center justify-space-between px-2 py-1" @click="showResignedEmpTable = !showResignedEmpTable" style="cursor: pointer;">
+                                <span class="text-caption font-weight-medium grey--text text--darken-2">
+                                    <v-icon x-small left color="primary">mdi-account-group</v-icon>
+                                    {{ $t('Resigned Employees List') }} ({{ resignedEmpListDetails.length }})
+                                </span>
+                                <v-btn icon x-small @click.stop="showResignedEmpTable = !showResignedEmpTable" :title="showResignedEmpTable ? $t('Collapse') : $t('Expand')">
+                                    <v-icon x-small>{{ showResignedEmpTable ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+                                </v-btn>
+                            </div>
+                            <v-expand-transition>
+                                <div v-show="showResignedEmpTable">
+                                    <v-simple-table dense  fixed-header class="mt-1">
+                                        <template v-slot:default>
+                                            <thead>
+                                                <tr>
+                                                    <th class="text-left">#</th>
+                                                    <th class="text-left">{{ $t('EmpNo') }}</th>
+                                                    <th class="text-left">{{ $t('Name') }}</th>
+                                                    <th class="text-left">{{ $t('Department') }}</th>
+                                                    <th class="text-left">{{ $t('In Date') }}</th>
+                                                    <th class="text-center" v-if="!formDisabled"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr v-for="(item, idx) in resignedEmpListDetails" :key="item.empno">
+                                                    <td>{{ idx + 1 }}</td>
+                                                    <td class="font-weight-bold primary--text">{{ item.empno }}</td>
+                                                    <td>{{ item.name }} </td>
+                                                    <td>{{ item.dept_name || item.dept_code }}</td>
+                                                    <td>{{ item.in_date }}</td>
+                                                    <td class="text-center" v-if="!formDisabled">
+                                                        <v-btn icon small color="error" @click="removeOldEmp(idx)">
+                                                            <v-icon small>mdi-close-circle</v-icon>
+                                                        </v-btn>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </template>
+                                    </v-simple-table>
+                                </div>
+                            </v-expand-transition>
+                        </v-card>
                     </v-col>
                 </v-row>
-                    
-                    <v-row>
-                    <v-col cols="2" md="2">
-                        <v-menu v-model="dateRequestMenu" :close-on-content-click="false" transition="scale-transition"
-                        offset-y>
-                        <template v-slot:activator="{ on, attrs }">
-                            <v-text-field :disabled="formDisabled" v-model="form.recruitment.requestDate"
-                            :label="$t('Req.date')" readonly outlined dense v-bind="attrs" v-on="on"
-                            hide-details prepend-inner-icon="mdi-calendar"></v-text-field>
-                        </template>
-                        <v-date-picker v-model="form.recruitment.requestDate" @input="dateRequestMenu = false"
-                        :min="getEffectiveDate()"></v-date-picker>
-                    </v-menu>
-                </v-col>
-                <v-col cols="4" md="6">
-                    <v-card outlined :class="{ 'error--text': formErrors.recruitment }"
-                    class="pa-2 custom-card-hover">
-                    <v-row dense>
-                        <v-col cols="12" class="d-flex flex-wrap align-center">
-                            <span class="font-weight-medium">{{ $t("Reason") }}</span>
-                            <v-radio-group :disabled="formDisabled" v-model="form.recruitment.reason" row dense
-                            hide-details :rules="[reasonSelectionRule]">
-                            <v-radio v-for="reason in dataRecruitmentReason" :key="reason.id"
-                            :value="reason.id" :label="getReasonLabel(reason)" dense class="mr-2"
-                            @change="handleReasonChange(reason.id)">
-                        </v-radio>
+            </v-card>
+        </v-col>
+        
+        <v-col cols="12" md="4">
+            <v-file-input :disabled="formDisabled" v-model="form.attachments.dimissionList"
+            :label="$t('Dimission list file')" outlined dense
+            :error="form.recruitment.reason === 3 && !form.attachments.dimissionList"
+            :required="form.recruitment.reason === 3"
+            :rules="form.recruitment.reason === 3 ? [rules.required] : []" hide-details="auto"
+            @change="handleDimissionListChange($event)" prepend-inner-icon="mdi-file-account"
+            :clearable="true" accept=".doc,.docx,.pdf,.xls,.xlsx"></v-file-input>
+            <div class="mt-1 ml-1">
+                <a href="/Resign template.xlsx" download class="text-caption" style="color: #00838F; text-decoration: underline;">
+                    <v-icon x-small color="#00838F">mdi-download</v-icon> {{ $t("Download template") }}
+                </a>
+            </div>
+            <div v-show="filePreview.dimissionList && (form.recruitment.reason === 2 || form.recruitment.reason === 3)"
+            class="file-preview-card mt-2">
+            <div class="d-flex align-center justify-space-between mb-1">
+                <v-chip small class="bg-primary-light">
+                    <v-icon left small color="#01a6be">{{ getFileIcon(form.attachments.dimissionList?.type ||
+                        getFileTypeFromName(form.attachments.dimissionList) ) }}</v-icon>
+                        <span class="file-name-text">{{ getFileName("dimissionList") }}</span>
+                    </v-chip>
+                    <span class="caption grey--text">{{ form.attachments.dimissionList_size || "" }}</span>
+                </div>
+                <div class="d-flex align-center justify-end">
+                    <v-btn x-small text color="primary" @click="openFile('dimissionList')" class="mr-2"> <v-icon small left>mdi-eye</v-icon> {{ $t("View") }} </v-btn>
+                    <v-btn :disabled="formDisabled" x-small text color="error" @click="clearFile('dimissionList')"> <v-icon small left>mdi-delete</v-icon> {{ $t("Delete") }} </v-btn>
+                </div>
+            </div>
+        </v-col>
+    </v-row>
+</div>
+
+<!-- Qualifications & Job Description Card -->
+<div class="form-card mt-4">
+    <div class="form-card-header d-flex align-center mb-4">
+        <v-icon color="#01a6be" class="mr-2" size="24">mdi-school-outline</v-icon>
+        <span class="text-subtitle-1 font-weight-bold text-slate-800">{{ $t("Qualifications & Job Description") }}</span>
+    </div>
+    <v-row>
+        <v-col cols="12" sm="6" md="2">
+            <v-autocomplete :disabled="formDisabled" v-model="form.educationLevel"
+            :items="educationLevelItems" :rules="[rules.required]" required
+            :label="$t('Education Level')" item-text="name" item-value="id" outlined dense hide-details
+            clearable></v-autocomplete>
+        </v-col>
+        <v-col cols="12" sm="6" md="8">
+            <v-textarea :disabled="formDisabled" auto-grow v-model="localizedSpecialization"
+            :rules="[rules.required]" required :placeholder="$t('Professional qualifications')"
+            :label="$t('Professional qualifications')" outlined dense rows="1" hide-details
+            @input="handleSpecializationInput"></v-textarea>
+        </v-col>
+        <v-col cols="12" sm="6" md="2">
+            <v-autocomplete :disabled="formDisabled" v-model="form.workExperience" :items="workExpItems"
+            :rules="[rules.required]" required :label="$t('Work Experience')" item-text="name"
+            item-value="id" outlined dense hide-details clearable></v-autocomplete>
+        </v-col>
+    </v-row>
+    <v-row class="mt-3">
+        <v-col cols="12" :md="getJobDescColWidth">
+            <v-textarea :disabled="formDisabled" auto-grow v-model="form.jobDesc" outlined
+            :label="$t('Basic Job Description')" :rules="[rules.required]" required rows="1"
+            hide-details></v-textarea>
+        </v-col>
+        <v-col cols="12" md="2" v-if="form.pos !== 1">
+            <v-file-input :disabled="formDisabled" v-model="form.attachments.jobDesc"
+            :label="$t('Job description file')" outlined dense :error="form.pos === 1"
+            :error-messages="form.pos === 1 ? $t('Job description file is required') : ''" :required="form.pos === 1"
+            hide-details @change="previewFile('jobDesc', $event)" v-show="form.pos !== 1"
+            :clearable="true" accept=".doc,.docx,.pdf"></v-file-input>
+            <div v-if="filePreview.jobDesc" class="file-preview-card mt-2">
+                <div class="d-flex align-center justify-space-between mb-1">
+                    <v-chip small class="bg-primary-light">
+                        <v-icon left small color="#01a6be">{{ getFileIcon(form.attachments.jobDesc?.type ||
+                            getFileTypeFromName(form.attachments.jobDesc) ) }}</v-icon>
+                            <span class="file-name-text">{{ getFileName("jobDesc") }}</span>
+                        </v-chip>
+                        <span class="caption grey--text">{{ form.attachments.jobDesc_size || "" }}</span>
+                    </div>
+                    <div class="d-flex align-center justify-end">
+                        <v-btn x-small text color="primary" @click="openFile('jobDesc')" class="mr-2"> <v-icon small left>mdi-eye</v-icon> {{ $t("View") }} </v-btn>
+                        <v-btn :disabled="formDisabled" x-small text color="error" @click="clearFile('jobDesc')"> <v-icon small left>mdi-delete</v-icon> {{ $t("Delete") }} </v-btn>
+                    </div>
+                </div>
+            </v-col>
+        </v-row>
+    </div>
+    
+    <!-- Skills & Other Information Card -->
+    <div class="form-card mt-4">
+        <div v-show="form.pos !== 1">
+            <div class="d-flex align-center mb-2">
+                <v-icon left color="#01a6be" small>mdi-translate</v-icon>
+                <div class="text-subtitle-2 font-weight-medium text-slate-700">
+                    {{ $t("Foreign Language Proficiency") }}
+                </div>
+            </div>
+            <v-row class="ml-1 mb-4">
+                <v-col cols="12" md="4">
+                    <v-radio-group :disabled="formDisabled" v-model="form.either" row dense hide-details>
+                        <div class="subtitle-2 mr-2">{{ $t("Either:") }}</div>
+                        <v-radio :disabled="formDisabled"
+                        v-for="(level, index) in getLanguageLevels('either')"
+                        :key="'either-' + index" :value="level.value"
+                        :label="getLocalizedLabel(level)" hide-details class="mr-3"></v-radio>
                     </v-radio-group>
-                    <v-autocomplete class="ml-1"
-                    :disabled="formDisabled || form.recruitment.reason !== 3"
-                    v-model="form.recruitment.otherReasonSelected" :items="otherReasonItems"
-                    item-text="text" item-value="id" :label="$t('Please select')" outlined dense
-                    :rules="form.recruitment.reason === 3 ? [rules.required] : []"
-                    :required="form.recruitment.reason === 3"
-                    hide-details="auto" clearable @change="handleOtherReasonSelect"></v-autocomplete>
                 </v-col>
-                <v-col cols="12" v-if="form.recruitment.reason === 2"> <!-- For2-->
-                    <v-text-field :rules="[rules.required]" required :disabled="formDisabled"
-                    v-model="form.recruitment.oldempno" :label="$t('Old empno')" outlined dense
-                    hide-details></v-text-field>
+                <v-col cols="12" md="4">
+                    <v-radio-group :disabled="formDisabled" v-model="form.english" row hide-details dense>
+                        <div class="subtitle-2 mr-2">{{ $t("English:") }}</div>
+                        <v-radio :disabled="formDisabled"
+                        v-for="(level, index) in getLanguageLevels('en')"
+                        :key="'english-' + index" :value="level.value"
+                        :label="getLocalizedLabel(level)" hide-details class="mr-3"></v-radio>
+                    </v-radio-group>
                 </v-col>
-                
+                <v-col cols="12" md="4">
+                    <v-radio-group :disabled="formDisabled" v-model="form.chinese" row hide-details dense>
+                        <div class="subtitle-2 mr-2">{{ $t("Chinese:") }}</div>
+                        <v-radio :disabled="formDisabled"
+                        v-for="(level, index) in getLanguageLevels('cn')"
+                        :key="'chinese-' + index" :value="level.value"
+                        :label="getLocalizedLabel(level)" hide-details class="mr-3"></v-radio>
+                    </v-radio-group>
+                </v-col>
+                <v-col cols="12" md="4" class="pt-0">
+                    <v-checkbox :disabled="formDisabled" v-model="form.tranlator"
+                    :label="$t('Translator')" hide-details class="mt-0"></v-checkbox>
+                </v-col>
             </v-row>
-                            </v-card>
-                        </v-col>
-                        
-                        <v-col cols="12" md="4" class="d-flex flex-column justify-center">
-                            <v-file-input :disabled="formDisabled" v-model="form.attachments.dimissionList"
-                            :label="$t('Dimission list file')" outlined dense
-                            :error="(form.recruitment.reason === 2 || form.recruitment.reason === 3) && !form.attachments.dimissionList"
-                            :required="form.recruitment.reason === 2 || form.recruitment.reason === 3"
-                            :rules="(form.recruitment.reason === 2 || form.recruitment.reason === 3) ? [rules.required] : []" hide-details="auto"
-                            @change="previewFile('dimissionList', $event)" prepend-inner-icon="mdi-file-account"
-                            :clearable="true" accept=".doc,.docx,.pdf,.xls,.xlsx"></v-file-input>
-                            <div v-show="filePreview.dimissionList && (form.recruitment.reason === 2 || form.recruitment.reason === 3)"
-                            class="file-preview-card mt-2">
-                                <div class="d-flex align-center justify-space-between mb-1">
-                                    <v-chip small class="bg-primary-light">
-                                        <v-icon left small color="#01a6be">{{ getFileIcon(form.attachments.dimissionList?.type ||
-                                            getFileTypeFromName(form.attachments.dimissionList) ) }}</v-icon>
-                                            <span class="file-name-text">{{ getFileName("dimissionList") }}</span>
-                                    </v-chip>
-                                    <span class="caption grey--text">{{ form.attachments.dimissionList_size || "" }}</span>
-                                </div>
-                                <div class="d-flex align-center justify-end">
-                                    <v-btn x-small text color="primary" @click="openFile('dimissionList')" class="mr-2"> <v-icon small left>mdi-eye</v-icon> {{ $t("View") }} </v-btn>
-                                    <v-btn :disabled="formDisabled" x-small text color="error" @click="clearFile('dimissionList')"> <v-icon small left>mdi-delete</v-icon> {{ $t("Delete") }} </v-btn>
-                                </div>
-                            </div>
-                        </v-col>
-                    </v-row>
+        </div>
+        
+        <div v-show="form.pos !== 1" class="mt-4">
+            <div class="d-flex align-center mb-2">
+                <v-icon left color="#01a6be" small>mdi-desktop-classic</v-icon>
+                <div class="text-subtitle-2 font-weight-medium text-slate-700">
+                    {{ $t("Computer Skills") }}
                 </div>
-
-                <!-- Qualifications & Job Description Card -->
-                <div class="form-card mt-4">
-                    <div class="form-card-header d-flex align-center mb-4">
-                        <v-icon color="#01a6be" class="mr-2" size="24">mdi-school-outline</v-icon>
-                        <span class="text-subtitle-1 font-weight-bold text-slate-800">{{ $t("Qualifications & Job Description") }}</span>
-                    </div>
-                    <v-row>
-                        <v-col cols="12" sm="6" md="2">
-                            <v-autocomplete :disabled="formDisabled" v-model="form.educationLevel"
-                            :items="educationLevelItems" :rules="[rules.required]" required
-                            :label="$t('Education Level')" item-text="name" item-value="id" outlined dense hide-details
-                            clearable></v-autocomplete>
-                        </v-col>
-                        <v-col cols="12" sm="6" md="8">
-                            <v-textarea :disabled="formDisabled" auto-grow v-model="localizedSpecialization"
-                            :rules="[rules.required]" required :placeholder="$t('Professional qualifications')"
-                            :label="$t('Professional qualifications')" outlined dense rows="1" hide-details
-                            @input="handleSpecializationInput"></v-textarea>
-                        </v-col>
-                        <v-col cols="12" sm="6" md="2">
-                            <v-autocomplete :disabled="formDisabled" v-model="form.workExperience" :items="workExpItems"
-                            :rules="[rules.required]" required :label="$t('Work Experience')" item-text="name"
-                            item-value="id" outlined dense hide-details clearable></v-autocomplete>
-                        </v-col>
-                    </v-row>
-                    <v-row class="mt-3">
-                        <v-col cols="12" :md="getJobDescColWidth">
-                            <v-textarea :disabled="formDisabled" auto-grow v-model="form.jobDesc" outlined
-                            :label="$t('Basic Job Description')" :rules="[rules.required]" required rows="1"
-                            hide-details></v-textarea>
-                        </v-col>
-                        <v-col cols="12" md="2" v-if="form.pos !== 1">
-                            <v-file-input :disabled="formDisabled" v-model="form.attachments.jobDesc"
-                            :label="$t('Job description file')" outlined dense :error="form.pos === 1"
-                            :error-messages="form.pos === 1 ? $t('Job description file is required') : ''" :required="form.pos === 1"
-                            hide-details @change="previewFile('jobDesc', $event)" v-show="form.pos !== 1"
-                            :clearable="true" accept=".doc,.docx,.pdf"></v-file-input>
-                            <div v-if="filePreview.jobDesc" class="file-preview-card mt-2">
-                                <div class="d-flex align-center justify-space-between mb-1">
-                                    <v-chip small class="bg-primary-light">
-                                        <v-icon left small color="#01a6be">{{ getFileIcon(form.attachments.jobDesc?.type ||
-                                            getFileTypeFromName(form.attachments.jobDesc) ) }}</v-icon>
-                                            <span class="file-name-text">{{ getFileName("jobDesc") }}</span>
-                                    </v-chip>
-                                    <span class="caption grey--text">{{ form.attachments.jobDesc_size || "" }}</span>
-                                </div>
-                                <div class="d-flex align-center justify-end">
-                                    <v-btn x-small text color="primary" @click="openFile('jobDesc')" class="mr-2"> <v-icon small left>mdi-eye</v-icon> {{ $t("View") }} </v-btn>
-                                    <v-btn :disabled="formDisabled" x-small text color="error" @click="clearFile('jobDesc')"> <v-icon small left>mdi-delete</v-icon> {{ $t("Delete") }} </v-btn>
-                                </div>
-                            </div>
-                        </v-col>
-                    </v-row>
+            </div>
+            <v-row class="ml-1 mb-4">
+                <v-col cols="12" class="d-flex flex-wrap py-0">
+                    <v-checkbox
+                    v-for="skill in ['Word', 'Excel', 'Access', 'PowerPoint', 'Internet', 'None', 'Other']"
+                    :key="skill" :disabled="formDisabled" v-model="form.computerSkills"
+                    :value="skill" :label="$t(skill)" dense hide-details class="mr-4 mb-2"></v-checkbox>
+                </v-col>
+                <v-col cols="12" v-if="form.computerSkills.includes('Other')" class="pt-0">
+                    <v-textarea :disabled="formDisabled"
+                    v-model="form.otherComputerSkills" :label="$t('Other Skills')" dense outlined
+                    class="mt-2" rows="1" hide-details auto-grow></v-textarea>
+                </v-col>
+            </v-row>
+        </div>
+        
+        <div class="mt-4">
+            <div class="d-flex align-center mb-2">
+                <v-icon left color="#01a6be" small>mdi-shield-account</v-icon>
+                <div class="text-subtitle-2 font-weight-medium text-slate-700">
+                    {{ $t("Workplace Safety") }}
                 </div>
+            </div>
+            <v-radio-group :disabled="formDisabled" v-model="form.safetyLevels" row dense
+            class="ml-2" :rules="[rules.required]" required hide-details>
+            <v-radio v-for="(level, index) in safetyLevels" :key="'safety-' + index"
+            :value="level.id" :label="level.name" class="mr-4" hide-details></v-radio>
+        </v-radio-group>
+    </div>
+    
+    <v-row class="mt-4">
+        <v-col cols="12">
+            <v-textarea :disabled="formDisabled" v-model="form.remark" outlined
+            :label="$t('Remark')" rows="2" hide-details auto-grow></v-textarea>
+        </v-col>
+        <v-col cols="12" v-if="form.req_id_oldyear || (editData && editData.req_id_oldyear)">
+            <v-text-field 
+            outlined 
+            readonly 
+            dense
+            :label="$t('Note')" 
+            :value="noteText" 
+            hide-details
+            :append-icon="'mdi-open-in-new'"
+            @click:append="viewOriginalRequest"
+            color="primary"
+            class="note-text-field"
+            >
+        </v-text-field>
+    </v-col>
+</v-row>
+</div>
 
-                <!-- Skills & Other Information Card -->
-                <div class="form-card mt-4">
-                    <div v-show="form.pos !== 1">
-                        <div class="d-flex align-center mb-2">
-                            <v-icon left color="#01a6be" small>mdi-translate</v-icon>
-                            <div class="text-subtitle-2 font-weight-medium text-slate-700">
-                                {{ $t("Foreign Language Proficiency") }}
-                            </div>
-                        </div>
-                        <v-row class="ml-1 mb-4">
-                            <v-col cols="12" md="4">
-                                <v-radio-group :disabled="formDisabled" v-model="form.either" row dense hide-details>
-                                    <div class="subtitle-2 mr-2">{{ $t("Either:") }}</div>
-                                    <v-radio :disabled="formDisabled"
-                                    v-for="(level, index) in getLanguageLevels('either')"
-                                    :key="'either-' + index" :value="level.value"
-                                    :label="getLocalizedLabel(level)" hide-details class="mr-3"></v-radio>
-                                </v-radio-group>
-                            </v-col>
-                            <v-col cols="12" md="4">
-                                <v-radio-group :disabled="formDisabled" v-model="form.english" row hide-details dense>
-                                    <div class="subtitle-2 mr-2">{{ $t("English:") }}</div>
-                                    <v-radio :disabled="formDisabled"
-                                    v-for="(level, index) in getLanguageLevels('en')"
-                                    :key="'english-' + index" :value="level.value"
-                                    :label="getLocalizedLabel(level)" hide-details class="mr-3"></v-radio>
-                                </v-radio-group>
-                            </v-col>
-                            <v-col cols="12" md="4">
-                                <v-radio-group :disabled="formDisabled" v-model="form.chinese" row hide-details dense>
-                                    <div class="subtitle-2 mr-2">{{ $t("Chinese:") }}</div>
-                                    <v-radio :disabled="formDisabled"
-                                    v-for="(level, index) in getLanguageLevels('cn')"
-                                    :key="'chinese-' + index" :value="level.value"
-                                    :label="getLocalizedLabel(level)" hide-details class="mr-3"></v-radio>
-                                </v-radio-group>
-                            </v-col>
-                            <v-col cols="12" md="4" class="pt-0">
-                                <v-checkbox :disabled="formDisabled" v-model="form.tranlator"
-                                :label="$t('Translator')" hide-details class="mt-0"></v-checkbox>
-                            </v-col>
-                        </v-row>
-                    </div>
-
-                    <div v-show="form.pos !== 1" class="mt-4">
-                        <div class="d-flex align-center mb-2">
-                            <v-icon left color="#01a6be" small>mdi-desktop-classic</v-icon>
-                            <div class="text-subtitle-2 font-weight-medium text-slate-700">
-                                {{ $t("Computer Skills") }}
-                            </div>
-                        </div>
-                        <v-row class="ml-1 mb-4">
-                            <v-col cols="12" class="d-flex flex-wrap py-0">
-                                <v-checkbox
-                                v-for="skill in ['Word', 'Excel', 'Access', 'PowerPoint', 'Internet', 'None', 'Other']"
-                                :key="skill" :disabled="formDisabled" v-model="form.computerSkills"
-                                :value="skill" :label="$t(skill)" dense hide-details class="mr-4 mb-2"></v-checkbox>
-                            </v-col>
-                            <v-col cols="12" v-if="form.computerSkills.includes('Other')" class="pt-0">
-                                <v-textarea :disabled="formDisabled"
-                                v-model="form.otherComputerSkills" :label="$t('Other Skills')" dense outlined
-                                class="mt-2" rows="1" hide-details auto-grow></v-textarea>
-                            </v-col>
-                        </v-row>
-                    </div>
-
-                    <div class="mt-4">
-                        <div class="d-flex align-center mb-2">
-                            <v-icon left color="#01a6be" small>mdi-shield-account</v-icon>
-                            <div class="text-subtitle-2 font-weight-medium text-slate-700">
-                                {{ $t("Workplace Safety") }}
-                            </div>
-                        </div>
-                        <v-radio-group :disabled="formDisabled" v-model="form.safetyLevels" row dense
-                        class="ml-2" :rules="[rules.required]" required hide-details>
-                            <v-radio v-for="(level, index) in safetyLevels" :key="'safety-' + index"
-                            :value="level.id" :label="level.name" class="mr-4" hide-details></v-radio>
-                        </v-radio-group>
-                    </div>
-
-                    <v-row class="mt-4">
-                        <v-col cols="12">
-                            <v-textarea :disabled="formDisabled" v-model="form.remark" outlined
-                            :label="$t('Remark')" rows="2" hide-details auto-grow></v-textarea>
-                        </v-col>
-                        <v-col cols="12" v-if="form.req_id_oldyear || (editData && editData.req_id_oldyear)">
-                            <v-text-field 
-                            outlined 
-                            readonly 
-                            dense
-                            :label="$t('Note')" 
-                            :value="noteText" 
-                            hide-details
-                            :append-icon="'mdi-open-in-new'"
-                            @click:append="viewOriginalRequest"
-                            color="primary"
-                            class="note-text-field"
-                            >
-                            </v-text-field>
-                        </v-col>
-                    </v-row>
-                </div>
-                
-                <!-- Approval History panel -->
-                <div class="form-card mt-4">
-                    <div class="form-card-header d-flex align-center mb-4">
-                        <v-icon color="#01a6be" class="mr-2" size="24">mdi-history</v-icon>
-                        <span class="text-subtitle-1 font-weight-bold text-slate-800">{{ $t("Approval History") }}</span>
-                    </div>
-                    
-                    <v-expansion-panels flat class="approval-history-panels">
-                        <v-expansion-panel class="approval-history-panel">
+<!-- Approval History panel -->
+<div class="form-card mt-4">
+    <div class="form-card-header d-flex align-center mb-4">
+        <v-icon color="#01a6be" class="mr-2" size="24">mdi-history</v-icon>
+        <span class="text-subtitle-1 font-weight-bold text-slate-800">{{ $t("Approval History") }}</span>
+    </div>
+    
+    <v-expansion-panels flat class="approval-history-panels">
+        <v-expansion-panel class="approval-history-panel">
             <v-expansion-panel-header class="py-3">
-                                <div class="d-flex align-center font-weight-medium text-subtitle-2 text-slate-700">
-                                    <v-icon left color="primary" small>mdi-clock-outline</v-icon>
-                                    {{ $t("Current Approval History") }}
-                                </div>
-                            </v-expansion-panel-header>
-                            <v-expansion-panel-content class="pa-0 pt-3">
-                                <v-stepper v-model="approvalStepper" class="approval-stepper transparent elevation-0" flat>
-                                    <v-stepper-header class="compact-stepper-header">
-                                        <v-stepper-step v-if="editData" :complete="true" :editable="true" color="#01a6be"
-                                        :step="0" :key="'submitter-step'" class="submitter-step compact-step"
-                                        style="pointer-events: none;" complete-icon="mdi-pencil-outline">
-                                            <div class="text-center font-weight-bold my-1" style="font-size: 0.8rem;">
-                                                {{ $t('Submitter') }}
-                                            </div>
-                                            <div class="caption text-center grey--text text--darken-2" style="line-height: 1.3;">
-                                                <div style="white-space: normal; font-weight: 500;">
-                                                    {{
-                                                        (() => {
-                                                            try {
-                                                                let s = editData?.submitter;
-                                                                if (typeof s === 'string') {
-                                                                    s = JSON.parse(s);
-                                                                }
-                                                                return s ? `${s.name || ''}` : '';
-                                                            } catch (e) {
-                                                                return '';
-                                                            }
-                                                        })()
-                                                    }}
-                                                </div>
-                                                <div v-if="editData.created_at" class="grey--text text--lighten-1 font-italic mt-1" style="font-size: 0.7rem;">
-                                                    ({{ editData.created_at.split(' ')[0] }})
-                                                </div>
-                                            </div>
-                                        </v-stepper-step>
-                                        
-                                        <v-divider :key="'div-submitter-current'"></v-divider>
-                                        
-                                        <template v-for="(step, idx) in approvalStepperSteps">
-                                            <v-stepper-step v-if="step.approver && step.approver.empno && (step.level === 1 || isLevel1Approved)"
-                                            :complete="step.status === 'approved'" :editable="false"
-                                            :rules="step.shouldShowError ? [() => false] : []"
-                                            :color="getApprovalStatusColor(step.status)" :step="idx + 1"
-                                            :error-icon="step.shouldShowError ? 'mdi-cancel' : ''"
-                                            complete-icon="mdi-check" :key="idx"
-                                            class="compact-step">
-                                                <div class="text-center font-weight-bold my-1 d-flex align-center justify-center" 
-                                                style="font-size: 0.8rem; min-height: 25px; line-height: 1.2;">
-                                                    {{ step.levelName }}
-                                                </div>
-                                                <div class="caption text-center grey--text text--darken-2 mb-1" style="line-height: 1.3;">
-                                                    <div style="white-space: normal; word-break: break-word; font-weight: 500;">
-                                                        <template v-if="step.approver.empno === 'Pending'">
-                                                            {{ step.approver.name }}
-                                                        </template>
-                                                        <template v-else>
-                                                            {{ step.approver.empno }} - {{ step.approver.name }}
-                                                        </template>
-                                                    </div>
-                                                    <div class="font-italic mt-1" :style="{ color: getApprovalStatusColor(step.status) }">
-                                                        {{ getApprovalStatusText(step.status) }}
-                                                        <div v-if="step.processed_at" class="grey--text text--lighten-1" style="font-size: 0.7rem;">
-                                                            ({{ step.processed_at.split(' ')[0] }})
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div class="d-flex flex-column align-center w-100 mt-1" style="width: 100%">
-                                                    <div v-if="step.reason_denied" class="caption error--text font-weight-bold px-2 py-1 rounded red lighten-5 d-flex align-center justify-center my-1" style="width: 100%; line-height: 1.2; font-size: 0.7rem; white-space: normal; text-align: center;">
-                                                        <v-icon x-small color="error" class="mr-1">mdi-close-circle-outline</v-icon>
-                                                        <span>{{ step.reason_denied }}</span>
-                                                    </div>
-                                                    <div v-if="step.return_reason" class="caption warning--text font-weight-bold px-2 py-1 rounded orange lighten-5 d-flex align-center justify-center my-1" style="width: 100%; line-height: 1.2; font-size: 0.7rem; white-space: normal; text-align: center;">
-                                                        <v-icon x-small color="warning" class="mr-1">mdi-undo-variant</v-icon>
-                                                        <span>{{ step.return_reason }}</span>
-                                                    </div>
-                                                    <div v-if="step.approval_record" class="caption primary--text px-2 py-1 rounded blue lighten-5 d-flex align-center justify-center my-1" style="width: 100%; line-height: 1.2; font-size: 0.7rem; white-space: normal; text-align: center;">
-                                                        <v-icon x-small color="primary" class="mr-1">mdi-comment-text-outline</v-icon>
-                                                        <span>{{ step.approval_record }}</span>
-                                                    </div>
-                                                </div>
-                                            </v-stepper-step>
-                                            <v-divider v-if="idx < approvalStepperSteps.length - 1" :key="`div-${idx}`"></v-divider>
-                                        </template>
-                                    </v-stepper-header>
-                                </v-stepper>
-                            </v-expansion-panel-content>
-                        </v-expansion-panel>
+                <div class="d-flex align-center font-weight-medium text-subtitle-2 text-slate-700">
+                    <v-icon left color="primary" small>mdi-clock-outline</v-icon>
+                    {{ $t("Current Approval History") }}
+                </div>
+            </v-expansion-panel-header>
+            <v-expansion-panel-content class="pa-0 pt-3">
+                <v-stepper v-model="approvalStepper" class="approval-stepper transparent elevation-0" flat>
+                    <v-stepper-header class="compact-stepper-header">
+                        <v-stepper-step v-if="editData" :complete="true" :editable="true" color="#01a6be"
+                        :step="0" :key="'submitter-step'" class="submitter-step compact-step"
+                        style="pointer-events: none;" complete-icon="mdi-pencil-outline">
+                        <div class="text-center font-weight-bold my-1" style="font-size: 0.8rem;">
+                            {{ $t('Submitter') }}
+                        </div>
+                        <div class="caption text-center grey--text text--darken-2" style="line-height: 1.3;">
+                            <div style="white-space: normal; font-weight: 500;">
+                                {{
+                                    (() => {
+                                        try {
+                                            let s = editData?.submitter;
+                                            if (typeof s === 'string') {
+                                                s = JSON.parse(s);
+                                            }
+                                            return s ? `${s.name || ''}` : '';
+                                        } catch (e) {
+                                            return '';
+                                        }
+                                    })()
+                                }}
+                            </div>
+                            <div v-if="editData.created_at" class="grey--text text--lighten-1 font-italic mt-1" style="font-size: 0.7rem;">
+                                ({{ editData.created_at.split(' ')[0] }})
+                            </div>
+                        </div>
+                    </v-stepper-step>
+                    
+                    <v-divider :key="'div-submitter-current'"></v-divider>
+                    
+                    <template v-for="(step, idx) in approvalStepperSteps">
+                        <v-stepper-step v-if="step.approver && step.approver.empno && (step.level === 1 || isLevel1Approved)"
+                        :complete="step.status === 'approved'" :editable="false"
+                        :rules="step.shouldShowError ? [() => false] : []"
+                        :color="getApprovalStatusColor(step.status)" :step="idx + 1"
+                        :error-icon="step.shouldShowError ? 'mdi-cancel' : ''"
+                        complete-icon="mdi-check" :key="idx"
+                        class="compact-step">
+                        <div class="text-center font-weight-bold my-1 d-flex align-center justify-center" 
+                        style="font-size: 0.8rem; min-height: 25px; line-height: 1.2;">
+                        {{ step.levelName }}
+                    </div>
+                    <div class="caption text-center grey--text text--darken-2 mb-1" style="line-height: 1.3;">
+                        <div style="white-space: normal; word-break: break-word; font-weight: 500;">
+                            <template v-if="step.approver.empno === 'Pending'">
+                                {{ step.approver.name }}
+                            </template>
+                            <template v-else>
+                                {{ step.approver.empno }} - {{ step.approver.name }}
+                            </template>
+                        </div>
+                        <div class="font-italic mt-1" :style="{ color: getApprovalStatusColor(step.status) }">
+                            {{ getApprovalStatusText(step.status) }}
+                            <div v-if="step.processed_at" class="grey--text text--lighten-1" style="font-size: 0.7rem;">
+                                ({{ step.processed_at.split(' ')[0] }})
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-flex flex-column align-center w-100 mt-1" style="width: 100%">
+                        <div v-if="step.reason_denied" class="caption error--text font-weight-bold px-2 py-1 rounded red lighten-5 d-flex align-center justify-center my-1" style="width: 100%; line-height: 1.2; font-size: 0.7rem; white-space: normal; text-align: center;">
+                            <v-icon x-small color="error" class="mr-1">mdi-close-circle-outline</v-icon>
+                            <span>{{ step.reason_denied }}</span>
+                        </div>
+                        <div v-if="step.return_reason" class="caption warning--text font-weight-bold px-2 py-1 rounded orange lighten-5 d-flex align-center justify-center my-1" style="width: 100%; line-height: 1.2; font-size: 0.7rem; white-space: normal; text-align: center;">
+                            <v-icon x-small color="warning" class="mr-1">mdi-undo-variant</v-icon>
+                            <span>{{ step.return_reason }}</span>
+                        </div>
+                        <div v-if="step.approval_record" class="caption primary--text px-2 py-1 rounded blue lighten-5 d-flex align-center justify-center my-1" style="width: 100%; line-height: 1.2; font-size: 0.7rem; white-space: normal; text-align: center;">
+                            <v-icon x-small color="primary" class="mr-1">mdi-comment-text-outline</v-icon>
+                            <span>{{ step.approval_record }}</span>
+                        </div>
+                    </div>
+                </v-stepper-step>
+                <v-divider v-if="idx < approvalStepperSteps.length - 1" :key="`div-${idx}`"></v-divider>
+            </template>
+        </v-stepper-header>
+    </v-stepper>
+</v-expansion-panel-content>
+</v-expansion-panel>
 
 <template>
     <v-expansion-panel v-if="showPreviousApprovalHistory" class="approval-history-panel mt-2">
@@ -703,8 +774,8 @@
 </v-expansion-panel>
 </template>
 </v-expansion-panels>
-                    </div>
-            </v-card-text>
+</div>
+</v-card-text>
 
 <v-row class="dialog-actions">
     <v-col cols="12" class="d-flex justify-end align-center">
@@ -863,14 +934,72 @@ v-model="viewOriginal"
 :is-edit="true" 
 :is-change="false" 
 />
+
+<v-dialog v-model="dimissionPreviewDialog" max-width="1200px" persistent>
+    <v-card>
+        <v-card-title class="error white--text" v-if="dimissionPreviewHasError">
+            <v-icon left dark>mdi-alert</v-icon>
+            {{ $t('Invalid Employee IDs Found') || 'Mã nhân viên không hợp lệ' }}
+        </v-card-title>
+        <v-card-title class="primary white--text" v-else>
+            <v-icon left dark>mdi-file-excel</v-icon>
+            {{ $t('Review Employee IDs') || 'Xác nhận danh sách nhân viên' }}
+        </v-card-title>
+        <v-card-text class="pt-4">
+            <div class="mb-4" v-if="dimissionPreviewHasError">
+                <span class="error--text">{{ $t('The highlighted IDs have been used for another request. Please update the file.') || 'Các mã được tô đỏ đã được dùng cho đơn khác. Vui lòng cập nhật lại file.' }}</span>
+                <br>
+                <a href="/Resign template.xlsx" download style="color: blue; text-decoration: underline;">
+                    <v-icon x-small color="blue">mdi-download</v-icon> {{ $t('Download template here') || 'Tải file mẫu tại đây' }}
+                </a>
+            </div>
+            <v-data-table
+                :headers="dimissionPreviewHeaders"
+                :items="dimissionPreviewData"
+                class="elevation-1"
+                hide-default-footer
+                disable-pagination
+                height="400"
+                fixed-header
+            >
+                <template v-slot:item="{ item }">
+                    <tr :class="{'error-row': item.hasError}">
+                        <td>{{ item.stt }}</td>
+                        <td>
+                            {{ item.empno }}
+                            <div v-if="item.errorMsg" class="text-caption error--text" style="line-height: 1.2;">{{ item.errorMsg }}</div>
+                        </td>
+                        <td>{{ item.name }}</td>
+                        <td>{{ item.deptNo }}</td>
+                        <td>{{ item.deptName }}</td>
+                        <td>{{ item.date }}</td>
+                        <td class="text-center">
+                            <v-icon v-if="item.hasError" color="error" >mdi-close-circle</v-icon>
+                            <v-icon v-else color="success">mdi-check-circle</v-icon>
+                        </td>
+                    </tr>
+                </template>
+            </v-data-table>
+        </v-card-text>
+        <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn color="grey darken-1" outlined @click="closeDimissionPreview">
+                {{ $t('Close') || 'Đóng' }}
+            </v-btn>
+            <v-btn color="success" v-if="!dimissionPreviewHasError" @click="confirmDimissionPreview">
+                {{ $t('Confirm') || 'Xác nhận' }}
+            </v-btn>
+        </v-card-actions>
+    </v-card>
 </v-dialog>
 
+</v-dialog>
 </template>
 <script>
-    // import VfaAppFlow from "../../../@global-component/vfa-comp";
-    // import VfaAppFlow from 'D:/source/@global-component/vfa-comp';
-    import VfaAppFlow from '@/components/AppFlow.vue';
-   export default {
+// import VfaAppFlow from "../../../@global-component/vfa-comp";
+// import VfaAppFlow from 'D:/source/@global-component/vfa-comp';
+import VfaAppFlow from '@/components/AppFlow.vue';
+export default {
     components: { VfaAppFlow },
     name: "RequestDialog",
     props: {
@@ -951,6 +1080,14 @@ v-model="viewOriginal"
             selectedFlowSign: null,
             reqId: "",
             itemsReqId: [],
+            oldEmpError: "",
+            resignedEmpInfo: null,
+            oldEmpList: [],
+            resignedEmpListDetails: [],
+            showResignedEmpTable: true,
+            dimissionPreviewDialog: false,
+            dimissionPreviewData: [],
+            dimissionPreviewHasError: false,
             form: {
                 newYearRecruitment: null,
                 keyInDate: new Date().toISOString().substr(0, 10),
@@ -1343,6 +1480,138 @@ v-model="viewOriginal"
         },
     },
     methods: {
+        async handleOldEmpListChange(val) {
+            let list = Array.isArray(val) ? val : [val];
+            let cleanList = [];
+            list.forEach(item => {
+                if (typeof item === 'string') {
+                    item.split(/[\s,]+/).forEach(s => {
+                        const trimmed = s.trim();
+                        if (trimmed && !cleanList.includes(trimmed)) {
+                            cleanList.push(trimmed);
+                        }
+                    });
+                }
+            });
+            
+            this.oldEmpList = cleanList;
+            this.oldEmpError = ""; // Reset old error
+            
+            let finalCleanList = [];
+            let newDetails = [];
+            let hasAnyError = false;
+            
+            for (const empno of cleanList) {
+                let hasErrorThisEmp = false;
+                let errorMsg = "";
+                
+                // Check duplicate in resign-tracking
+                try {
+                    const checkRes = await this.$axios.post(this.api + 'checkResignEmpNo', {
+                        empno: empno,
+                        req_id: this.editData?.req_id || ''
+                    });
+                    if (checkRes.data && checkRes.data.exists) {
+                        hasErrorThisEmp = true;
+                        errorMsg = checkRes.data.message;
+                    }
+                } catch (e) {
+                    console.error("Error checking resign empno:", e);
+                }
+                
+                if (hasErrorThisEmp) {
+                    this.$notify({
+                        title: this.$t("Error"),
+                        text: errorMsg,
+                        type: "error",
+                        duration: 7000
+                    });
+                    this.oldEmpError = this.oldEmpError ? (this.oldEmpError + ' \n ' + errorMsg) : errorMsg;
+                    hasAnyError = true;
+                    continue; // Bỏ qua nhân viên này
+                }
+                
+                let detailObj = {
+                    empno: empno,
+                    name: "",
+                    dept_code: "",
+                    dept_name: "",
+                    sex: "",
+                    in_date: "",
+                    error: "" // Không còn error nữa do đã bỏ qua bên trên
+                };
+                
+                let isEmpValid = false;
+                
+                // Fetch emp details
+                try {
+                    const empRes = await this.$axios.post('http://gmo021.cansportsvg.com/api/emp/postByEmpNo', {
+                        empno: empno,
+                        loc: this.activeUser?.location || 'vg'
+                    });
+                    if (empRes.data && empRes.data.name) {
+                        detailObj.name = empRes.data.name || "";
+                        detailObj.dept_code = empRes.data.dept_code || "";
+                        detailObj.dept_name = empRes.data.dept_name || "";
+                        detailObj.sex = empRes.data.sex || "";
+                        detailObj.in_date = empRes.data.in_date || "";
+                        isEmpValid = true;
+                    } else {
+                        const notFoundMsg = (this.$t ? this.$t("Employee not found:") : "Không tìm thấy nhân viên:") + " " + empno;
+                        this.$notify({
+                            title: this.$t ? this.$t("Error") : "Lỗi",
+                            text: notFoundMsg,
+                            type: "error",
+                            duration: 7000
+                        });
+                        this.oldEmpError = this.oldEmpError ? (this.oldEmpError + ' \n ' + notFoundMsg) : notFoundMsg;
+                        hasAnyError = true;
+                    }
+                } catch (e) {
+                    console.error("Error fetching employee info:", e);
+                    const errMsg = (this.$t ? this.$t("Error fetching employee info for:") : "Lỗi khi lấy thông tin nhân viên:") + " " + empno;
+                    this.$notify({
+                        title: this.$t ? this.$t("Error") : "Lỗi",
+                        text: errMsg,
+                        type: "error",
+                        duration: 7000
+                    });
+                    this.oldEmpError = this.oldEmpError ? (this.oldEmpError + ' \n ' + errMsg) : errMsg;
+                    hasAnyError = true;
+                }
+                
+                if (isEmpValid) {
+                    finalCleanList.push(empno);
+                    newDetails.push(detailObj);
+                }
+
+            }
+            
+            if (hasAnyError) {
+                // Cập nhật lại danh sách nếu có mã bị xóa bỏ
+                this.oldEmpList = finalCleanList;
+            }
+            this.form.recruitment.oldempno = finalCleanList.join(",");
+            
+            this.resignedEmpListDetails = newDetails;
+            if (newDetails.length > 0) {
+                this.showResignedEmpTable = true;
+            }
+        },
+        handleOldEmpPaste(event) {
+            event.preventDefault();
+            const text = (event.clipboardData || window.clipboardData).getData('text');
+            if (!text) return;
+            const pastedItems = text.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+            const combined = [...this.oldEmpList, ...pastedItems];
+            this.handleOldEmpListChange(combined);
+        },
+        removeOldEmp(index) {
+            this.oldEmpList.splice(index, 1);
+            this.resignedEmpListDetails.splice(index, 1);
+            this.form.recruitment.oldempno = this.oldEmpList.join(",");
+            this.oldEmpError = this.resignedEmpListDetails.some(d => d.error) ? "Có mã nhân viên không hợp lệ" : "";
+        },
         // Thêm vào methods trong dialog.vue
         processAsyncTranslation(rawText) {
             if (!rawText) return "";
@@ -2103,6 +2372,15 @@ v-model="viewOriginal"
                         staffCount: false,
                     };
                     
+                    if (this.form.recruitment.reason === 2 && this.oldEmpError) {
+                        this.$notify({
+                            title: "Error",
+                            text: this.oldEmpError,
+                            type: "error",
+                        });
+                        return;
+                    }
+                    
                     if (Object.values(this.formErrors).some((error) => error)) {
                         this.$notify({
                             title: "Error",
@@ -2119,9 +2397,9 @@ v-model="viewOriginal"
                 if ((this.isEdit || this.isChange) && this.editData && this.editData.submitter) {
                     try {
                         submitterData = typeof this.editData.submitter === "string" 
-                                        ? JSON.parse(this.editData.submitter) 
-                                        : { ...this.editData.submitter };
-                                        
+                        ? JSON.parse(this.editData.submitter) 
+                        : { ...this.editData.submitter };
+                        
                         submitterData.div = this.user.div || submitterData.div;
                         submitterData.dept = this.user.dept || submitterData.dept;
                         submitterData.unit = this.user.unit || submitterData.unit;
@@ -2168,7 +2446,11 @@ v-model="viewOriginal"
                 
                 const reasonExp = this.form.recruitment.reason || (this.form.recruitment.otherReasonSelected ? 3 : "");
                 formData.append("reason_exp", reasonExp ? String(reasonExp) : "");
-                formData.append("old_emp", this.form.recruitment.oldempno);
+                if (this.resignedEmpListDetails && this.resignedEmpListDetails.length > 0) {
+                    formData.append("old_emp", JSON.stringify(this.resignedEmpListDetails));
+                } else {
+                    formData.append("old_emp", this.form.recruitment.oldempno || "");
+                }
                 
                 // Fix lỗi gửi chuỗi "null" cho isOther_reason
                 let otherReasonValue = "";
@@ -2609,6 +2891,144 @@ v-model="viewOriginal"
             this.form.attachments[`${fileType}_size`] = "";
             this.filePreview[fileType] = false;
         },
+        async handleDimissionListChange(event) {
+            this.previewFile('dimissionList', event);
+            const file = this.form.attachments.dimissionList;
+            if (!file) return;
+
+            if (file.name && file.name.match(/\.(xlsx|xls)$/i)) {
+                try {
+                    const XLSX = await import('xlsx');
+                    const reader = new FileReader();
+                    reader.onload = async (e) => {
+                        try {
+                            const data = new Uint8Array(e.target.result);
+                            const workbook = XLSX.read(data, { type: 'array' });
+                            const firstSheetName = workbook.SheetNames[0];
+                            const worksheet = workbook.Sheets[firstSheetName];
+                            
+                            // range: 1 skips the first row (index 0)
+                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 1 });
+                            
+                            if (jsonData.length > 0) {
+                                const firstRowKeys = Object.keys(jsonData[0]).map(k => k.toUpperCase().trim());
+                                const hasEmpno = firstRowKeys.some(k => k.includes('EMPNO') || k === 'EMP NO' || k === 'MÃ NV' || k === 'MÃ NHÂN VIÊN');
+                                const hasName = firstRowKeys.some(k => k.includes('NAME') || k === 'TÊN');
+                                const hasDate = firstRowKeys.some(k => k.includes('DIMISION DATE') || k.includes('DIMISSION DATE') || k.includes('DATE') || k.includes('NGÀY'));
+                                
+                                if (!hasEmpno || !hasName || !hasDate) {
+                                    this.clearFile('dimissionList');
+                                    const Swal = (await import('sweetalert2')).default;
+                                    Swal.fire({
+                                        icon: 'error',
+                                        title: this.$t('Invalid Format'),
+                                        html: `${this.$t('The uploaded file does not match the required template. Please use the specified format.')}<br><br><a href="/Resign template.xlsx" download style="color: blue; text-decoration: underline;">${this.$t('Download correct template here')}</a>`,
+                                        confirmButtonText: this.$t('Close')
+                                    });
+                                    return;
+                                }
+                            }
+
+                            
+                            let extractedEmpnos = [];
+                            jsonData.forEach(row => {
+                                const empno = row['EMPNO'] || row['empno'] || row['Empno'];
+                                if (empno) {
+                                    let empnoStr = empno.toString().trim();
+                                    if (empnoStr.length > 0 && !extractedEmpnos.includes(empnoStr)) {
+                                        extractedEmpnos.push(empnoStr);
+                                    }
+                                }
+                            });
+
+                            if (extractedEmpnos.length > 0) {
+                                let invalidEmpnos = {};
+                                
+                                const promises = extractedEmpnos.map(empno => 
+                                    this.$axios.post(this.api + 'checkResignEmpNo', {
+                                        empno: empno,
+                                        req_id: this.editData?.req_id || ''
+                                    }).then(res => {
+                                        if (res.data && res.data.exists) {
+                                            invalidEmpnos[empno] = res.data.req_id || 'Unknown';
+                                        }
+                                    }).catch(err => {
+                                        console.error("Error checking empno", empno, err);
+                                    })
+                                );
+
+                                await Promise.all(promises);
+
+                                if (Object.keys(invalidEmpnos).length > 0) {
+                                    this.dimissionPreviewHasError = true;
+                                } else {
+                                    this.dimissionPreviewHasError = false;
+                                }
+
+                                // Map the json data to our preview data format
+                                this.dimissionPreviewData = jsonData.map((row, index) => {
+                                    const empno = (row['EMPNO'] || row['empno'] || row['Empno'] || '').toString().trim();
+                                    const hasError = invalidEmpnos.hasOwnProperty(empno);
+                                    const usedInReqId = invalidEmpnos[empno] || '';
+                                    let rawDate = row['DIMISION DATE'] || row['DIMISSION DATE'] || row['Dimission Date'] || '';
+                                    let formattedDate = rawDate;
+                                    if (typeof rawDate === 'number' && rawDate > 10000) {
+                                        // Convert Excel serial date to JS Date
+                                        const jsDate = new Date(Date.UTC(1899, 11, 30));
+                                        jsDate.setUTCDate(jsDate.getUTCDate() + rawDate);
+                                        const d = String(jsDate.getUTCDate()).padStart(2, '0');
+                                        const m = String(jsDate.getUTCMonth() + 1).padStart(2, '0');
+                                        const y = jsDate.getUTCFullYear();
+                                        formattedDate = `${d}/${m}/${y}`;
+                                    } else if (typeof rawDate === 'string' && rawDate.match(/^\d{4}-\d{2}-\d{2}/)) {
+                                        // Fallback if it parses as YYYY-MM-DD
+                                        const parts = rawDate.substr(0, 10).split('-');
+                                        formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                                    }
+
+                                    return {
+                                        stt: row['STT'] || (index + 1),
+                                        empno: empno,
+                                        name: row['NAME_S'] || row['Name'] || row['NAME'] || '',
+                                        deptNo: row['DEPT_NO'] || row['DEPT NO'] || row['Dept No'] || row['Mã bộ phận'] || '',
+                                        deptName: row['DEPT NAME'] || row['DEPT_NAME'] || row['Dept Name'] || '',
+                                        date: formattedDate,
+                                        hasError: hasError,
+                                        errorMsg: hasError ? `${usedInReqId}` : ''
+                                    };
+                                }).filter(item => item.empno !== ''); // remove empty rows
+
+                                this.dimissionPreviewDialog = true;
+                            } else {
+                                this.clearFile('dimissionList');
+                                const Swal = (await import('sweetalert2')).default;
+                                Swal.fire({
+                                    icon: 'warning',
+                                    title: this.$t ? this.$t('Warning') : 'Cảnh báo',
+                                    text: this.$t ? this.$t('No employee IDs found in the Excel file.') : 'Không tìm thấy mã nhân viên nào trong file Excel.',
+                                    confirmButtonText: this.$t ? this.$t('Close') : 'Đóng'
+                                });
+                            }
+                        } catch (err) {
+                            console.error("Error parsing excel", err);
+                        }
+                    };
+                    reader.readAsArrayBuffer(file);
+                } catch (error) {
+                    console.error("Error loading xlsx", error);
+                }
+            }
+        },
+        closeDimissionPreview() {
+            this.dimissionPreviewDialog = false;
+            this.clearFile('dimissionList');
+        },
+        confirmDimissionPreview() {
+            this.dimissionPreviewDialog = false;
+            const validEmpnos = this.dimissionPreviewData.filter(x => !x.hasError).map(x => x.empno);
+            const combined = [...new Set([...this.oldEmpList, ...validEmpnos])];
+            this.handleOldEmpListChange(combined);
+        },
         previewFile(fileType, event) {
             if (this.form.attachments[fileType]) {
                 
@@ -2858,6 +3278,25 @@ v-model="viewOriginal"
                 otherReasonSelected: "",  // clear initial value
                 isOther_reason: { vi: "", en: "", cn: "" }
             };
+            
+            if (data.old_emp) {
+                try {
+                    const parsed = JSON.parse(data.old_emp);
+                    if (Array.isArray(parsed)) {
+                        const list = parsed.map(item => typeof item === 'object' ? item.empno : item);
+                        this.handleOldEmpListChange(list);
+                    } else if (typeof parsed === 'object' && parsed.empno) {
+                        this.handleOldEmpListChange([parsed.empno]);
+                    } else {
+                        this.handleOldEmpListChange(data.old_emp);
+                    }
+                } catch (e) {
+                    this.handleOldEmpListChange(data.old_emp);
+                }
+            } else {
+                this.oldEmpList = [];
+                this.resignedEmpListDetails = [];
+            }
             
             try {
                 // Xử lý reason_exp
@@ -3202,9 +3641,9 @@ v-model="viewOriginal"
                         id: this.selectedItemForAccept.id,
                         status: this.selectedItemForAccept.status,
                         status_amendent: this.selectedItemForAccept.status_amendent,
-                        status_endyear: this.selectedItemForAccept.status_endyear, // Thêm dòng này để backend nhận diện
+                        status_endyear: this.selectedItemForAccept.status_endyear, 
                         approval: this.selectedItemForAccept.approval,
-                        approval_record: JSON.stringify(approvalRecords), // Gửi mảng record đã cập nhật
+                        approval_record: JSON.stringify(approvalRecords), 
                         activeRct: this.form.newYearRecruitment,
                     },
                 };
@@ -3385,22 +3824,11 @@ v-model="viewOriginal"
             }
         },
         confirmSubmit() {
-            // this.confirmSubmitDialog = false;
-            // this.saveDB();
-            
             this.confirmSubmitDialog = false;
-            
-            // Kiểm tra nếu là chức năng New Year (có hiện form và đã chọn 0 hoặc 1)
             if (this.showNewYearSection && (this.form.newYearRecruitment === 0 || this.form.newYearRecruitment === 1)) {
-                
-                // Gán dữ liệu hiện tại để chuẩn bị cho bước duyệt
                 this.selectedItemForAccept = this.editData;
-                
-                // GỌI SAVE VỚI THAM SỐ TRUE: Lưu xong sẽ tự động duyệt
                 this.saveDB(true); 
-                
             } else {
-                // Lưu bình thường (Lưu xong đóng dialog)
                 this.saveDB(false);
             }
         },
@@ -3562,22 +3990,20 @@ v-model="viewOriginal"
         },
     },
     computed: {
+        dimissionPreviewHeaders() {
+            return [
+                { text: 'STT', value: 'stt' },
+                { text: this.$t('EmpNo') || 'EMPNO', value: 'empno' },
+                { text: this.$t('Name') || 'Name', value: 'name' },
+                { text: this.$t('Dept No') || 'Dept No', value: 'deptNo' },
+                { text: this.$t('Dept') || 'Dept Name', value: 'deptName' },
+                { text: this.$t('Req.date') || 'Dimission Date', value: 'date' },
+                { text: this.$t('Status') || 'Status', value: 'status' }
+            ];
+        },
         showPreviousApprovalHistory() {
-            // if (!this.activeUser?.empno) {
-            //     console.warn('empno is empty, hiding previous approval history');
-            //     return false;
-            // }
             
             if (!this.editData) return false;
-            
-            // const hasActiveRct = this.editData.activeRct !== null && 
-            // this.editData.activeRct !== undefined && 
-            // this.editData.activeRct !== '';
-            
-            // if (!hasActiveRct) return false;
-            
-            // if (!this.editData.logs) return false;
-            
             try {
                 const logs = typeof this.editData.logs === 'string' ? 
                 JSON.parse(this.editData.logs) : this.editData.logs;
@@ -3636,12 +4062,9 @@ v-model="viewOriginal"
                         return lv.status && ["waiting", "approved", "rejected", "returned"].includes(lv.status);
                     })
                     .map(lv => {
-                        // --- ÁP DỤNG DỊCH TỰ ĐỘNG ---
-                        // 1. Xử lý lý do từ chối & trả về
                         const reasonDeniedText = this.processAsyncTranslation(lv.reason_denied);
                         const returnReasonText = this.processAsyncTranslation(lv.return_reason);
                         
-                        // 2. Xử lý ghi chú duyệt (approval_record)
                         let rawNote = cycleRecordObj[lv.type] || "";
                         
                         if (!rawNote && lv.approval_record && !shouldHideRecord) {
@@ -3654,7 +4077,6 @@ v-model="viewOriginal"
                             }
                         }
                         
-                        // Gọi hàm dịch cho ghi chú
                         const finalNote = this.processAsyncTranslation(rawNote);
                         
                         return {
@@ -3686,13 +4108,10 @@ v-model="viewOriginal"
         getApprovalLogsData(item) {
             try {
                 let logsData = [];
-                // Chỉ xử lý dữ liệu từ logs (lịch sử)
                 if (item.logs) {
                     const parsedLogs = JSON.parse(item.logs);
                     const approvalRecords = item.approval_record ? JSON.parse(item.approval_record) : [];
                     
-                    // KIỂM TRA: Item có đang hiển thị phần "Current Cycle" ở trên không?
-                    // (Nếu approval khác rỗng/null nghĩa là có Current Cycle)
                     const hasCurrentCycle = item.approval && item.approval !== '[]' && item.approval !== 'null';
                     
                     if (Array.isArray(parsedLogs[0])) {
@@ -3935,10 +4354,7 @@ v-model="viewOriginal"
             );
         },
         getAppCode() {
-            if (this.form.changeReason && this.form.changeReason.id === 2) {
-                return 'mpr';
-            }
-            return this.form.suppType === 1 ? 'mpr_flow2' : 'mpr';
+            return Number(this.form.suppType) === 1 ? 'mpr_flow2' : 'mpr';
         },
         
         // Update flowKey to include changeReason for proper reactivity
@@ -4090,7 +4506,7 @@ v-model="viewOriginal"
             if (this.isEdit && this.editData && this.editData.req_id_change) {
                 return true;
             }
-
+            
             if(this.editData && this.editData.approval && 
             JSON.parse(this.editData.approval).some(level => level.status === 'returned')) {
                 return false;
@@ -4278,9 +4694,9 @@ v-model="viewOriginal"
         posItems() {
             
             const positions = this.pos.filter((type) => {
-                if (this.form.suppType === 1) {
+                if (Number(this.form.suppType) === 1) {
                     return true; // Include all positions
-                } else if (this.form.suppType === 2) {
+                } else if (Number(this.form.suppType) === 2) {
                     // return type.id !== 1;
                     return type.id === 3;
                 }
@@ -4415,7 +4831,7 @@ v-model="viewOriginal"
                     if (!empnoStr) return false;
                     const e = empnoStr.toLowerCase();
                     return (this.activeUser.empno && e === this.activeUser.empno.toLowerCase()) || 
-                           (this.activeUser.group_empno && e === this.activeUser.group_empno.toLowerCase());
+                    (this.activeUser.group_empno && e === this.activeUser.group_empno.toLowerCase());
                 };
                 
                 return currentFlow.managers.some(manager => {
@@ -4904,7 +5320,32 @@ v-model="viewOriginal"
             "Waiting HR Rec SF": "Waiting for HR Recruitment",
             "Waiting HR": "Waiting for HR",
             "No.": "No.",
-            "Settings": "Settings"
+            "Settings": "Settings",
+            "Basic Request Information": "Basic Request Information",
+            "Qualifications & Job Description": "Qualifications & Job Description",
+            "Amendment Request Details": "Amendment Request Details",
+            "Resigned Employee IDs (Type and press Enter or Comma)...": "Resigned Employee IDs (Type and press Enter or Comma)...",
+            "Resigned Employees List": "Resigned Employees List",
+            "In Date": "In Date",
+            "Validation": "Validation",
+            "Valid": "Valid",
+            "EmpNo": "EmpNo",
+            "Department": "Department",
+            "Type_EmpNo_Hint": "Type employee ID then press <kbd>Enter</kbd> or comma <kbd>,</kbd> to add",
+            "Download template": "Download template",
+            "Download template here": "Download template here",
+            "Download correct template here": "Download correct template here",
+            "Invalid Employee IDs Found": "Invalid Employee IDs Found",
+            "Review Employee IDs": "Review Employee IDs",
+            "The highlighted IDs have been used for another request. Please update the file.": "The highlighted IDs have been used for another request. Please update the file.",
+            "Invalid Format": "Invalid Format",
+            "The uploaded file does not match the required template. Please use the specified format.": "The uploaded file does not match the required template. Please use the specified format.",
+            "No employee IDs found in the Excel file.": "No employee IDs found in the Excel file.",
+            "Please enter at least one employee ID": "Please enter at least one employee ID",
+            "Close": "Close",
+            "Employee not found:": "Employee not found:",
+            "Error fetching employee info for:": "Error fetching employee info for:",
+            "Dept No": "Dept No"
         },
         "vi": {
             "Create new request": "Tạo yêu cầu mới",
@@ -4922,7 +5363,7 @@ v-model="viewOriginal"
             "Quantity request": "Số lượng yêu cẩu",
             "Change Quantity": "Số lượng thay đổi",
             "Change Reason": "Lý do thay đổi",
-            "Req.date": "Ngày yêu cầu công nhân - nhân viên đến",
+            "Req.date": "Ngày vào làm",
             "Expansion of Staffing": "Mở rộng biên chế",
             "Replacement": "Bổ sung thôi việc",
             "Old empno": "Mã số công nhân-nhân viên nghỉ việc",
@@ -5057,8 +5498,30 @@ v-model="viewOriginal"
             "Settings": "Cài đặt",
             "Basic Request Information": "Thông tin cơ bản",
             "Qualifications & Job Description":"Yêu cầu về trình độ và mô tả công việc",
-            "Amendment Request Details":"Chi tiết yêu cầu thay đổi"
-            
+            "Amendment Request Details":"Chi tiết yêu cầu thay đổi",
+            "Resigned Employee IDs (Type and press Enter or Comma)...": "Mã NV thôi việc (Gõ và nhấn Enter hoặc Phẩy)...",
+            "Resigned Employees List": "Danh sách nhân viên thôi việc",
+            "In Date": "Ngày vào làm",
+            "Validation": "Kiểm tra",
+            "Valid": "Hợp lệ",
+            "EmpNo": "Mã NV",
+            "Department": "Bộ phận",
+            "Type_EmpNo_Hint": "Gõ mã nhân viên rồi nhấn <kbd>Enter</kbd> hoặc dấu phẩy <kbd>,</kbd> để thêm",
+            "Dimission list file": "File danh sách thôi việc",
+            "Download template": "Tải file mẫu",
+            "Download template here": "Tải file mẫu tại đây",
+            "Download correct template here": "Tải file mẫu chuẩn tại đây",
+            "Invalid Employee IDs Found": "Mã nhân viên không hợp lệ",
+            "Review Employee IDs": "Xác nhận danh sách nhân viên",
+            "The highlighted IDs have been used for another request. Please update the file.": "Các mã được tô đỏ đã được dùng cho đơn khác. Vui lòng cập nhật lại file.",
+            "Invalid Format": "Sai định dạng",
+            "The uploaded file does not match the required template. Please use the specified format.": "File tải lên không đúng định dạng quy định. Phải sử dụng đúng định dạng.",
+            "No employee IDs found in the Excel file.": "Không tìm thấy mã nhân viên nào trong file Excel.",
+            "Please enter at least one employee ID": "Vui lòng nhập ít nhất một mã nhân viên",
+            "Close": "Đóng",
+            "Employee not found:": "Không tìm thấy nhân viên:",
+            "Error fetching employee info for:": "Lỗi khi lấy thông tin nhân viên:",
+            "Dept No": "Mã bộ phận"
         },
         "cn": {
             "Create new request": "创建新请求",
@@ -5211,12 +5674,42 @@ v-model="viewOriginal"
             "Settings": "设置",
             "Basic Request Information": " 基本请求信息",
             "Qualifications & Job Description": "职位描述和资质要求",
-            "Amendment Request Details":"更改请求详细信息"
+            "Amendment Request Details":"更改请求详细信息",
+            "Resigned Employee IDs (Type and press Enter or Comma)...": "離職工號（輸入後按 Enter 或逗號）...",
+            "Resigned Employees List": "離職人員名單",
+            "In Date": "到職日",
+            "Validation": "驗證",
+            "Valid": "有效",
+            "EmpNo": "工號",
+            "Department": "部門",
+            "Type_EmpNo_Hint": "輸入員工工號，然後按 <kbd>Enter</kbd> 或逗號 <kbd>,</kbd> 添加",
+            "Download template": "下載範本",
+            "Download template here": "點此下載範本",
+            "Download correct template here": "點此下載標準範本",
+            "Invalid Employee IDs Found": "無效離職工號",
+            "Review Employee IDs": "確認離職人員名單",
+            "The highlighted IDs have been used for another request. Please update the file.": "標紅的工號已在其他申請單中使用，請更新檔案。",
+            "Invalid Format": "格式錯誤",
+            "The uploaded file does not match the required template. Please use the specified format.": "上傳的檔案不符合規定格式，請使用指定的標準格式。",
+            "No employee IDs found in the Excel file.": "Excel檔案中未找到任何工號。",
+            "Please enter at least one employee ID": "請至少輸入一個離職工號",
+            "Close": "關閉",
+            "Employee not found:": "找不到員工：",
+            "Error fetching employee info for:": "獲取員工資訊時出錯：",
+            "Dept No": "部門代碼"
         }
     }
 </i18n>
 
 <style scoped>
+.error-row {
+    background-color: #ffebee !important;
+}
+.error-row td {
+    color: #d32f2f !important;
+    font-weight: bold;
+}
+
 .request-page {
     background-color: #f8f9fa;
     min-height: 100vh;

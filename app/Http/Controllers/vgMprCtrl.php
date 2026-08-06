@@ -7,6 +7,7 @@ use App\hrmDepartmentMdl as hrmDept;
 use App\globalDeptMdl as DeptCode;
 use App\vgMprLangMdl as Lang;
 use App\vgMprWpsMdl as Wps;
+use App\vgMprResignTrackingMdl as ResignTracking;
 use App\vgMprMdl as Mpr;
 use App\vgMprMdlTemp as MprTemp;
 use App\vgMprWorkExpMdl as WorkExp;
@@ -51,6 +52,7 @@ class vgMprCtrl extends Controller
 
         $data = Mpr::select("req_id")
             ->where("status", $status)
+            ->where("fulfilled", "no")
             ->whereRaw('JSON_EXTRACT(submitter, "$.high_dept") = ?', [$div])
             ->where(function ($query) use ($status) {
                 $query
@@ -142,7 +144,7 @@ class vgMprCtrl extends Controller
         } elseif ($empno && $dept) {
             $params = new Request([
                 "empno" => $empno,
-                "app_code" => "mpr",
+                "app_code" => $app_code,
                 "location" => "VG",
                 "custom_data" => json_encode([
                     "custom_dept" => $dept,
@@ -1410,6 +1412,9 @@ class vgMprCtrl extends Controller
 
         // --- XỬ LÝ KHI HOÀN THÀNH (COMPLETED) ---
         if ($nextStatus === "completed") {
+            // Đồng bộ sang bảng resign-tracking khi đơn hoàn thành (kể cả đơn chỉnh sửa/điều chỉnh)
+            $this->syncResignTrackingOnCompleted($mpr);
+
             // Lấy giá trị activeRct an toàn
             $activeRctVal = $mpr->activeRct;
             $activeRctInt = is_numeric($activeRctVal)
@@ -1520,7 +1525,7 @@ class vgMprCtrl extends Controller
             if (strcasecmp($manager["empno"], $user_empno) === 0) {
                 return [
                     "empno" => $manager["empno"],
-                    "name" => $manager["name"],
+                    "name" => $manager["full_name"]?? $manager["name"],
                     "dept" => $manager["dept_code"][0] ?? "",
                     "email" => $manager["email"],
                 ];
@@ -1534,7 +1539,7 @@ class vgMprCtrl extends Controller
                     ) {
                         return [
                             "empno" => $deputy["empno"],
-                            "name" => $deputy["name"],
+                            "name" => $deputy["full_name"] ?? $deputy["name"],
                             "dept" => $manager["dept_code"][0] ?? "",
                             "email" => $deputy["email"],
                         ];
@@ -4714,6 +4719,90 @@ class vgMprCtrl extends Controller
                 'success' => false,
                 'message' => "Error migrating MPR to Demand: " . $e->getMessage()
             ], 500);
+        }
+    }
+
+    public function checkResignEmpNo(Request $request)
+    {
+        try {
+            $empno = trim($request->input('empno'));
+            $currentReqId = $request->input('req_id');
+
+            if (empty($empno)) {
+                return response()->json(['success' => false, 'message' => 'EmpNo is required'], 400);
+            }
+
+            $query = ResignTracking::where('empno', $empno)
+                ->whereNotIn('status', ['declined', 'cancelled']);
+
+            if (!empty($currentReqId)) {
+                $query->where('req_id', '!=', $currentReqId);
+            }
+
+            $record = $query->first();
+
+            if ($record) {
+                return response()->json([
+                    'success' => true,
+                    'exists' => true,
+                    'req_id' => $record->req_id,
+                    'status' => $record->status,
+                    'emp_name' => $record->emp_name,
+                    'message' => "Mã nhân viên {$empno} (" . ($record->emp_name ?? '') . ") đã được sử dụng ở đơn {$record->req_id} (Trạng thái: {$record->status})!"
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'exists' => false
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    private function syncResignTrackingOnCompleted($mpr)
+    {
+        try {
+            if (empty($mpr) || empty($mpr->old_emp)) {
+                return;
+            }
+
+            $oldEmpRaw = $mpr->old_emp;
+            $empList = [];
+            if (is_array($oldEmpRaw)) {
+                $empList = $oldEmpRaw;
+            } else {
+                $decoded = json_decode($oldEmpRaw, true);
+                if (is_array($decoded)) {
+                    $empList = $decoded;
+                } else {
+                    $empList = [['empno' => trim($oldEmpRaw)]];
+                }
+            }
+
+            foreach ($empList as $emp) {
+                $empNoVal = is_array($emp) ? ($emp['empno'] ?? null) : $emp;
+                if (!empty($empNoVal)) {
+                    ResignTracking::updateOrCreate(
+                        [
+                            'req_id' => $mpr->req_id,
+                            'empno' => trim($empNoVal),
+                        ],
+                        [
+                            'emp_name' => is_array($emp) ? ($emp['name'] ?? $emp['emp_name'] ?? null) : null,
+                            'dept_code' => is_array($emp) ? ($emp['dept_code'] ?? $emp['dept'] ?? null) : null,
+                            'dept_name' => is_array($emp) ? ($emp['dept_name'] ?? null) : null,
+                            'status' => 'completed',
+                        ]
+                    );
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error("Error syncing ResignTracking on completed: " . $e->getMessage());
         }
     }
 }

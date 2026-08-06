@@ -241,7 +241,9 @@ export default {
                         }
                     }
                     
-                    this.userCompanies = res.data.data.map(item => item.company.code);
+                    this.userCompanies = (res.data.data || [])
+                        .map(item => (item && item.company ? item.company.code : null))
+                        .filter(Boolean);
                     
                     if (!this.selectedCompany && this.userCompanies.length > 0) {
                         this.selectCompany(this.userCompanies[0]);

@@ -69,6 +69,10 @@ export default {
             type: String,
             required: true,
         },
+        value: {
+            type: Array,
+            default: () => [],
+        },
     },
     data() {
         return {
@@ -89,6 +93,17 @@ export default {
         }
     },
     watch: {
+        value: {
+            handler(newVal) {
+                if (newVal) {
+                    this.selected = [...newVal];
+                } else {
+                    this.selected = [];
+                }
+            },
+            immediate: true,
+            deep: true
+        },
         inItems: {
             handler(newItems) {
                 if (this.selected && this.selected.length > 0) {
@@ -105,17 +120,16 @@ export default {
                 this.$nextTick(() => {
                     this.$refs.autocomplete.focus();
                 });
+            } else {
+                this.$emit('changed', this.selected);
             }
-        },
-        // We removed the auto-select on searchQuery change to make it a standard filter
-        selected(newVal) {
-            this.$emit('changed', newVal)
         },
     },
     methods: {
         clearFilter() {
             this.selected = [];
             this.searchQuery = null;
+            this.show = false;
         },
         handleEnterKey() {
             if (!this.searchQuery) return;

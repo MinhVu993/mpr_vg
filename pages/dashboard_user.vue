@@ -75,6 +75,7 @@
                 </v-menu>
             </v-tabs>
             <v-data-table :headers="originalHeaders" :items="filteredData" :search="search" class="elevation-1"  :loading="loading"
+            show-select v-model="selectedItems" item-key="id"
             :footer-props="{
                 showFirstLastPage: true,
                 firstIcon: 'mdi-arrow-collapse-left',
@@ -91,52 +92,52 @@
             </template>
             <template #[`header.submitter`]>
                 <DsFilter :name="$t('Submitted by')" :in-items="filterItems.submitter"
-                @changed="updateFilter('submitter', $event)" />
+                :value="filterValues.submitter" @changed="updateFilter('submitter', $event)" />
             </template>
             <template #[`header.key_in_date`]>
                 <DsFilter :name="$t('Apply Date')" :in-items="filterItems.key_in_date"
-                @changed="updateFilter('key_in_date', $event)" />
+                :value="filterValues.key_in_date" @changed="updateFilter('key_in_date', $event)" />
             </template>
             <template #[`header.unit`]>
                 <DsFilter :name="$t('Unit code')" :in-items="filterItems.unit"
-                @changed="updateFilter('unit', $event)" />
+                :value="filterValues.unit" @changed="updateFilter('unit', $event)" />
             </template>
             <template #[`header.unit_name`]>
                 <DsFilter :name="$t('Unit name')" :in-items="filterItems.unit_name"
-                @changed="updateFilter('unit_name', $event)" />
+                :value="filterValues.unit_name" @changed="updateFilter('unit_name', $event)" />
             </template>
             <template #[`header.pos`]>
                 <DsFilter :name="$t('Position')" :in-items="filterItems.pos"
-                @changed="updateFilter('pos', $event)" />
+                :value="filterValues.pos" @changed="updateFilter('pos', $event)" />
             </template>
             <template #[`header.conditions`]>
                 {{ $t('Conditions') }}
             </template>            
             <template #[`header.qty_req`]>
                 <DsFilter :name="$t('Demand')" :in-items="filterItems.qty_req"
-                @changed="updateFilter('qty_req', $event)" />
+                :value="filterValues.qty_req" @changed="updateFilter('qty_req', $event)" />
             </template>
             <template #[`header.req_id`]>
                 <DsFilter :name="$t('ID')" :in-items="filterItems.req_id"
-                @changed="updateFilter('req_id', $event)" />
+                :value="filterValues.req_id" @changed="updateFilter('req_id', $event)" />
             </template>
             <template #[`header.recruited`]>
                 <!-- {{ $t('Recruited') }} -->
                 <DsFilter :name="$t('Recruited')" :in-items="filterItems.recruited"
-                @changed="updateFilter('recruited', $event)" />
+                :value="filterValues.recruited" @changed="updateFilter('recruited', $event)" />
             </template>
             <template #[`header.reason`]>
                 <DsFilter :name="$t('Reason')" :in-items="filterItems.reason"
-                @changed="updateFilter('reason', $event)" />
+                :value="filterValues.reason" @changed="updateFilter('reason', $event)" />
             </template>
             <template #[`header.resign`]>
                 <!-- {{ $t('Resign') }} -->
                 <DsFilter :name="$t('Resign')" :in-items="filterItems.resign"
-                @changed="updateFilter('resign', $event)" />
+                :value="filterValues.resign" @changed="updateFilter('resign', $event)" />
             </template>
             <template #[`header.status`]>
                 <DsFilter :name="$t('Approval Status')" :in-items="filterItems.status"
-                @changed="updateFilter('status', $event)" />
+                :value="filterValues.status" @changed="updateFilter('status', $event)" />
             </template>
             <template #[`header.action`]>
                 {{ $t('Print') }}
@@ -144,7 +145,7 @@
             <template #[`header.recruited_status`]>
                 <DsFilter :name="$t('Recruitment status')" 
                 :in-items="filterItems.recruited_status"
-                @changed="updateFilter('recruited_status', $event)" />
+                :value="filterValues.recruited_status" @changed="updateFilter('recruited_status', $event)" />
             </template>
             <template v-slot:[`item.recruited_status`]="{ item }">
                 <v-chip 
@@ -386,10 +387,14 @@
         <v-icon left>mdi-file-excel</v-icon>
         {{ $t("Export") }}
     </v-btn>
+    <v-btn small color="primary" @click="printMultipleDocuments" :disabled="selectedItems.length === 0" :title="$t('Print multiple')" class="mr-6" dark>
+        <v-icon left>mdi-printer</v-icon>
+        {{ $t("Print") }}
+    </v-btn>
 </template>
 <template v-slot:[`body.append`]>
     <tr class="total-row">
-        <td colspan="3" class="text-center">{{ $t('Total') }}</td>
+        <td colspan="4" class="text-center">{{ $t('Total') }}</td>
         <template v-for="(header, index) in originalHeaders.slice(3)">
             <td 
             :key="index" 
@@ -839,6 +844,8 @@
                 selectedItemForAction: null,
                 denyReason: '',
                 dataMpr: [],
+                selectedItems: [],
+                dataRecruitmentReason: [],
                 filteredItems: [],
                 selectedItem: null,
                 isEdit: false,
@@ -1398,6 +1405,15 @@
             },
         },
         methods: {
+            printMultipleDocuments() {
+                if (!this.selectedItems || this.selectedItems.length === 0) return;
+                const ids = this.selectedItems.map(item => item.id).join(',');
+                const routeData = this.$router.resolve({
+                    name: 'template-print-request',
+                    query: { ids: ids }
+                });
+                window.open(routeData.href, '_blank');
+            },
             isYearEndTodo(item) {
                 try {
                     if (!item) return false;
@@ -1845,7 +1861,7 @@
                 if (item.deny_temp &&
                 typeof item.deny_temp === 'string' &&
                 item.deny_temp.trim() !== '' &&
-                (statusAmendent === 'completed' || (status === 'completed' && activeRctInt !== ""))) {
+                (statusAmendent === 'completed' || (status === 'completed' && activeRctInt !== null && !isNaN(activeRctInt)))) {
                     try {
                         const denyTempData = JSON.parse(item.deny_temp);
                         if (denyTempData.fullfilldate) {
@@ -3249,11 +3265,11 @@
                     let managerList = [];
                     let deputyList = [];
                     currentFlow.managers.forEach(m => {
-                        managerList.push(`- ${m.empno} - ${m.name}`);
+                        managerList.push(`- ${m.empno} - ${m.full_name || m.name}`);
                         const deputies = m.deputies || [];
                         const activeDeputies = deputies.filter(d => d.status);
                         activeDeputies.forEach(d => {
-                            deputyList.push(`  - ${d.empno} - ${d.name}`);
+                            deputyList.push(`  - ${d.empno} - ${d.full_name || d.name}`);
                         });
                     });
                     
@@ -3389,11 +3405,11 @@
                     let managerList = [];
                     let deputyList = [];
                     currentFlow.managers.forEach(m => {
-                        managerList.push(`- ${m.empno} - ${m.name}`);
+                        managerList.push(`- ${m.empno} - ${m.full_name || m.name}`);
                         const deputies = m.deputies || [];
                         const activeDeputies = deputies.filter(d => d.status);
                         activeDeputies.forEach(d => {
-                            deputyList.push(`  - ${d.empno} - ${d.name}`);
+                            deputyList.push(`  - ${d.empno} - ${d.full_name || d.name}`);
                         });
                     });
                     
@@ -3441,11 +3457,11 @@
                     let managerList = [];
                     let deputyList = [];
                     currentFlow.managers.forEach(m => {
-                        managerList.push(`- ${m.empno} - ${m.name}`);
+                        managerList.push(`- ${m.empno} - ${m.full_name || m.name}`);
                         const deputies = m.deputies || [];
                         const activeDeputies = deputies.filter(d => d.status);
                         activeDeputies.forEach(d => {
-                            deputyList.push(`  - ${d.empno} - ${d.name}`);
+                            deputyList.push(`  - ${d.empno} - ${d.full_name || d.name}`);
                         });
                     });
                     
@@ -4074,7 +4090,9 @@
             "loadingData":"Loading data...please wait",
             "NY_Prefix":"Req for New Year ",
             "No.": "No.",
-            "Rows per page": "Rows per page"
+            "Rows per page": "Rows per page",
+            "Print multiple": "Print multiple",
+            "Cancel request": "Cancel request"
         },
         "vi": {
             "ID": "Mã đơn",

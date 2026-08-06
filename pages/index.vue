@@ -78,7 +78,8 @@
                 </v-menu>
                 
             </v-tabs>
-            <v-data-table :headers="originalHeaders" :items="filteredData" :search="search" class="elevation-1"  :loading="loading" :items-per-page="10"
+            <v-data-table :headers="originalHeaders" :items="filteredData" :search="search" class="elevation-1" :loading="loading" :items-per-page="10"
+            show-select v-model="selectedItems" item-key="id"
             :footer-props="{
                 showFirstLastPage: true,
                 firstIcon: 'mdi-arrow-collapse-left',
@@ -95,57 +96,57 @@
             </template>
             <template #[`header.submitter`]>
                 <DsFilter :name="$t('Submitted by')" :in-items="filterItems.submitter"
-                @changed="updateFilter('submitter', $event)" />
+                :value="filterValues.submitter" @changed="updateFilter('submitter', $event)" />
             </template>
             <template #[`header.key_in_date`]>
                 <DsFilter :name="$t('Apply Date')" :in-items="filterItems.key_in_date"
-                @changed="updateFilter('key_in_date', $event)" />
+                :value="filterValues.key_in_date" @changed="updateFilter('key_in_date', $event)" />
             </template>
             <template #[`header.unit`]>
                 <DsFilter :name="$t('Unit code')" :in-items="filterItems.unit"
-                @changed="updateFilter('unit', $event)" />
+                :value="filterValues.unit" @changed="updateFilter('unit', $event)" />
             </template>
             <template #[`header.unit_name`]>
                 <DsFilter :name="$t('Unit name')" :in-items="filterItems.unit_name"
-                @changed="updateFilter('unit_name', $event)" />
+                :value="filterValues.unit_name" @changed="updateFilter('unit_name', $event)" />
             </template>
             <template #[`header.pos`]>
                 <DsFilter :name="$t('Position')" :in-items="filterItems.pos"
-                @changed="updateFilter('pos', $event)" />
+                :value="filterValues.pos" @changed="updateFilter('pos', $event)" />
             </template>
             <template #[`header.sub_pos`]>
                 <!-- {{ $t('Sub position') }} -->
                 <DsFilter :name="$t('Sub position')" :in-items="filterItems.sub_pos"
-                @changed="updateFilter('sub_pos', $event)" />
+                :value="filterValues.sub_pos" @changed="updateFilter('sub_pos', $event)" />
             </template>          
             <template #[`header.conditions`]>
                 {{ $t('Conditions') }}
             </template>            
             <template #[`header.qty_req`]>
                 <DsFilter :name="$t('Demand')" :in-items="filterItems.qty_req"
-                @changed="updateFilter('qty_req', $event)" />
+                :value="filterValues.qty_req" @changed="updateFilter('qty_req', $event)" />
             </template>
             <template #[`header.req_id`]>
                 <DsFilter :name="$t('ID')" :in-items="filterItems.req_id"
-                @changed="updateFilter('req_id', $event)" />
+                :value="filterValues.req_id" @changed="updateFilter('req_id', $event)" />
             </template>
             <template #[`header.recruited`]>
                 <!-- {{ $t('Recruited') }} -->
                 <DsFilter :name="$t('Recruited')" :in-items="filterItems.recruited"
-                @changed="updateFilter('recruited', $event)" />
+                :value="filterValues.recruited" @changed="updateFilter('recruited', $event)" />
             </template>
             <template #[`header.reason`]>
                 <DsFilter :name="$t('Reason')" :in-items="filterItems.reason"
-                @changed="updateFilter('reason', $event)" />
+                :value="filterValues.reason" @changed="updateFilter('reason', $event)" />
             </template>
             <template #[`header.resign`]>
                 <!-- {{ $t('Resign') }} -->
                 <DsFilter :name="$t('Resign')" :in-items="filterItems.resign"
-                @changed="updateFilter('resign', $event)" />
+                :value="filterValues.resign" @changed="updateFilter('resign', $event)" />
             </template>
             <template #[`header.status`]>
                 <DsFilter :name="$t('Approval Status')" :in-items="filterItems.status"
-                @changed="updateFilter('status', $event)" />
+                :value="filterValues.status" @changed="updateFilter('status', $event)" />
             </template>
             <template #[`header.action`]>
                 {{ $t('Print') }}
@@ -153,7 +154,7 @@
             <template #[`header.recruited_status`]>
                 <DsFilter :name="$t('Recruitment status')" 
                 :in-items="filterItems.recruited_status"
-                @changed="updateFilter('recruited_status', $event)" />
+                :value="filterValues.recruited_status" @changed="updateFilter('recruited_status', $event)" />
             </template>
             <template v-slot:[`item.sub_pos`]="{ item }">
                 {{ getSubPositionName(item.sub_pos, true) }}
@@ -390,10 +391,14 @@
         <v-icon left>mdi-file-excel</v-icon>
         {{ $t("Export") }}
     </v-btn>
+    <v-btn small color="primary" @click="printMultipleDocuments" :disabled="selectedItems.length === 0" :title="$t('Print multiple')" class="mr-6" dark>
+        <v-icon left>mdi-printer</v-icon>
+        {{ $t("Print") }}
+    </v-btn>
 </template>
 <template v-slot:[`body.append`]>
     <tr class="total-row">
-        <td colspan="3" class="text-center">{{ $t('Total') }}</td>
+        <td colspan="4" class="text-center">{{ $t('Total') }}</td>
         <template v-for="(header, index) in originalHeaders.slice(3)">
             <td 
             :key="index" 
@@ -996,22 +1001,28 @@
                 :footer-props="{ 'items-per-page-options': [10, 20, 50] }"
                 >
                 <template v-slot:header.year="{ header }">
-                    <DsFilter :name="$t('year')" :in-items="computedSettingFilterItems.year" @changed="updateSettingFilter('year', $event)" />
+                    <DsFilter :name="$t('year')" :in-items="computedSettingFilterItems.year"
+                    :value="settingFilterValues.year" @changed="updateSettingFilter('year', $event)" />
                 </template>
                 <template v-slot:header.email_date="{ header }">
-                    <DsFilter :name="$t('Email Notification Date')" :in-items="computedSettingFilterItems.email_date" @changed="updateSettingFilter('email_date', $event)" />
+                    <DsFilter :name="$t('Email Notification Date')" :in-items="computedSettingFilterItems.email_date"
+                    :value="settingFilterValues.email_date" @changed="updateSettingFilter('email_date', $event)" />
                 </template>
                 <template v-slot:header.deadline_date="{ header }">
-                    <DsFilter :name="$t('Reply Deadline')" :in-items="computedSettingFilterItems.deadline_date" @changed="updateSettingFilter('deadline_date', $event)" />
+                    <DsFilter :name="$t('Reply Deadline')" :in-items="computedSettingFilterItems.deadline_date"
+                    :value="settingFilterValues.deadline_date" @changed="updateSettingFilter('deadline_date', $event)" />
                 </template>
                 <template v-slot:header.update_date="{ header }">
-                    <DsFilter :name="$t('System Update Date')" :in-items="computedSettingFilterItems.update_date" @changed="updateSettingFilter('update_date', $event)" />
+                    <DsFilter :name="$t('System Update Date')" :in-items="computedSettingFilterItems.update_date"
+                    :value="settingFilterValues.update_date" @changed="updateSettingFilter('update_date', $event)" />
                 </template>
                 <template v-slot:header.ey_date_req="{ header }">
-                    <DsFilter :name="$t('NY Date Request')" :in-items="computedSettingFilterItems.ey_date_req" @changed="updateSettingFilter('ey_date_req', $event)" />
+                    <DsFilter :name="$t('NY Date Request')" :in-items="computedSettingFilterItems.ey_date_req"
+                    :value="settingFilterValues.ey_date_req" @changed="updateSettingFilter('ey_date_req', $event)" />
                 </template>
                 <template v-slot:header.key_in_newyear="{ header }">
-                    <DsFilter :name="$t('Key In New Year')" :in-items="computedSettingFilterItems.key_in_newyear" @changed="updateSettingFilter('key_in_newyear', $event)" />
+                    <DsFilter :name="$t('Key In New Year')" :in-items="computedSettingFilterItems.key_in_newyear"
+                    :value="settingFilterValues.key_in_newyear" @changed="updateSettingFilter('key_in_newyear', $event)" />
                 </template>
                 <template v-slot:item.year="{ item }">
                     <v-chip color="primary" small label outlined class="font-weight-bold">{{ item.year }}</v-chip>
@@ -1094,6 +1105,7 @@
                 selectedItemForAction: null,
                 denyReason: '',
                 dataMpr: [],
+                selectedItems: [],
                 filteredItems: [],
                 selectedItem: null, 
                 isEdit: false,
@@ -2248,7 +2260,7 @@
                 if (item.deny_temp &&
                 typeof item.deny_temp === 'string' &&
                 item.deny_temp.trim() !== '' &&
-                (statusAmendent === 'completed' || (status === 'completed' && activeRctInt !== ""))) {
+                (statusAmendent === 'completed' || (status === 'completed' && activeRctInt !== null && !isNaN(activeRctInt)))) {
                     try {
                         const denyTempData = JSON.parse(item.deny_temp);
                         if (denyTempData.fullfilldate) {
@@ -2900,6 +2912,15 @@
                     return false;
                 }
                 
+            },
+            printMultipleDocuments() {
+                if (!this.selectedItems || this.selectedItems.length === 0) return;
+                const ids = this.selectedItems.map(item => item.id).join(',');
+                const routeData = this.$router.resolve({
+                    name: 'template-print-request',
+                    query: { ids: ids }
+                });
+                window.open(routeData.href, '_blank');
             },
             printDocument(item) {
                 if (item.qty_req && typeof item.qty_req === 'string') {
@@ -3589,11 +3610,11 @@
                     let managerList = [];
                     let deputyList = [];
                     currentFlow.managers.forEach(m => {
-                        managerList.push(`- ${m.empno} - ${m.name}`);
+                        managerList.push(`- ${m.empno} - ${m.full_name || m.name}`);
                         const deputies = m.deputies || [];
                         const activeDeputies = deputies.filter(d => d.status);
                         activeDeputies.forEach(d => {
-                            deputyList.push(`  - ${d.empno} - ${d.name}`);
+                            deputyList.push(`  - ${d.empno} - ${d.full_name || d.name}`);
                         });
                     });
                     
@@ -3737,11 +3758,11 @@
                     let managerList = [];
                     let deputyList = [];
                     currentFlow.managers.forEach(m => {
-                        managerList.push(`- ${m.empno} - ${m.name}`);
+                        managerList.push(`- ${m.empno} - ${m.full_name || m.name}`);
                         const deputies = m.deputies || [];
                         const activeDeputies = deputies.filter(d => d.status);
                         activeDeputies.forEach(d => {
-                            deputyList.push(`  - ${d.empno} - ${d.name}`);
+                            deputyList.push(`  - ${d.empno} - ${d.full_name || d.name}`);
                         });
                     });
                     
@@ -3793,11 +3814,11 @@
                     let managerList = [];
                     let deputyList = [];
                     currentFlow.managers.forEach(m => {
-                        managerList.push(`- ${m.empno} - ${m.name}`);
+                        managerList.push(`- ${m.empno} - ${m.full_name || m.name}`);
                         const deputies = m.deputies || [];
                         const activeDeputies = deputies.filter(d => d.status);
                         activeDeputies.forEach(d => {
-                            deputyList.push(`  - ${d.empno} - ${d.name}`);
+                            deputyList.push(`  - ${d.empno} - ${d.full_name || d.name}`);
                         });
                     });
                     
@@ -3818,11 +3839,9 @@
                 if (this.approvalFlowCache[id]) return;
                 if (this.flowLoading[id]) return; // avoid duplicate requests
                 
-                // mark loading
                 this.$set(this.flowLoading, id, true);
                 this.getFlowDataForItem(item)
                 .then(() => {
-                    // force redraw so tooltips pick up new content
                     this.$forceUpdate();
                 })
                 .catch(error => {
@@ -4593,7 +4612,9 @@
             "Email Notify":"Email Notify",
             "System Update":"System Update",
             "Key In New Year":"New Year Form Apply Date",
-            "NY Date Request":"New Year require onboard Date"
+            "NY Date Request":"New Year require onboard Date",
+            "No.": "No.",
+            "Print multiple": "Print multiple"
         },
         "vi": {
             "ID": "Mã đơn",
