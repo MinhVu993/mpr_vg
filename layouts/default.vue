@@ -75,8 +75,8 @@
 </template>
 
 <script>
-import AuthComp from "../../../@global-component/auth-comp";
-// import AuthComp from 'D:/source/@global-component/auth-comp.vue';
+// import AuthComp from "../../../@global-component/auth-comp";
+import AuthComp from 'D:/source/@global-component/auth-comp.vue';
 export default {
     components: {
         AuthComp,
@@ -126,7 +126,8 @@ export default {
             }
             ];
             
-            if (user && ['admin', 'review'].includes(user.role)) {
+            const role = user && user.role ? user.role.toLowerCase() : null;
+            if (user && ['admin', 'review'].includes(role)) {
                 return [
                 {
                     icon: "mdi-home",
@@ -156,8 +157,8 @@ export default {
                 console.error("Error parsing app_roles", e);
             }
             
-            const roleItem = appRoles.find(app => app.app === "mpr");
-            const role = roleItem ? roleItem.role : null;
+            const roleItem = appRoles.find(app => app.app && app.app.toLowerCase() === "mpr");
+            const role = roleItem && roleItem.role ? roleItem.role.toLowerCase() : null;
             // console.log(user);
             let queryParams = { location: 'vg' };
             if (user.group_empno) {
@@ -210,7 +211,7 @@ export default {
 
             const currentPath = this.$route.path;
             const base = this.$router.options.base || '/';
-            if(roleItem && authArr.includes(roleItem.role)) {
+            if(role && authArr.includes(role)) {
                 if (currentPath !== '/') {
                     this.$router.push('/');
                 }

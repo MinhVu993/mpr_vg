@@ -4416,7 +4416,8 @@
                 
                 this.$root.$on("user-session-updated", () => {
                     this.activeUser = this.$session.get("mpr");
-                    if (this.activeUser && !authArr.includes(this.activeUser.role)) {
+                    const activeRole = this.activeUser && this.activeUser.role ? this.activeUser.role.toLowerCase() : null;
+                    if (this.activeUser && !authArr.includes(activeRole)) {
                         const base = this.$router.options.base || '/';
                         window.location.href = base.endsWith('/') ? base + 'dashboard_user' : base + '/dashboard_user';
                         return;
