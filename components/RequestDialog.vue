@@ -380,7 +380,7 @@
             @change="handleDimissionListChange($event)" prepend-inner-icon="mdi-file-account"
             :clearable="true" accept=".doc,.docx,.pdf,.xls,.xlsx"></v-file-input>
             <div class="mt-1 ml-1">
-                <a href="/Resign template.xlsx" download class="text-caption" style="color: #00838F; text-decoration: underline;">
+                <a :href="`${$router.options.base}Resign_template.xlsx`" download class="text-caption" style="color: #00838F; text-decoration: underline;">
                     <v-icon x-small color="#00838F">mdi-download</v-icon> {{ $t("Download template") }}
                 </a>
             </div>
@@ -949,7 +949,7 @@ v-model="viewOriginal"
             <div class="mb-4" v-if="dimissionPreviewHasError">
                 <span class="error--text">{{ $t('The highlighted IDs have been used for another request. Please update the file.') || 'Các mã được tô đỏ đã được dùng cho đơn khác. Vui lòng cập nhật lại file.' }}</span>
                 <br>
-                <a href="/Resign template.xlsx" download style="color: blue; text-decoration: underline;">
+                <a :href="`${$router.options.base}Resign_template.xlsx`" download style="color: blue; text-decoration: underline;">
                     <v-icon x-small color="blue">mdi-download</v-icon> {{ $t('Download template here') || 'Tải file mẫu tại đây' }}
                 </a>
             </div>
@@ -2922,7 +2922,7 @@ export default {
                                     Swal.fire({
                                         icon: 'error',
                                         title: this.$t('Invalid Format'),
-                                        html: `${this.$t('The uploaded file does not match the required template. Please use the specified format.')}<br><br><a href="/Resign template.xlsx" download style="color: blue; text-decoration: underline;">${this.$t('Download correct template here')}</a>`,
+                                        html: `${this.$t('The uploaded file does not match the required template. Please use the specified format.')}<br><br><a href="${this.$router.options.base}Resign_template.xlsx" download style="color: blue; text-decoration: underline;">${this.$t('Download correct template here')}</a>`,
                                         confirmButtonText: this.$t('Close')
                                     });
                                     return;
