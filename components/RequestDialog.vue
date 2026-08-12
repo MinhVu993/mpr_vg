@@ -295,35 +295,15 @@
                             :required="form.recruitment.reason === 3"
                             hide-details="auto" clearable @change="handleOtherReasonSelect"></v-autocomplete>
                         </v-col>
-                        <v-col cols="12" v-if="form.recruitment.reason === 2"> <!-- For2 Replacement -->
-                            <v-combobox
-                            v-model="oldEmpList"
-                            multiple
-                            chips
-                            small-chips
-                            deletable-chips
-                            :disabled="formDisabled"
-                            :label="$t('Resigned Employee IDs (Type and press Enter or Comma)...')"
-                            outlined
-                            dense
-                            hide-details="auto"
-                            :error-messages="oldEmpError"
-                            :rules="[() => (oldEmpList && oldEmpList.length > 0) || $t('Please enter at least one employee ID')]"
-                            @change="handleOldEmpListChange"
-                            @paste="handleOldEmpPaste"
-                            >
-                            <template v-slot:no-data>
-                                <v-list-item>
-                                    <v-list-item-content>
-                                        <v-list-item-title class="text-caption" v-html="$t('Type_EmpNo_Hint')">
-                                        </v-list-item-title>
-                                    </v-list-item-content>
-                                </v-list-item>
-                            </template>
-                        </v-combobox>
-                        
-                        <!-- Table of Resigned Employees Details -->
-                        <v-card v-if="resignedEmpListDetails && resignedEmpListDetails.length > 0" outlined class="mt-2 pa-2">
+                        <!-- Table of Resigned Employees Details (Chỉ hiện khi có dữ liệu từ file tải lên hoặc đơn cũ) -->
+                        <v-col cols="12" v-if="form.recruitment.reason === 2 || showDimissionFileInput">
+                            <v-alert dense type="info" outlined v-if="oldEmpRawText" class="mb-2">
+                                <span class="text-caption">
+                                    <b>{{ $t('Old Request Note') || 'Ghi chú nhân viên thôi việc' }}:</b> {{ oldEmpRawText }}
+                                </span>
+                            </v-alert>
+                            
+                            <v-card outlined class="pa-2" v-if="resignedEmpListDetails && resignedEmpListDetails.length > 0 && !(form.attachments.dimissionList || form.attachments.dimissionList_url)">
                             <div class="d-flex align-center justify-space-between px-2 py-1" @click="showResignedEmpTable = !showResignedEmpTable" style="cursor: pointer;">
                                 <span class="text-caption font-weight-medium grey--text text--darken-2">
                                     <v-icon x-small left color="primary">mdi-account-group</v-icon>
@@ -343,7 +323,6 @@
                                                     <th class="text-left">{{ $t('EmpNo') }}</th>
                                                     <th class="text-left">{{ $t('Name') }}</th>
                                                     <th class="text-left">{{ $t('Department') }}</th>
-                                                    <th class="text-left">{{ $t('In Date') }}</th>
                                                     <th class="text-center" v-if="!formDisabled"></th>
                                                 </tr>
                                             </thead>
@@ -353,7 +332,6 @@
                                                     <td class="font-weight-bold primary--text">{{ item.empno }}</td>
                                                     <td>{{ item.name }} </td>
                                                     <td>{{ item.dept_name || item.dept_code }}</td>
-                                                    <td>{{ item.in_date }}</td>
                                                     <td class="text-center" v-if="!formDisabled">
                                                         <v-btn icon small color="error" @click="removeOldEmp(idx)">
                                                             <v-icon small>mdi-close-circle</v-icon>
@@ -372,19 +350,19 @@
         </v-col>
         
         <v-col cols="12" md="4">
-            <v-file-input :disabled="formDisabled" v-model="form.attachments.dimissionList"
-            :label="$t('Dimission list file')" outlined dense
-            :error="form.recruitment.reason === 3 && !form.attachments.dimissionList"
-            :required="form.recruitment.reason === 3"
-            :rules="form.recruitment.reason === 3 ? [rules.required] : []" hide-details="auto"
-            @change="handleDimissionListChange($event)" prepend-inner-icon="mdi-file-account"
+            <v-file-input :disabled="formDisabled || !showDimissionFileInput" v-model="form.attachments.dimissionList"
+            :label="form.recruitment.reason === 2 ? $t('Dimission list file') : $t('Attached file')" outlined dense
+            hide-details="auto"
+            @change="handleDimissionListChange($event)"
+            @click:clear="clearFile('dimissionList')"
+            prepend-inner-icon="mdi-file-account"
             :clearable="true" accept=".doc,.docx,.pdf,.xls,.xlsx"></v-file-input>
-            <div class="mt-1 ml-1">
-                <a :href="`${$router.options.base}Resign_template.xlsx`" download class="text-caption" style="color: #00838F; text-decoration: underline;">
+            <div class="mt-1 ml-1" v-if="templateFileName">
+                <a :href="`${$router.options.base}${templateFileName}`" download class="text-caption" style="color: #00838F; text-decoration: underline;">
                     <v-icon x-small color="#00838F">mdi-download</v-icon> {{ $t("Download template") }}
                 </a>
             </div>
-            <div v-show="filePreview.dimissionList && (form.recruitment.reason === 2 || form.recruitment.reason === 3)"
+            <div v-show="filePreview.dimissionList && showDimissionFileInput"
             class="file-preview-card mt-2">
             <div class="d-flex align-center justify-space-between mb-1">
                 <v-chip small class="bg-primary-light">
@@ -972,6 +950,7 @@ v-model="viewOriginal"
                         <td>{{ item.name }}</td>
                         <td>{{ item.deptNo }}</td>
                         <td>{{ item.deptName }}</td>
+                        <td>{{ item.position }}</td>
                         <td>{{ item.date }}</td>
                         <td class="text-center">
                             <v-icon v-if="item.hasError" color="error" >mdi-close-circle</v-icon>
@@ -1081,6 +1060,7 @@ export default {
             reqId: "",
             itemsReqId: [],
             oldEmpError: "",
+            oldEmpRawText: "",
             resignedEmpInfo: null,
             oldEmpList: [],
             resignedEmpListDetails: [],
@@ -1485,12 +1465,16 @@ export default {
             let cleanList = [];
             list.forEach(item => {
                 if (typeof item === 'string') {
-                    item.split(/[\s,]+/).forEach(s => {
-                        const trimmed = s.trim();
-                        if (trimmed && !cleanList.includes(trimmed)) {
-                            cleanList.push(trimmed);
-                        }
-                    });
+                    // Match potential EmpNos (5-7 alphanumeric chars)
+                    const matches = item.match(/\b[a-zA-Z0-9]{5,7}\b/g);
+                    if (matches) {
+                        matches.forEach(m => {
+                            const trimmed = m.toUpperCase();
+                            if (!cleanList.includes(trimmed)) {
+                                cleanList.push(trimmed);
+                            }
+                        });
+                    }
                 }
             });
             
@@ -1596,6 +1580,9 @@ export default {
             this.resignedEmpListDetails = newDetails;
             if (newDetails.length > 0) {
                 this.showResignedEmpTable = true;
+            } else {
+                this.showResignedEmpTable = false;
+                this.clearFile("dimissionList");
             }
         },
         handleOldEmpPaste(event) {
@@ -1611,6 +1598,10 @@ export default {
             this.resignedEmpListDetails.splice(index, 1);
             this.form.recruitment.oldempno = this.oldEmpList.join(",");
             this.oldEmpError = this.resignedEmpListDetails.some(d => d.error) ? "Có mã nhân viên không hợp lệ" : "";
+            if (this.resignedEmpListDetails.length === 0) {
+                this.showResignedEmpTable = false;
+                this.clearFile("dimissionList");
+            }
         },
         // Thêm vào methods trong dialog.vue
         processAsyncTranslation(rawText) {
@@ -2372,13 +2363,23 @@ export default {
                         staffCount: false,
                     };
                     
-                    if (this.form.recruitment.reason === 2 && this.oldEmpError) {
-                        this.$notify({
-                            title: "Error",
-                            text: this.oldEmpError,
-                            type: "error",
-                        });
-                        return;
+                    if (this.form.recruitment.reason === 2) {
+                        if (!this.resignedEmpListDetails || this.resignedEmpListDetails.length === 0) {
+                            this.$notify({
+                                title: "Error",
+                                text: this.$t("Please upload dimission list file") || "Vui lòng tải lên danh sách thôi việc",
+                                type: "error",
+                            });
+                            return;
+                        }
+                        if (this.oldEmpError) {
+                            this.$notify({
+                                title: "Error",
+                                text: this.oldEmpError,
+                                type: "error",
+                            });
+                            return;
+                        }
                     }
                     
                     if (Object.values(this.formErrors).some((error) => error)) {
@@ -2890,11 +2891,22 @@ export default {
             this.form.attachments[`${fileType}_name`] = "";
             this.form.attachments[`${fileType}_size`] = "";
             this.filePreview[fileType] = false;
+            
+            if (fileType === 'dimissionList') {
+                this.oldEmpList = [];
+                this.resignedEmpListDetails = [];
+                this.form.recruitment.oldempno = "";
+                this.showResignedEmpTable = false;
+                this.oldEmpError = "";
+            }
         },
         async handleDimissionListChange(event) {
             this.previewFile('dimissionList', event);
             const file = this.form.attachments.dimissionList;
-            if (!file) return;
+            if (!file) {
+                this.clearFile('dimissionList');
+                return;
+            }
 
             if (file.name && file.name.match(/\.(xlsx|xls)$/i)) {
                 try {
@@ -2992,6 +3004,7 @@ export default {
                                         name: row['NAME_S'] || row['Name'] || row['NAME'] || '',
                                         deptNo: row['DEPT_NO'] || row['DEPT NO'] || row['Dept No'] || row['Mã bộ phận'] || '',
                                         deptName: row['DEPT NAME'] || row['DEPT_NAME'] || row['Dept Name'] || '',
+                                        position: row['POSITION'] || row['Position'] || row['position'] || row['Chức vụ'] || row['CHỨC VỤ'] || '',
                                         date: formattedDate,
                                         hasError: hasError,
                                         errorMsg: hasError ? `${usedInReqId}` : ''
@@ -3271,27 +3284,30 @@ export default {
             this.form.safetyLevels = data.wps;
             
             // 10. Handle recruitment info
+            const oldEmpData = data.old_emp || data.old_empno || "";
             this.form.recruitment = {
                 reason: "", // clear initial value
-                oldempno: data.old_emp || "",
+                oldempno: oldEmpData,
                 requestDate: data.date_req,
                 otherReasonSelected: "",  // clear initial value
                 isOther_reason: { vi: "", en: "", cn: "" }
             };
             
-            if (data.old_emp) {
+            if (oldEmpData) {
                 try {
-                    const parsed = JSON.parse(data.old_emp);
+                    const parsed = JSON.parse(oldEmpData);
                     if (Array.isArray(parsed)) {
                         const list = parsed.map(item => typeof item === 'object' ? item.empno : item);
                         this.handleOldEmpListChange(list);
                     } else if (typeof parsed === 'object' && parsed.empno) {
                         this.handleOldEmpListChange([parsed.empno]);
                     } else {
-                        this.handleOldEmpListChange(data.old_emp);
+                        this.oldEmpRawText = oldEmpData;
+                        this.handleOldEmpListChange(oldEmpData);
                     }
                 } catch (e) {
-                    this.handleOldEmpListChange(data.old_emp);
+                    this.oldEmpRawText = oldEmpData;
+                    this.handleOldEmpListChange(oldEmpData);
                 }
             } else {
                 this.oldEmpList = [];
@@ -3885,9 +3901,7 @@ export default {
             this.formErrors = {
                 ...this.formErrors,
                 jobDesc: this.form.pos === 1 && !this.form.attachments.jobDesc,
-                dimissionList:
-                this.form.recruitment.reason === 2 &&
-                !this.form.attachments.dimissionList,
+                dimissionList: false,
             };
         },
         handleSpecializationInput(value) {
@@ -3911,8 +3925,7 @@ export default {
                 if (!this.form.recruitment.isOther_reason) {
                     this.form.recruitment.isOther_reason = { vi: "", en: "", cn: "" };
                 }
-                // Không clear otherReasonSelected
-                // Không xóa file dimissionList
+                this.clearFile("dimissionList");
                 return;
             }
             
@@ -3997,7 +4010,8 @@ export default {
                 { text: this.$t('Name') || 'Name', value: 'name' },
                 { text: this.$t('Dept No') || 'Dept No', value: 'deptNo' },
                 { text: this.$t('Dept') || 'Dept Name', value: 'deptName' },
-                { text: this.$t('Req.date') || 'Dimission Date', value: 'date' },
+                { text: this.$t('Position') || 'Position', value: 'position' },
+                { text: this.$t('Dimission Date') || 'Dimission Date', value: 'date' },
                 { text: this.$t('Status') || 'Status', value: 'status' }
             ];
         },
@@ -4302,6 +4316,30 @@ export default {
                 }
             });
         },
+        selectedOtherReasonEnText() {
+            if (!this.form.recruitment.otherReasonSelected || !this.otherReason) return "";
+            const found = this.otherReason.find(r => r.id === this.form.recruitment.otherReasonSelected);
+            if (!found) return "";
+            try {
+                const parsed = typeof found.reason_name === "string" ? JSON.parse(found.reason_name) : found.reason_name;
+                return (parsed.en || "").toLowerCase();
+            } catch (e) {
+                return (found.reason_name || "").toLowerCase();
+            }
+        },
+        templateFileName() {
+            if (this.form.recruitment.reason === 2) return 'Resign_template.xlsx';
+            if (this.form.recruitment.reason === 3) {
+                const enText = this.selectedOtherReasonEnText;
+                if (enText.includes("transfer")) return 'Transfer_template.xlsx';
+                if (enText.includes("maternity")) return 'Maternity _template.xlsx';
+                if (enText.includes("military")) return 'Military service_template.xlsx';
+            }
+            return null;
+        },
+        showDimissionFileInput() {
+            return this.templateFileName !== null;
+        },
         showLevelField() {
             return this.form.pos === 3;
         },
@@ -4521,9 +4559,18 @@ export default {
         },
         disableSaveButton() {
             if (this.showNewYearSection) {
+                const val = this.form.newYearRecruitment;
                 return (val === "" || val === null || val === undefined);
             }
-            const reasonSelected = !!(this.form.recruitment && this.form.recruitment.reason && (this.form.recruitment.reason !== 3 || this.form.recruitment.otherReasonSelected));
+            const reasonSelected = !!(
+                this.form.recruitment &&
+                this.form.recruitment.reason &&
+                (
+                    this.form.recruitment.reason === 1 ||
+                    (this.form.recruitment.reason === 2 && this.oldEmpList && this.oldEmpList.length > 0 && this.resignedEmpListDetails && this.resignedEmpListDetails.length > 0) ||
+                    (this.form.recruitment.reason === 3 && this.form.recruitment.otherReasonSelected)
+                )
+            );
             if (this.isChange) {
                 const baseValidation =
                 !this.form.pos ||
@@ -4619,6 +4666,14 @@ export default {
             return "";
         },
         showSaveButton() {
+            // Nếu chọn Replacement (2) mà chưa có ds người thôi việc -> ẩn nút Submit
+            if (
+                this.form.recruitment?.reason === 2 &&
+                (!this.oldEmpList || this.oldEmpList.length === 0 || !this.resignedEmpListDetails || this.resignedEmpListDetails.length === 0)
+            ) {
+                return false;
+            }
+
             // LOGIC CHO PHẦN NEW YEAR RECRUITMENT
             if (this.showNewYearSection) {
                 // 1. Nếu user hiện tại có quyền duyệt -> ẨN nút Submit

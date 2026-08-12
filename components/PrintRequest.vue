@@ -596,7 +596,21 @@
                                                                         
                                                                         // Old employee number
                                                                         if (this.formData.old_emp) {
-                                                                            this.$refs.oldEmpNo.value = this.formData.old_emp;
+                                                                            if (this.formData.att_dis) {
+                                                                                this.$refs.oldEmpNo.value = "Vui lòng xem file đính kèm";
+                                                                            } else {
+                                                                                try {
+                                                                                    const parsedOldEmp = JSON.parse(this.formData.old_emp);
+                                                                                    if (Array.isArray(parsedOldEmp)) {
+                                                                                        const empnos = parsedOldEmp.map(p => typeof p === 'object' ? p.empno : p).filter(Boolean);
+                                                                                        this.$refs.oldEmpNo.value = empnos.join(', ');
+                                                                                    } else {
+                                                                                        this.$refs.oldEmpNo.value = this.formData.old_emp;
+                                                                                    }
+                                                                                } catch (e) {
+                                                                                    this.$refs.oldEmpNo.value = this.formData.old_emp;
+                                                                                }
+                                                                            }
                                                                         }
                                                                     }
                                                                     if (this.formData.qtyReq) {
