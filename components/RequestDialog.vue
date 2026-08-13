@@ -359,7 +359,7 @@
             :clearable="true" accept=".doc,.docx,.pdf,.xls,.xlsx"></v-file-input>
             <div class="mt-1 ml-1" v-if="templateFileName">
                 <a :href="`${$router.options.base}${templateFileName}`" download class="text-caption" style="color: #00838F; text-decoration: underline;">
-                    <v-icon x-small color="#00838F">mdi-download</v-icon> {{ $t("Download template") }}
+                    <v-icon x-small color="#00838F">mdi-download</v-icon> {{ $t("Download template") }} ({{ templateFileName }})
                 </a>
             </div>
             <div v-show="filePreview.dimissionList && showDimissionFileInput"
@@ -1671,7 +1671,7 @@ export default {
         },
         handleOtherReasonSelect(id) {
             if (!id) {
-                this.form.recruitment.otherReasonSelected = '';
+                this.form.recruitment.otherReasonSelected = null;
                 return;
             }
             this.form.recruitment.reason = 3;
@@ -3319,7 +3319,7 @@ export default {
                 if (data.reason_exp && data.reason_exp !== "3") {
                     // Nếu là lý do thông thường (không phải Other)
                     this.form.recruitment.reason = parseInt(data.reason_exp);
-                    this.form.recruitment.otherReasonSelected = "";
+                    this.form.recruitment.otherReasonSelected = null;
                 }
                 
                 // Xử lý isOther_reason 
@@ -3930,7 +3930,7 @@ export default {
             }
             
             // Nếu chọn loại khác (không phải Other) -> clear các trường liên quan đến Other
-            this.form.recruitment.otherReasonSelected = '';
+            this.form.recruitment.otherReasonSelected = null;
             this.form.recruitment.oldempno = "";
             this.form.recruitment.isOther_reason = {
                 vi: "",
@@ -4318,7 +4318,8 @@ export default {
         },
         selectedOtherReasonEnText() {
             if (!this.form.recruitment.otherReasonSelected || !this.otherReason) return "";
-            const found = this.otherReason.find(r => r.id === this.form.recruitment.otherReasonSelected);
+            const selectedId = Number(this.form.recruitment.otherReasonSelected);
+            const found = this.otherReason.find(r => Number(r.id) === selectedId);
             if (!found) return "";
             try {
                 const parsed = typeof found.reason_name === "string" ? JSON.parse(found.reason_name) : found.reason_name;
@@ -4328,8 +4329,9 @@ export default {
             }
         },
         templateFileName() {
-            if (this.form.recruitment.reason === 2) return 'Resign_template.xlsx';
-            if (this.form.recruitment.reason === 3) {
+            const currentReason = Number(this.form.recruitment.reason);
+            if (currentReason === 2) return 'Resign_template.xlsx';
+            if (currentReason === 3) {
                 const enText = this.selectedOtherReasonEnText;
                 if (enText.includes("transfer")) return 'Transfer_template.xlsx';
                 if (enText.includes("maternity")) return 'Maternity _template.xlsx';
