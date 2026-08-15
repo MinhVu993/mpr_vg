@@ -927,7 +927,7 @@ v-model="viewOriginal"
             <div class="mb-4" v-if="dimissionPreviewHasError">
                 <span class="error--text">{{ $t('The highlighted IDs have been used for another request. Please update the file.') || 'Các mã được tô đỏ đã được dùng cho đơn khác. Vui lòng cập nhật lại file.' }}</span>
                 <br>
-                <a :href="`${$router.options.base}Resign_template.xlsx`" download style="color: blue; text-decoration: underline;">
+                <a :href="`${$router.options.base}${templateFileName || 'Resign_template.xlsx'}`" download style="color: blue; text-decoration: underline;">
                     <v-icon x-small color="blue">mdi-download</v-icon> {{ $t('Download template here') || 'Tải file mẫu tại đây' }}
                 </a>
             </div>
@@ -2919,39 +2919,153 @@ export default {
                             const firstSheetName = workbook.SheetNames[0];
                             const worksheet = workbook.Sheets[firstSheetName];
                             
-                            // range: 1 skips the first row (index 0)
-                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 1 });
-                            
-                            if (jsonData.length > 0) {
-                                const firstRowKeys = Object.keys(jsonData[0]).map(k => k.toUpperCase().trim());
-                                const hasEmpno = firstRowKeys.some(k => k.includes('EMPNO') || k === 'EMP NO' || k === 'MÃ NV' || k === 'MÃ NHÂN VIÊN');
-                                const hasName = firstRowKeys.some(k => k.includes('NAME') || k === 'TÊN');
-                                const hasDate = firstRowKeys.some(k => k.includes('DIMISION DATE') || k.includes('DIMISSION DATE') || k.includes('DATE') || k.includes('NGÀY'));
+                            const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+                            if (!rawRows || rawRows.length === 0) {
+                                this.clearFile('dimissionList');
+                                return;
+                            }
+
+                            const normalizeStr = (str) => {
+                                if (!str || typeof str !== 'string') return '';
+                                return str
+                                    .normalize('NFD')
+                                    .replace(/[\u0300-\u036f]/g, '')
+                                    .replace(/[\r\n\s_./-]+/g, '')
+                                    .toUpperCase();
+                            };
+
+                            const formatDate = (rawDate) => {
+                                if (rawDate === null || rawDate === undefined || rawDate === '') return '';
                                 
-                                if (!hasEmpno || !hasName || !hasDate) {
-                                    this.clearFile('dimissionList');
-                                    const Swal = (await import('sweetalert2')).default;
-                                    Swal.fire({
-                                        icon: 'error',
-                                        title: this.$t('Invalid Format'),
-                                        html: `${this.$t('The uploaded file does not match the required template. Please use the specified format.')}<br><br><a href="${this.$router.options.base}Resign_template.xlsx" download style="color: blue; text-decoration: underline;">${this.$t('Download correct template here')}</a>`,
-                                        confirmButtonText: this.$t('Close')
-                                    });
-                                    return;
+                                if (typeof rawDate === 'number' || (!isNaN(rawDate) && !isNaN(parseFloat(rawDate)) && String(rawDate).trim().length > 4 && !String(rawDate).includes('/') && !String(rawDate).includes('-'))) {
+                                    const num = Number(rawDate);
+                                    if (num > 10000 && num < 100000) {
+                                        const jsDate = new Date(Date.UTC(1899, 11, 30));
+                                        jsDate.setUTCDate(jsDate.getUTCDate() + Math.floor(num));
+                                        const d = String(jsDate.getUTCDate()).padStart(2, '0');
+                                        const m = String(jsDate.getUTCMonth() + 1).padStart(2, '0');
+                                        const y = jsDate.getUTCFullYear();
+                                        return `${d}/${m}/${y}`;
+                                    }
+                                }
+
+                                if (rawDate instanceof Date) {
+                                    const d = String(rawDate.getDate()).padStart(2, '0');
+                                    const m = String(rawDate.getMonth() + 1).padStart(2, '0');
+                                    const y = rawDate.getFullYear();
+                                    return `${d}/${m}/${y}`;
+                                }
+
+                                const str = String(rawDate).trim();
+                                const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+                                if (ymdMatch) {
+                                    const d = String(ymdMatch[3]).padStart(2, '0');
+                                    const m = String(ymdMatch[2]).padStart(2, '0');
+                                    const y = ymdMatch[1];
+                                    return `${d}/${m}/${y}`;
+                                }
+
+                                const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+                                if (dmyMatch) {
+                                    const d = String(dmyMatch[1]).padStart(2, '0');
+                                    const m = String(dmyMatch[2]).padStart(2, '0');
+                                    const y = dmyMatch[3];
+                                    return `${d}/${m}/${y}`;
+                                }
+
+                                return str;
+                            };
+
+                            // Identify Header Row and Column mappings
+                            let headerRowIdx = -1;
+                            let empnoCol = -1, nameCol = -1, deptNoCol = -1, deptNameCol = -1, posCol = -1, dateCol = -1, sttCol = -1;
+
+                            for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
+                                const row = rawRows[r];
+                                if (!Array.isArray(row)) continue;
+
+                                let foundEmp = -1, foundName = -1, foundDate = -1, foundDeptNo = -1, foundDeptName = -1, foundPos = -1, foundStt = -1;
+
+                                for (let c = 0; c < row.length; c++) {
+                                    const cellVal = normalizeStr(String(row[c] || ''));
+                                    if (!cellVal) continue;
+
+                                    if (foundEmp === -1 && (cellVal.includes('EMPNO') || cellVal.includes('SOTHE') || cellVal.includes('MANV') || cellVal.includes('MANHANVIEN') || cellVal.includes('THECNV'))) {
+                                        foundEmp = c;
+                                    } else if (foundName === -1 && !cellVal.includes('DEPT') && !cellVal.includes('BOPHAN') && (cellVal.includes('NAMES') || cellVal.includes('HOTEN') || cellVal.includes('HOVATEN') || cellVal.includes('TEN') || cellVal.includes('NAME'))) {
+                                        foundName = c;
+                                    } else if (foundDeptNo === -1 && (cellVal.includes('DEPTNO') || (cellVal.includes('DEPT') && cellVal.includes('NO')) || cellVal.includes('MABOPHAN'))) {
+                                        foundDeptNo = c;
+                                    } else if (foundDeptName === -1 && !cellVal.includes('DEPTNO') && !cellVal.includes('NO') && (cellVal.includes('DEPTNAME') || cellVal.includes('DEPT') || cellVal.includes('TENBOPHAN') || cellVal.includes('BOPHAN'))) {
+                                        foundDeptName = c;
+                                    } else if (foundPos === -1 && (cellVal.includes('POSITION') || cellVal.includes('VITRI') || cellVal.includes('CHUCVU') || cellVal === 'POS')) {
+                                        foundPos = c;
+                                    } else if (foundDate === -1 && (cellVal.includes('DATE') || cellVal.includes('NGAY') || cellVal.includes('RESIGN') || cellVal.includes('MATERNITY') || cellVal.includes('MILITARY') || cellVal.includes('TRANSFER') || cellVal.includes('THOIVIEC') || cellVal.includes('THAISAN') || cellVal.includes('NGHIAVU') || cellVal.includes('DIEUCHUYEN') || cellVal.includes('DIMIS'))) {
+                                        foundDate = c;
+                                    } else if (foundStt === -1 && (cellVal === 'STT' || cellVal.includes('STT') || cellVal === 'NO' || cellVal.includes('THUTU'))) {
+                                        foundStt = c;
+                                    }
+                                }
+
+                                if (foundEmp !== -1 && (foundName !== -1 || foundDate !== -1)) {
+                                    headerRowIdx = r;
+                                    empnoCol = foundEmp;
+                                    nameCol = foundName !== -1 ? foundName : 2;
+                                    deptNoCol = foundDeptNo !== -1 ? foundDeptNo : 3;
+                                    deptNameCol = foundDeptName !== -1 ? foundDeptName : 4;
+                                    posCol = foundPos !== -1 ? foundPos : 5;
+                                    dateCol = foundDate !== -1 ? foundDate : 6;
+                                    sttCol = foundStt !== -1 ? foundStt : 0;
+                                    break;
                                 }
                             }
 
-                            
+                            const currentTemplate = this.templateFileName || 'Resign_template.xlsx';
+
+                            if (headerRowIdx === -1) {
+                                this.clearFile('dimissionList');
+                                const Swal = (await import('sweetalert2')).default;
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: this.$t('Invalid Format'),
+                                    html: `${this.$t('The uploaded file does not match the required template. Please use the specified format.')}<br><br><a href="${this.$router.options.base}${currentTemplate}" download style="color: blue; text-decoration: underline;">${this.$t('Download correct template here')}</a>`,
+                                    confirmButtonText: this.$t('Close')
+                                });
+                                return;
+                            }
+
+                            let extractedItems = [];
                             let extractedEmpnos = [];
-                            jsonData.forEach(row => {
-                                const empno = row['EMPNO'] || row['empno'] || row['Empno'];
-                                if (empno) {
-                                    let empnoStr = empno.toString().trim();
-                                    if (empnoStr.length > 0 && !extractedEmpnos.includes(empnoStr)) {
-                                        extractedEmpnos.push(empnoStr);
-                                    }
+
+                            for (let r = headerRowIdx + 1; r < rawRows.length; r++) {
+                                const row = rawRows[r];
+                                if (!Array.isArray(row)) continue;
+
+                                const empnoRaw = row[empnoCol] !== undefined ? String(row[empnoCol]).trim() : '';
+                                if (!empnoRaw) continue;
+
+                                const empno = empnoRaw.toUpperCase();
+                                const name = nameCol !== -1 && row[nameCol] !== undefined ? String(row[nameCol]).trim() : '';
+                                const deptNo = deptNoCol !== -1 && row[deptNoCol] !== undefined ? String(row[deptNoCol]).trim() : '';
+                                const deptName = deptNameCol !== -1 && row[deptNameCol] !== undefined ? String(row[deptNameCol]).trim() : '';
+                                const position = posCol !== -1 && row[posCol] !== undefined ? String(row[posCol]).trim() : '';
+                                const rawDate = dateCol !== -1 && row[dateCol] !== undefined ? row[dateCol] : '';
+                                const stt = sttCol !== -1 && row[sttCol] !== undefined && String(row[sttCol]).trim() !== '' ? String(row[sttCol]).trim() : (extractedItems.length + 1);
+
+                                extractedItems.push({
+                                    stt: stt,
+                                    empno: empno,
+                                    name: name,
+                                    deptNo: deptNo,
+                                    deptName: deptName,
+                                    position: position,
+                                    date: formatDate(rawDate)
+                                });
+
+                                if (!extractedEmpnos.includes(empno)) {
+                                    extractedEmpnos.push(empno);
                                 }
-                            });
+                            }
 
                             if (extractedEmpnos.length > 0) {
                                 let invalidEmpnos = {};
@@ -2978,38 +3092,22 @@ export default {
                                 }
 
                                 // Map the json data to our preview data format
-                                this.dimissionPreviewData = jsonData.map((row, index) => {
-                                    const empno = (row['EMPNO'] || row['empno'] || row['Empno'] || '').toString().trim();
-                                    const hasError = invalidEmpnos.hasOwnProperty(empno);
-                                    const usedInReqId = invalidEmpnos[empno] || '';
-                                    let rawDate = row['DIMISION DATE'] || row['DIMISSION DATE'] || row['Dimission Date'] || '';
-                                    let formattedDate = rawDate;
-                                    if (typeof rawDate === 'number' && rawDate > 10000) {
-                                        // Convert Excel serial date to JS Date
-                                        const jsDate = new Date(Date.UTC(1899, 11, 30));
-                                        jsDate.setUTCDate(jsDate.getUTCDate() + rawDate);
-                                        const d = String(jsDate.getUTCDate()).padStart(2, '0');
-                                        const m = String(jsDate.getUTCMonth() + 1).padStart(2, '0');
-                                        const y = jsDate.getUTCFullYear();
-                                        formattedDate = `${d}/${m}/${y}`;
-                                    } else if (typeof rawDate === 'string' && rawDate.match(/^\d{4}-\d{2}-\d{2}/)) {
-                                        // Fallback if it parses as YYYY-MM-DD
-                                        const parts = rawDate.substr(0, 10).split('-');
-                                        formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
-                                    }
+                                this.dimissionPreviewData = extractedItems.map((item) => {
+                                    const hasError = invalidEmpnos.hasOwnProperty(item.empno);
+                                    const usedInReqId = invalidEmpnos[item.empno] || '';
 
                                     return {
-                                        stt: row['STT'] || (index + 1),
-                                        empno: empno,
-                                        name: row['NAME_S'] || row['Name'] || row['NAME'] || '',
-                                        deptNo: row['DEPT_NO'] || row['DEPT NO'] || row['Dept No'] || row['Mã bộ phận'] || '',
-                                        deptName: row['DEPT NAME'] || row['DEPT_NAME'] || row['Dept Name'] || '',
-                                        position: row['POSITION'] || row['Position'] || row['position'] || row['Chức vụ'] || row['CHỨC VỤ'] || '',
-                                        date: formattedDate,
+                                        stt: item.stt,
+                                        empno: item.empno,
+                                        name: item.name,
+                                        deptNo: item.deptNo,
+                                        deptName: item.deptName,
+                                        position: item.position,
+                                        date: item.date,
                                         hasError: hasError,
                                         errorMsg: hasError ? `${usedInReqId}` : ''
                                     };
-                                }).filter(item => item.empno !== ''); // remove empty rows
+                                });
 
                                 this.dimissionPreviewDialog = true;
                             } else {
@@ -4004,6 +4102,16 @@ export default {
     },
     computed: {
         dimissionPreviewHeaders() {
+            let dateLabel = this.$t('Dimission Date') || 'Dimission Date';
+            if (this.templateFileName) {
+                if (this.templateFileName.includes('Transfer')) {
+                    dateLabel = this.$t('Transfer Date') || 'Ngày điều chuyển';
+                } else if (this.templateFileName.includes('Maternity')) {
+                    dateLabel = this.$t('Maternity Start Date') || 'Ngày bắt đầu nghỉ thai sản';
+                } else if (this.templateFileName.includes('Military')) {
+                    dateLabel = this.$t('Military Service Start Date') || 'Ngày bắt đầu NVQS';
+                }
+            }
             return [
                 { text: 'STT', value: 'stt' },
                 { text: this.$t('EmpNo') || 'EMPNO', value: 'empno' },
@@ -4011,7 +4119,7 @@ export default {
                 { text: this.$t('Dept No') || 'Dept No', value: 'deptNo' },
                 { text: this.$t('Dept') || 'Dept Name', value: 'deptName' },
                 { text: this.$t('Position') || 'Position', value: 'position' },
-                { text: this.$t('Dimission Date') || 'Dimission Date', value: 'date' },
+                { text: dateLabel, value: 'date' },
                 { text: this.$t('Status') || 'Status', value: 'status' }
             ];
         },
