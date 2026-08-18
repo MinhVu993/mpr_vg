@@ -1946,6 +1946,10 @@ export default {
                     if (dataMpr.hold === 1) {
                         this.item_changeReason = this.item_changeReason.filter(item => item.id !== 4);
                     }
+                    this.dataMpr = dataMpr;
+                    this.editData = dataMpr;
+                    this.approvalStepper = 0;
+
                     // Populate form with processed data
                     this.populateForm(dataMpr);
                     
@@ -1962,10 +1966,6 @@ export default {
                             });
                         });
                     }
-                    
-                    this.dataMpr = dataMpr;
-                    this.editData = dataMpr;
-                    this.approvalStepper = 0;
                 }
             } catch (error) {
                 console.error("Error fetching data by req_id:", error);
@@ -2353,8 +2353,30 @@ export default {
                     formData.append("status_amendent", null);
                 }
                 
-                // 4. Validate Form (Bỏ qua nếu là New Year process)
-                if (!hasActiveRct) {
+                // 4. Validate Form (Bỏ qua nếu là New Year process hoặc Amendment)
+                if (isAmendmentRequest) {
+                    const changeReasonId = (this.form.changeReason && typeof this.form.changeReason === 'object')
+                        ? this.form.changeReason.id
+                        : this.form.changeReason;
+                    if (!changeReasonId) {
+                        this.$notify({
+                            title: "Error",
+                            text: this.$t("Please select Change Reason") || "Vui lòng chọn lý do thay đổi",
+                            type: "error",
+                        });
+                        return;
+                    }
+                    if (changeReasonId === 1) {
+                        if (!this.form.changeQty || this.changeQtyError) {
+                            this.$notify({
+                                title: "Error",
+                                text: this.$t("Please enter valid change quantity") || "Vui lòng nhập số lượng hợp lệ",
+                                type: "error",
+                            });
+                            return;
+                        }
+                    }
+                } else if (!hasActiveRct) {
                     this.formErrors = {
                         education: false,
                         experience: false,
@@ -4668,6 +4690,49 @@ export default {
             return !!this.editData && !this.isCreating;
         },
         disableSaveButton() {
+            // 1. Logic cho Amendment Request (isChange)
+            if (this.isChange) {
+                if (!this.reqId) return true;
+                if (!this.form.changeReason) return true;
+
+                const changeReasonId = (this.form.changeReason && typeof this.form.changeReason === 'object')
+                    ? this.form.changeReason.id
+                    : this.form.changeReason;
+
+                // Thay đổi số lượng (id = 1)
+                if (changeReasonId === 1) {
+                    if (this.form.changeQty === "" || this.form.changeQty === null || this.form.changeQty === undefined) return true;
+                    if (this.changeQtyError) return true;
+                    return false;
+                }
+
+                // Hủy yêu cầu (id = 2), Tạm dừng (id = 4), Tiếp tục (id = 5)
+                if (changeReasonId === 2 || changeReasonId === 4 || changeReasonId === 5) {
+                    return false;
+                }
+
+                // Thay đổi yêu cầu tuyển dụng (id = 3)
+                if (changeReasonId === 3) {
+                    const hasSomeChange = !!(
+                        this.form.educationLevel_change ||
+                        this.form.specialization_change ||
+                        this.form.workExperience_change ||
+                        this.form.jobDesc_change ||
+                        this.form.attachments.jobDesc_change ||
+                        this.form.either_change ||
+                        this.form.english_change ||
+                        this.form.chinese_change ||
+                        this.form.tranlator_change ||
+                        (this.form.computerSkills_change && this.form.computerSkills_change.length > 0) ||
+                        this.form.otherComputerSkills_change ||
+                        this.form.remark_change
+                    );
+                    return !hasSomeChange;
+                }
+
+                return false;
+            }
+
             if (this.showNewYearSection) {
                 const val = this.form.newYearRecruitment;
                 return (val === "" || val === null || val === undefined);
@@ -4681,26 +4746,6 @@ export default {
                     (this.form.recruitment.reason === 3 && this.form.recruitment.otherReasonSelected)
                 )
             );
-            if (this.isChange) {
-                const baseValidation =
-                !this.form.pos ||
-                !this.form.suppType ||
-                !this.form.quantity ||
-                !this.user.unit ||
-                !this.form.educationLevel ||
-                !this.form.workExperience ||
-                !reasonSelected ||
-                !this.form.specialization ||
-                !this.form.jobDesc ||
-                !this.form.safetyLevels;
-                
-                if (this.form.pos === 1) {
-                    return baseValidation;
-                }
-                return (baseValidation ||
-                !(this.form.computerSkills && this.form.computerSkills.length > 0) ||
-                !(this.form.either || this.form.english || this.form.chinese));
-            }
             if (this.editData && this.editData.approval &&
             JSON.parse(this.editData.approval).some(level => level.status === 'returned')) {
                 return false; // Enable nút để sửa và gửi lại
@@ -4776,6 +4821,11 @@ export default {
             return "";
         },
         showSaveButton() {
+            // 1. Ưu tiên hàng đầu: Nếu đang thực hiện Amendment (isChange)
+            if (this.isChange) {
+                return true;
+            }
+
             // Nếu chọn Replacement (2) mà chưa có ds người thôi việc -> ẩn nút Submit
             if (
                 this.form.recruitment?.reason === 2 &&
@@ -4812,10 +4862,6 @@ export default {
             
             // --- CÁC LOGIC KHÁC GIỮ NGUYÊN ---
             if (!this.editData) {
-                return true;
-            }
-            // ... (phần còn lại của hàm giữ nguyên)
-            if (this.isChange) {
                 return true;
             }
             if (this.editData.approval) {
