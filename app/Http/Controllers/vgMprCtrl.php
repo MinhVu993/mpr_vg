@@ -2923,14 +2923,11 @@ class vgMprCtrl extends Controller
     public function countResignedCandidates()
     {
         try {
-            // Get all MPRs with candidates but no resignList yet
+            // Lấy toàn bộ các đơn MPR đã có ứng viên (bỏ giới hạn paginate(500) để không bị sót các đơn mới > 500)
             $mprs = Mpr::whereNotNull("candidates")
-                // ->where("candidates", "!=", "")
-                // ->where(function ($query) {
-                //     $query->whereNull("resignList")->orWhere("resignList", "");
-                // })
-                // ->get();
-                ->paginate(500);
+                ->where("candidates", "!=", "")
+                ->where("candidates", "!=", "[]")
+                ->get();
 
             if ($mprs->isEmpty()) {
                 return response()->json(
@@ -2949,23 +2946,36 @@ class vgMprCtrl extends Controller
 
             foreach ($mprs as $mpr) {
                 $candidates = json_decode($mpr->candidates, true);
-                if (!empty($candidates)) {
-                    $empnos = array_column($candidates, "empno");
-                    $allCandidateEmpnos = array_merge(
-                        $allCandidateEmpnos,
-                        $empnos
-                    );
-                    $mprCandidatesMap[$mpr->id] = $candidates;
+                if (is_array($candidates) && !empty($candidates)) {
+                    $empnos = [];
+                    foreach ($candidates as $cand) {
+                        if (!empty($cand["empno"])) {
+                            $cleanEmpno = trim(ltrim((string) $cand["empno"], "'"));
+                            if ($cleanEmpno !== "") {
+                                $empnos[] = $cleanEmpno;
+                            }
+                        }
+                    }
+                    if (!empty($empnos)) {
+                        $allCandidateEmpnos = array_merge(
+                            $allCandidateEmpnos,
+                            $empnos
+                        );
+                        $mprCandidatesMap[$mpr->id] = $candidates;
+                    }
                 }
             }
 
-            // Single query to get all resigned employees
+            // Single query to get all resigned employees (order by er_resigndate asc so keyBy keeps the latest resignation date)
             $resignedEmployees = ResignData::whereIn(
                 "er_empid",
-                array_unique($allCandidateEmpnos)
+                array_values(array_unique($allCandidateEmpnos))
             )
+                ->orderBy("er_resigndate", "asc")
                 ->get()
-                ->keyBy("er_empid");
+                ->keyBy(function ($item) {
+                    return trim((string) $item->er_empid);
+                });
 
             $results = [];
             $bulkUpdateData = [];
@@ -2980,28 +2990,48 @@ class vgMprCtrl extends Controller
                 $resignedCount = 0;
 
                 foreach ($candidates as $candidate) {
-                    if (isset($resignedEmployees[$candidate["empno"]])) {
-                        $resignData = $resignedEmployees[$candidate["empno"]];
-                        $resignList[] = [
-                            "empno" => $candidate["empno"],
-                            "date" => $resignData->er_resigndate,
-                            "name" => $candidate["name"],
-                            "key_in" => $candidate["key_in"],
-                            "position" => $mpr->pos,
-                        ];
-                        $resignedCount++;
+                    $empno = isset($candidate["empno"])
+                        ? trim(ltrim((string) $candidate["empno"], "'"))
+                        : "";
+                    if ($empno !== "" && isset($resignedEmployees[$empno])) {
+                        $resignData = $resignedEmployees[$empno];
+                        $resignDate = isset($resignData->er_resigndate)
+                            ? substr(trim((string) $resignData->er_resigndate), 0, 10)
+                            : "";
+                        $candDate = isset($candidate["date"])
+                            ? substr(trim((string) $candidate["date"]), 0, 10)
+                            : "";
+
+                        // Chỉ tính nghỉ việc nếu ngày nghỉ >= ngày vào làm của đơn MPR này
+                        if ($candDate === "" || $resignDate === "" || $resignDate >= $candDate) {
+                            $resignList[] = [
+                                "empno" => $empno,
+                                "date" => $resignDate,
+                                "name" => isset($candidate["name"]) ? $candidate["name"] : ($resignData->er_name ?? ""),
+                                "key_in" => isset($candidate["key_in"]) ? $candidate["key_in"] : "",
+                                "position" => $mpr->pos,
+                            ];
+                            $resignedCount++;
+                        }
                     }
                 }
 
-                // Prepare bulk update data
-                $bulkUpdateData[] = [
-                    "id" => $mpr->id,
-                    "resign" => $resignedCount,
-                    "resignList" => !empty($resignList)
-                        ? json_encode($resignList)
-                        : null,
-                    "updated_at" => now(),
-                ];
+                $newResignListJson = !empty($resignList)
+                    ? json_encode($resignList, JSON_UNESCAPED_UNICODE)
+                    : null;
+
+                // Chỉ cập nhật những bản ghi thực sự có thay đổi
+                if (
+                    (int) $mpr->resign !== $resignedCount ||
+                    (string) ($mpr->resignList ?? "") !== (string) ($newResignListJson ?? "")
+                ) {
+                    $bulkUpdateData[] = [
+                        "id" => $mpr->id,
+                        "resign" => $resignedCount,
+                        "resignList" => $newResignListJson,
+                        "updated_at" => now(),
+                    ];
+                }
 
                 $results[] = [
                     "mpr_id" => $mpr->id,
