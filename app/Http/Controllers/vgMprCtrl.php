@@ -144,7 +144,7 @@ class vgMprCtrl extends Controller
         } elseif ($empno && $dept) {
             $params = new Request([
                 "empno" => $empno,
-                "app_code" => $app_code,
+                "app_code" => "mpr",
                 "location" => "VG",
                 "custom_data" => json_encode([
                     "custom_dept" => $dept,
@@ -780,6 +780,7 @@ class vgMprCtrl extends Controller
             }
 
             return [
+                 "id" => $changeReasonId,
                 "cn" => $reasonRaw["cn"] ?? "",
                 "en" => $reasonRaw["en"] ?? "",
                 "vi" => $reasonRaw["vi"] ?? "",
@@ -1415,6 +1416,24 @@ class vgMprCtrl extends Controller
             // Đồng bộ sang bảng resign-tracking khi đơn hoàn thành (kể cả đơn chỉnh sửa/điều chỉnh)
             $this->syncResignTrackingOnCompleted($mpr);
 
+             if ($isAmendmentRequest) {
+                $changeReasonData = $this->getAmendmentChangeReason($mpr);
+                $isCancellation = false;
+                if ($changeReasonData) {
+                    if (isset($changeReasonData["id"]) && (int)$changeReasonData["id"] === 2) {
+                        $isCancellation = true;
+                    } elseif (isset($changeReasonData["en"]) && stripos($changeReasonData["en"], "cancel") !== false) {
+                        $isCancellation = true;
+                    } elseif (isset($changeReasonData["vi"]) && stripos($changeReasonData["vi"], "Hủy") !== false) {
+                        $isCancellation = true;
+                    }
+                }
+
+                if ($isCancellation) {
+                    $this->cancelResignTracking($mpr->req_id);
+                }
+            }
+
             // Lấy giá trị activeRct an toàn
             $activeRctVal = $mpr->activeRct;
             $activeRctInt = is_numeric($activeRctVal)
@@ -1658,6 +1677,7 @@ class vgMprCtrl extends Controller
                 $mpr->status_amendent = "declined";
             } else {
                 $mpr->status = "declined";
+                $this->cancelResignTracking($mpr->req_id);
             }
 
             // Update approval
@@ -1739,6 +1759,7 @@ class vgMprCtrl extends Controller
             $mpr->status_amendent = "declined";
         } else {
             $mpr->status = "declined";
+            $this->cancelResignTracking($mpr->req_id);
         }
 
         $mpr->approval = json_encode($approval);
@@ -3192,6 +3213,7 @@ class vgMprCtrl extends Controller
 
             if ($mpr->status === "waiting_dept") {
                 $mpr->status = "declined";
+                $this->cancelResignTracking($mpr->req_id);
             }
             if ($mpr->status_amendent === "waiting_dept") {
                 $mpr->status_amendent = "declined";
@@ -4748,7 +4770,7 @@ class vgMprCtrl extends Controller
                     'req_id' => $record->req_id,
                     'status' => $record->status,
                     'emp_name' => $record->emp_name,
-                    'message' => "Mã nhân viên {$empno} (" . ($record->emp_name ?? '') . ") đã được sử dụng ở đơn {$record->req_id} (Trạng thái: {$record->status})!"
+                    'message' => "Mã nhân viên {$empno} (" . ($record->emp_name ?? '') . ") đã được sử dụng ở đơn {$record->req_id}"
                 ]);
             }
 
@@ -4803,6 +4825,47 @@ class vgMprCtrl extends Controller
             }
         } catch (\Exception $e) {
             \Log::error("Error syncing ResignTracking on completed: " . $e->getMessage());
+        }
+    }
+
+    private function cancelResignTracking($reqId)
+    {
+        try {
+            if (!empty($reqId)) {
+                ResignTracking::where('req_id', $reqId)->update(['status' => 'cancelled']);
+                \Log::info("Cancelled ResignTracking for req_id {$reqId}");
+            }
+        } catch (\Exception $e) {
+            \Log::error("Error cancelling ResignTracking for req_id {$reqId}: " . $e->getMessage());
+        }
+    }
+    public function manualSyncResignTracking(Request $request)
+    {
+        try {
+            $reqId = $request->input('req_id');
+            $query = Mpr::where('status', 'completed')->whereNotNull('old_emp');
+            if ($reqId) {
+                $query->where('req_id', $reqId);
+            }
+            $mprs = $query->get();
+
+            $syncedCount = 0;
+            foreach ($mprs as $mpr) {
+                if (!empty($mpr->old_emp)) {
+                    $this->syncResignTrackingOnCompleted($mpr);
+                    $syncedCount++;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Successfully synced resign tracking for $syncedCount MPRs.",
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => "Error: " . $e->getMessage()
+            ], 500);
         }
     }
 }
